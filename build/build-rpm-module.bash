@@ -34,6 +34,7 @@ build_module() {
     local module=$1
     local rel
     local epoch
+    local epoch_str
     local devel=0
     local root_module="$ROOT_DIR/$module"
 
@@ -72,7 +73,15 @@ build_module() {
         rel=1
     fi
     if [[ "'$4'" != *"--"* ]] && [[ -n "$4" ]]; then
+        epoch_str="$4:"
         epoch="--epoch $4"
+    else
+        # Check if module has epoch
+        epoch=$(get_rpm_module_epoch "$module")
+        if [ -n "$epoch" ]; then
+            epoch_str="$epoch:"
+            epoch="--epoch $epoch"
+        fi
     fi
     if [ -z "$ver" ]; then
         ver=$(get_module_version "$root_module")
@@ -84,7 +93,7 @@ build_module() {
         ver="$ver.$last_commit_date"
     fi
 
-    echo "  package output version: $ver-$rel"
+    echo "  package output version: $epoch_str$ver-$rel"
     echo "************************************************************************"
 
     echo "Pulling latest changes.."
@@ -126,7 +135,7 @@ build_module() {
             update_module_version "$root_module" "$ver" || exit 1
         fi
         cd "$ROOT_DIR" || exit 1
-        cmd="$ROOT_DIR/build-deps/makemodulerpm.pl $epoch--release \
+        cmd="$ROOT_DIR/build-deps/makemodulerpm.pl $epoch --release \
             $rel --rpm-depends --licence 'GPLv3' --allow-overwrite --rpm-dir \
             $ROOT_BUILD --target-dir $root_module/tmp \
             --vendor '$BUILDER_PACKAGE_NAME' $module $VERBOSITY_LEVEL"

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2181
 # functions.bash
 # Copyright Ilia Ross <ilia@webmin.dev>
 # Build functions for the build process
@@ -66,7 +67,6 @@ cloud_upload() {
                 local cmd1="ssh $ssh_args $CLOUD_UPLOAD_SSH_USER@"
                 cmd1+="$CLOUD_UPLOAD_SSH_HOST \"rm -rf $d\" $VERBOSITY_LEVEL"
                 eval "$cmd1"
-                # shellcheck disable=SC2181
                 if [ "$?" != "0" ]; then
                     err=1
                 fi
@@ -86,7 +86,6 @@ cloud_upload() {
                 local cmd2="scp $ssh_args -r $u $CLOUD_UPLOAD_SSH_USER@"
                 cmd2+="$CLOUD_UPLOAD_SSH_HOST:$CLOUD_UPLOAD_SSH_DIR/ $VERBOSITY_LEVEL"
                 eval "$cmd2"
-                # shellcheck disable=SC2181
                 if [ "$?" != "0" ]; then
                     err=1
                 fi
@@ -383,3 +382,16 @@ adjust_module_filename() {
     return $failed
 }
 
+# Retrieve the RPM module epoch from the provided list
+get_rpm_module_epoch() {
+    local module="$1"
+    local script_dir
+    local epoch_file
+    script_dir=$(dirname "$(realpath "${BASH_SOURCE[0]}")")
+    epoch_file="$script_dir/rpm-modules-epoch.txt"
+    if [ ! -f "$epoch_file" ]; then
+        echo "Error: $epoch_file not found" >&2
+        return 1
+    fi
+    awk -F= -v module="$module" '$1 == module {print $2; exit}' "$epoch_file"
+}

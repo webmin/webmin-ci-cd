@@ -5,6 +5,7 @@
 # Configures environment variables for the build process
 
 # Builder email
+BUILDER_PACKAGE_NAME="${ENV_BUILD__BUILDER_NAME:-Ilia Ross}"
 BUILDER_PACKAGE_EMAIL="${ENV_BUILD__BUILDER_EMAIL:-ilia@webmin.dev}"
 BUILDER_MODULE_EMAIL="${ENV_BUILD__BUILDER_EMAIL:-ilia@virtualmin.dev}"
 

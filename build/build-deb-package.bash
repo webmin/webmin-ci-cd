@@ -160,11 +160,13 @@ build_prod() {
     echo
 
     echo "Building package .."
-    export DEB_MAINTAINER="$BUILDER_PACKAGE_NAME <$BUILDER_PACKAGE_EMAIL>"
+    local makecmd
+    makecmd="DEB_MAINTAINER=\"$BUILDER_PACKAGE_NAME <$BUILDER_PACKAGE_EMAIL>\" \
+        ./makedebian.pl"
     if [ "$relval" == "" ]; then
-        cmd="./makedebian.pl \"$ver\" $VERBOSITY_LEVEL"
+        cmd="$makecmd \"$ver\" $VERBOSITY_LEVEL"
     else
-        cmd="./makedebian.pl \"$ver\" \"$rel\" $VERBOSITY_LEVEL"
+        cmd="$makecmd \"$ver\" \"$rel\" $VERBOSITY_LEVEL"
     fi
     eval "$cmd"
     postcmd $?

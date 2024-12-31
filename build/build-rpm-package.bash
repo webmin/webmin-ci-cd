@@ -177,8 +177,8 @@ build_prod() {
     echo
 
     echo "Building package .."
-    export RPM_MAINTAINER="$BUILDER_PACKAGE_NAME"
-    cmd="./makerpm.pl \"$ver\" \"$rel\" $VERBOSITY_LEVEL"
+    cmd="RPM_MAINTAINER=\"$BUILDER_PACKAGE_NAME\" ./makerpm.pl \"$ver\" \"$rel\" \
+        $VERBOSITY_LEVEL"
     eval "$cmd"
     postcmd $?
     echo

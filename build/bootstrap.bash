@@ -20,20 +20,22 @@ BOOTSTRAP_SCRIPTS=(
 bootstrap() {
     local base_url="$BUILD_BOOTSTRAP_URL/"
     local script_dir
+    local ts
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    download_script() {
-	local script_url="$1"
-	local script_path="$2"
-	for downloader in "curl -fsSL" "wget -qO-"; do
-	    if command -v "${downloader%% *}" >/dev/null 2>&1; then
-		if eval "$downloader \"$script_url\" > \"$script_path\""; then
-		    chmod +x "$script_path"
-		    return 0
-		fi
-	    fi
-	done
-	return 1
-    }
+	ts=$(date +%s)
+	download_script() {
+		local script_url="$1?$ts"
+		local script_path="$2"
+		for downloader in "curl -fsSL" "wget -qO-"; do
+			if command -v "${downloader%% *}" >/dev/null 2>&1; then
+			if eval "$downloader \"$script_url\" > \"$script_path\""; then
+				chmod +x "$script_path"
+				return 0
+			fi
+			fi
+		done
+		return 1
+	}
     for script in "${BOOTSTRAP_SCRIPTS[@]}"; do
 	local script_path="$script_dir/$script"
 	if [ ! -f "$script_path" ]; then

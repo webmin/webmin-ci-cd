@@ -45,12 +45,18 @@ build_module() {
     echo "        build start date: $date                                         "
     echo "          package format: RPM                                           "
     echo "                  module: $module                                       "
+    echo -n "     downloading package: "
 
     # Pull or clone module repository
     remove_dir "$root_module"
     cmd=$(make_module_repo_cmd "$module" "$MODULES_REPO_URL")
     eval "$cmd"
-    rs=$?
+    local rs=$? # Store to print success or failure nicely later
+    if [ $rs -eq 0 ]; then
+        echo -e "✔"
+    else
+        echo -e "✘"
+    fi
 
     # Git last commit date
     last_commit_date=$(get_last_commit_date "$root_module")

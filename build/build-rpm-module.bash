@@ -128,7 +128,8 @@ build_module() {
         cd "$ROOT_DIR" || exit 1
         cmd="$ROOT_DIR/build-deps/makemodulerpm.pl $epoch--release \
             $rel --rpm-depends --licence 'GPLv3' --allow-overwrite --rpm-dir \
-            $ROOT_BUILD --target-dir $root_module/tmp $module $VERBOSITY_LEVEL"
+            $ROOT_BUILD --target-dir $root_module/tmp \
+            --vendor '$BUILDER_PACKAGE_NAME' $module $VERBOSITY_LEVEL"
         eval "$cmd"
         postcmd $?
     )

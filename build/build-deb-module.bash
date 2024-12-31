@@ -112,8 +112,8 @@ build_module() {
         fi
         cd "$ROOT_DIR" || exit 1
         cmd="$ROOT_DIR/build-deps/makemoduledeb.pl --release $rel --deb-depends \
-            --licence 'GPLv3' --email '$BUILDER_MODULE_EMAIL' --allow-overwrite \
-            --target-dir $root_module/tmp $module $VERBOSITY_LEVEL"
+            --licence 'GPLv3' --email '$BUILDER_PACKAGE_NAME <$BUILDER_MODULE_EMAIL>' \
+            --allow-overwrite --target-dir $root_module/tmp $module $VERBOSITY_LEVEL"
         eval "$cmd"
         postcmd $?
     )

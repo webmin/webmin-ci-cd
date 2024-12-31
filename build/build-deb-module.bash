@@ -76,6 +76,9 @@ build_module() {
     if [[ "'$*'" == *"--testing"* ]]; then
         devel=1
         verorig=$ver
+        # Testing version must always be x.x.<last_commit_date>, this will
+        # effectively remove the patch version from any module for testing
+        # builds
         ver=$(echo "$ver" | cut -d. -f1,2)
         ver="$ver.$last_commit_date"
     fi

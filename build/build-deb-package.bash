@@ -160,6 +160,7 @@ build_prod() {
     echo
 
     echo "Building package .."
+    export DEB_MAINTAINER="$BUILDER_PACKAGE_NAME <$BUILDER_PACKAGE_EMAIL>"
     if [ "$relval" == "" ]; then
         cmd="./makedebian.pl \"$ver\" $VERBOSITY_LEVEL"
     else

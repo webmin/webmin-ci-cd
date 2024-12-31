@@ -189,6 +189,19 @@ get_module_version() {
     echo "$version"
 }
 
+update_module_version() {
+    local module_root="$1"
+    local version="$2"
+    local version_file="$module_root/module.info"
+    if [ -f "$version_file" ]; then
+        # Update version line
+        sed -i "s/^version=[0-9]\+\(\.[0-9]\+\)*$/version=$version/" "$version_file"
+    else
+        echo "Error: module.info file is missing in $module_root" >&2
+        return 1
+    fi
+}
+
 # Get latest commit date
 get_current_date() {
     date +'%Y-%m-%d %H:%M:%S %z'

@@ -121,7 +121,10 @@ build_module() {
     # Build RPM package
     echo "Building packages.."
     (
-        # XXXX Update actual module testing version dynamically
+        # Update actual module testing version dynamically
+        if [ "$devel" -eq 1 ]; then
+            update_module_version "$root_module" "$ver" || exit 1
+        fi
         cd "$ROOT_DIR" || exit 1
         cmd="$ROOT_DIR/build-deps/makemodulerpm.pl $epoch--release \
             $rel --rpm-depends --licence 'GPLv3' --allow-overwrite --rpm-dir \

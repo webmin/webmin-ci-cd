@@ -221,6 +221,7 @@ make_packages_repos() {
     local devel="$3"
     local cmd
     local reqrepo="webmin"
+    local legacyrepo="webadmin"
     local repo="$reqrepo/$prod.git"
     local theme="authentic-theme"
     local lcmd="./bin/language-manager --mode=clean --yes $VERBOSITY_LEVEL_WITH_INPUT"
@@ -234,8 +235,10 @@ make_packages_repos() {
         fi
     fi
 
-    # Re-create legacy link
-    ln -fs "$ROOT_DIR/$reqrepo" "$ROOT_DIR/webadmin"
+    # Re-create legacy link unless it exists
+    if [ ! -L "$ROOT_DIR/$legacyrepo" ]; then
+        ln -fs "$ROOT_DIR/$reqrepo" "$ROOT_DIR/$legacyrepo"
+    fi
 
     # Clone required repo
     if [ ! -d "$reqrepo" ]; then

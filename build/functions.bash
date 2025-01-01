@@ -218,10 +218,12 @@ get_latest_commit_date_version() {
 make_packages_repos() {
     local root_prod="$1"
     local prod="$2"
+    local devel="$3"
     local cmd
     local reqrepo="webmin"
     local repo="$reqrepo/$prod.git"
     local theme="authentic-theme"
+    local lcmd="./bin/language-manager --mode=clean --yes $VERBOSITY_LEVEL_WITH_INPUT"
 
     # Clone repo
     if [ ! -d "$root_prod" ]; then
@@ -229,6 +231,16 @@ make_packages_repos() {
         eval "$cmd"
         if [ "$?" != "0" ]; then
             return 1
+        fi
+        # Clean language files if testing build
+        if [ "$devel" == "1" ]; then
+            echo "Cleaning languages .."
+            (
+                cd "$root_prod" || exit 1
+                eval "$lcmd"
+                postcmd $?
+            )
+            echo
         fi
     fi
 
@@ -238,6 +250,13 @@ make_packages_repos() {
         eval "$cmd"
         if [ "$?" != "0" ]; then
             return 1
+        fi
+        # Clean language files if testing build
+        if [ "$devel" == "1" ]; then
+            (
+                cd "$reqrepo" || exit 1
+                eval "$lcmd"
+            )
         fi
     fi
 

@@ -33,10 +33,9 @@ source ./bootstrap.bash || exit 1
 # Build product func
 build_prod() {
 
-    # Pack with English only in devel builds
-    local english_only=0
+    local devel=0
     if [[ "'$*'" == *"--testing"* ]]; then
-        english_only=1
+        devel=1
     fi
 
     # Always return back to root directory
@@ -47,7 +46,6 @@ build_prod() {
     local root_prod="$ROOT_DIR/$prod"
     local root_apt="$root_prod/deb"
     local ver=""
-    local devel=0
 
     # Print build actual date
     date=$(get_current_date)
@@ -60,7 +58,7 @@ build_prod() {
     echo -n "    downloading packages: "
     
     # Download products from repos
-    make_packages_repos "$root_prod" "$prod"
+    make_packages_repos "$root_prod" "$prod" "$devel"
     local rs=$? # Store to print success or failure nicely later
     if [ $rs -eq 0 ]; then
         echo -e "✔"
@@ -92,7 +90,6 @@ build_prod() {
         ver=$(get_current_repo_tag "$root_prod")
     fi
     if [[ "'$*'" == *"--testing"* ]]; then
-        devel=1
         ver="$ver.$date_version"
         # Set actual product version
         echo "${ver}" >"version"
@@ -133,24 +130,6 @@ build_prod() {
 
     # Descend to project dir
     cd "$root_prod" || exit 1
-
-    if [ "$english_only" = "1" ]; then
-        echo "Cleaning languages .."
-        cmd="./bin/language-manager --mode=clean --yes $VERBOSITY_LEVEL_WITH_INPUT"
-        eval "$cmd"
-        postcmd $?
-        echo
-    else
-        # Force restore build directory
-        if [ ! -f "lang/ja" ]; then
-            echo "Restoring languages .."
-            cmd="git checkout \"*\" $VERBOSITY_LEVEL && git clean -f -d \
-                $VERBOSITY_LEVEL && git pull $VERBOSITY_LEVEL"
-            eval "$cmd"
-            postcmd $?
-            echo
-        fi
-    fi
 
     echo "Pre-building package .."
     eval "$cmd"

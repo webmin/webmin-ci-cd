@@ -87,13 +87,14 @@ cloud_upload() {
 
 # Sign and update repos metadata in remote
 cloud_repo_sign_and_update() {
+    local repo_type="$1"
     # Setup SSH keys on the build machine
     setup_ssh
     # Sign and update repos metadata in remote
     echo "Signing and updating repos metadata in $CLOUD_UPLOAD_SSH_HOST .."
     local ssh_args="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-    local remote_cmd="cd ~/.scripts && ./update-repo-packages-signature.bash \
-        $CLOUD_UPLOAD_GPG_PASSPHRASE"
+    local remote_cmd="cd ~/.scripts && ./sign-and-build-repos.bin \
+        '$CLOUD_UPLOAD_GPG_PASSPHRASE' '$CLOUD_UPLOAD_SSH_DIR' '$repo_type'"
     local cmd1="ssh $ssh_args $CLOUD_UPLOAD_SSH_USER@"
     cmd1+="$CLOUD_UPLOAD_SSH_HOST \"$remote_cmd\" $VERBOSITY_LEVEL"
     eval "$cmd1"

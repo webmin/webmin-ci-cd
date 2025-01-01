@@ -192,4 +192,4 @@ else
 fi
 
 cloud_upload cloud_upload_list_upload
-cloud_repo_sign_and_update
+cloud_repo_sign_and_update webmin.dev

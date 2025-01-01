@@ -224,7 +224,7 @@ make_packages_repos() {
     local repo="$reqrepo/$prod.git"
     local theme="authentic-theme"
     local lcmd="./bin/language-manager --mode=clean --yes $VERBOSITY_LEVEL_WITH_INPUT"
-
+    
     # Clone repo
     if [ ! -d "$root_prod" ]; then
         cmd="git clone --depth 1 $GIT_BASE_URL/$repo $VERBOSITY_LEVEL"
@@ -233,6 +233,9 @@ make_packages_repos() {
             return 1
         fi
     fi
+
+    # Re-create legacy link
+    ln -fs "$ROOT_DIR/$reqrepo" "$ROOT_DIR/webadmin"
 
     # Clone required repo
     if [ ! -d "$reqrepo" ]; then

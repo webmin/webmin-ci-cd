@@ -112,10 +112,6 @@ build_prod() {
     make_dir "$root_prod/minimal/"
     make_dir "$root_prod/tarballs/"
 
-    # Re-create legacy link
-    remove_dir "$ROOT_DIR/webadmin"
-    ln -s "$ROOT_DIR/webmin" "$ROOT_DIR/webadmin"
-
     # Purge old files
     purge_dir "$root_prod/newkey/deb"
     purge_dir "$root_prod/umodules"

@@ -5,29 +5,28 @@
 # Configures environment variables for the build process
 
 # Builder email
-BUILDER_PACKAGE_NAME="${ENV_BUILD__BUILDER_NAME:-webmin/webmin-ci-cd}"
-BUILDER_PACKAGE_EMAIL="${ENV_BUILD__BUILDER_EMAIL:-ilia@webmin.dev}"
-BUILDER_MODULE_EMAIL="${ENV_BUILD__BUILDER_EMAIL:-ilia@virtualmin.dev}"
+BUILDER_PACKAGE_NAME="${ENV__BUILDER_NAME:-webmin/webmin-ci-cd}"
+BUILDER_PACKAGE_EMAIL="${ENV__BUILDER_EMAIL:-ilia@webmin.dev}"
+BUILDER_MODULE_EMAIL="${ENV__BUILDER_EMAIL:-ilia@virtualmin.dev}"
 
 # Set defaults
-ROOT_DIR="${ENV_BUILD__ROOT:-$HOME}"
-ROOT_REPOS="${ENV_BUILD__ROOT_REPOS:-$ROOT_DIR/repo}"
-ROOT_BUILD="${ENV_BUILD__ROOT_BUILD:-$ROOT_DIR/rpmbuild}"
-ROOT_RPMS="${ENV_BUILD__ROOT_RPMS:-$ROOT_BUILD/RPMS/noarch}"
+ROOT_DIR="${ENV__ROOT:-$HOME}"
+ROOT_REPOS="${ENV__ROOT_REPOS:-$ROOT_DIR/repo}"
+ROOT_BUILD="${ENV__ROOT_BUILD:-$ROOT_DIR/rpmbuild}"
+ROOT_RPMS="${ENV__ROOT_RPMS:-$ROOT_BUILD/RPMS/noarch}"
 
 # Create symlinks for Perl
 PERL_SOURCE="/usr/bin/perl"
 PERL_TARGET="/usr/local/bin/perl"
 ln -fs "$PERL_SOURCE" "$PERL_TARGET"
 
-# GitHub private repos access token
-GITHUB_TOKEN="${ENV_BUILD__GITHUB_TOKEN}"
-
 # Cloud upload config
-CLOUD_UPLOAD_SSH_USER="${ENV_BUILD__CLOUD_UPLOAD_SSH_USER:-webmin.dev}"
-CLOUD_UPLOAD_SSH_HOST="${ENV_BUILD__CLOUD_UPLOAD_SSH_HOST:-webmin.dev}"
-CLOUD_UPLOAD_SSH_DIR="${ENV_BUILD__CLOUD_UPLOAD_SSH_DIR:-~/domains/download.webmin.dev/public_html}"
-CLOUD_UPLOAD_GPG_PASSPHRASE="${WEBMIN_DEV__GPG_PH}"
+CLOUD_UPLOAD_GPG_PASSPHRASE="${CLOUD__GPG_PH:-}"
+CLOUD_UPLOAD_SSH_HOST="${CLOUD__IP_ADDR:-}"
+CLOUD_UPLOAD_SSH_USER="${CLOUD__UPLOAD_SSH_USER:-ghost}"
+CLOUD_UPLOAD_SSH_DIR="${CLOUD__UPLOAD_SSH_DIR:-~/tmp}"
+CLOUD_SSH_PRV_KEY="${CLOUD__SSH_PRV_KEY:-}"
+CLOUD_GH_TOKEN="${CLOUD__GH_TOKEN:-}"
 
 # Define verbosity level
 VERBOSITY_LEVEL=' >/dev/null 2>&1 </dev/null'
@@ -39,7 +38,10 @@ fi
 
 # Project links
 GIT_BASE_URL="https://github.com"
-GIT_AUTH_URL="https://${GITHUB_TOKEN}@github.com"
+GIT_AUTH_URL="$GIT_BASE_URL"
+if [ -n "$CLOUD_GH_TOKEN" ]; then
+    GIT_AUTH_URL="https://${CLOUD_GH_TOKEN}@github.com"
+fi
 WEBMIN_ORG_URL="$GIT_BASE_URL/webmin"
 WEBMIN_REPO="$WEBMIN_ORG_URL/webmin"
 VIRTUALMIN_ORG_AUTH_URL="$GIT_AUTH_URL/virtualmin"

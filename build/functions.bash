@@ -232,13 +232,6 @@ make_packages_repos() {
         if [ "$?" != "0" ]; then
             return 1
         fi
-        # Clean language files if testing build
-        if [ "$devel" == "1" ]; then
-            (
-                cd "$root_prod" || exit 1
-                eval "$lcmd"
-            )
-        fi
     fi
 
     # Clone required repo
@@ -248,13 +241,21 @@ make_packages_repos() {
         if [ "$?" != "0" ]; then
             return 1
         fi
-        # Clean language files if testing build
+        # Clean language files in the required product if testing build
         if [ "$devel" == "1" ]; then
             (
-                cd "$reqrepo" || exit 1
+                cd "$ROOT_DIR/$reqrepo" || exit 1
                 eval "$lcmd"
             )
         fi
+    fi
+
+    # Clean language files in the main product if testing build
+    if [ "$devel" == "1" ]; then
+        (
+            cd "$ROOT_DIR/$prod" || exit 1
+            eval "$lcmd"
+        )
     fi
 
     # Clone theme

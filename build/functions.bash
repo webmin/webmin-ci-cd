@@ -234,13 +234,10 @@ make_packages_repos() {
         fi
         # Clean language files if testing build
         if [ "$devel" == "1" ]; then
-            echo "Cleaning languages .."
             (
                 cd "$root_prod" || exit 1
                 eval "$lcmd"
-                postcmd $?
             )
-            echo
         fi
     fi
 

@@ -12,7 +12,6 @@ WEBMIN_REPOS=(
     "webmin/webmin"
     "webmin/usermin"
     "webmin/authentic-theme"
-    "webmin/webmin-ci-cd"
 )
 
 VIRTUALMIN_REPOS=(

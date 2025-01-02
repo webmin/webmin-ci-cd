@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # .gh-secret-update.bash
-# Update GitHub secrets dynamically based on organization and repository using
-# local secrets zip file
+# Update or delete GitHub secrets dynamically based on organization and repository
 
 # Configuration
 SECRETS_ZIP="${ENV_SECRETS_ZIP:-$HOME/.tmp/gh-secrets.zip}"
@@ -12,6 +11,7 @@ WEBMIN_REPOS=(
     "webmin/webmin"
     "webmin/usermin"
     "webmin/authentic-theme"
+    "webmin/webmin-ci-cd"
 )
 
 VIRTUALMIN_REPOS=(
@@ -50,8 +50,9 @@ usage() {
 Usage: $0 [OPTIONS]
 
 Options:
-    -r, --repo REPO       Update secrets for a specific repository (format: owner/repo)
-    -s, --secret SECRET   Update a specific secret across repositories or within a repository
+    -r, --repo REPO       Target a specific repository (format: owner/repo)
+    -s, --secret SECRET   Target a specific secret for update or delete
+    -d, --delete          Delete secrets instead of updating them
     -h, --help            Show this help message
 
 Examples:
@@ -64,8 +65,8 @@ Examples:
     Update webmin__DEV_GPG_PH for all repositories
         $0 -s webmin__DEV_GPG_PH
 
-    Update virtualmin__DEV_GPG_PH for virtualmin/virtualmin-awstats only
-        $0 -r virtualmin/virtualmin-awstats -s virtualmin__DEV_GPG_PH
+    Delete secrets for virtualmin/virtualmin-awstats
+        $0 -r virtualmin/virtualmin-awstats -d
 EOF
     exit 1
 }
@@ -95,6 +96,7 @@ is_valid_secret() {
 # Parse command line arguments
 REPO=""
 SECRET=""
+DELETE=0
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -114,6 +116,10 @@ while [[ $# -gt 0 ]]; do
             fi
             shift 2
             ;;
+        -d|--delete)
+            DELETE=1
+            shift
+            ;;
         -h|--help)
             usage
             ;;
@@ -124,8 +130,8 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Check if the secrets zip exists
-if [ ! -f "$SECRETS_ZIP" ]; then
+# Check if the secrets zip exists unless deleting
+if [ "$DELETE" -eq 0 ] && [ ! -f "$SECRETS_ZIP" ]; then
     echo "Error: Secrets zip '$SECRETS_ZIP' file not found"
     exit 1
 fi
@@ -133,14 +139,17 @@ fi
 # Create a temporary directory
 mkdir -p "$TEMP_DIR"
 
-# Ask for the ZIP passphrase
-read -s -p "Enter passphrase for secrets zip: " ZIP_PASS
-echo
+# Extract secrets if updating
+if [ "$DELETE" -eq 0 ]; then
+    # Ask for the ZIP passphrase
+    read -s -p "Enter passphrase for secrets zip: " ZIP_PASS
+    echo
 
-# Extract secrets to the temporary directory
-if ! unzip -P "$ZIP_PASS" -d "$TEMP_DIR" "$SECRETS_ZIP" > /dev/null 2>&1; then
-    echo "Error: Failed to extract secrets—invalid passphrase or insufficient access to the documents"
-    exit 1
+    # Extract secrets to the temporary directory
+    if ! unzip -P "$ZIP_PASS" -d "$TEMP_DIR" "$SECRETS_ZIP" > /dev/null 2>&1; then
+        echo "Error: Failed to extract secrets—invalid passphrase or insufficient access to the documents"
+        exit 1
+    fi
 fi
 
 # Function to update secrets for a repository
@@ -176,7 +185,34 @@ update_repo_secrets() {
     done
 }
 
-# Determine which repositories to update
+# Function to delete secrets for a repository
+delete_repo_secrets() {
+    local repo="$1"
+    local org
+    org=$(echo "$repo" | awk -F/ '{print $1}')
+    
+    echo "Deleting secrets for $repo .."
+    
+    # Determine which secrets to delete
+    local secrets_to_delete=("${SECRETS[@]}")
+    if [ -n "$SECRET" ]; then
+        secrets_to_delete=("${SECRET#*__}")
+    fi
+    
+    # Delete each secret
+    for secret in "${secrets_to_delete[@]}"; do
+        echo "  Deleting $secret .."
+        local err
+        err=$(gh secret remove "$secret" --repo "$repo" 2>&1)
+        if [ $? -ne 0 ]; then
+            echo "  .. failed : $err"
+        else
+            echo "  .. done"
+        fi
+    done
+}
+
+# Determine which repositories to update or delete
 repos_to_update=()
 if [ -n "$REPO" ]; then
     repos_to_update=("$REPO")
@@ -184,7 +220,11 @@ else
     repos_to_update=("${WEBMIN_REPOS[@]}" "${VIRTUALMIN_REPOS[@]}")
 fi
 
-# Update secrets for each repository
+# Perform the update or delete operation for each repository
 for repo in "${repos_to_update[@]}"; do
-    update_repo_secrets "$repo"
+    if [ "$DELETE" -eq 1 ]; then
+        delete_repo_secrets "$repo"
+    else
+        update_repo_secrets "$repo"
+    fi
 done

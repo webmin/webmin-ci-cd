@@ -96,8 +96,6 @@ cloud_repo_sign_and_update() {
     local ssh_args="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
     local cmd1="ssh $ssh_args $CLOUD_UPLOAD_SSH_USER@"
     cmd1+="$CLOUD_UPLOAD_SSH_HOST \"$CLOUD_SIGN_BUILD_REPOS_CMD\" $VERBOSITY_LEVEL"
-    echo "Debug: signing repos command : $CLOUD_SIGN_BUILD_REPOS_CMD"
-    echo "Debug: signing repos SSH command : $cmd1"
     eval "$cmd1"
     postcmd $?
     echo

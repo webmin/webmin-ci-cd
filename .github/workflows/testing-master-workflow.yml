@@ -38,24 +38,24 @@ jobs:
           curl -O https://raw.githubusercontent.com/webmin/webmin-ci-cd/main/build/bootstrap.bash
       
       - name: Build and upload
+        env:
+          CLOUD__GPG_PH: ${{ secrets.DEV_GPG_PH }}
+          CLOUD__IP_ADDR: ${{ secrets.DEV_IP_ADDR }}
+          CLOUD__UPLOAD_SSH_USER: ${{ secrets.DEV_UPLOAD_SSH_USER }}
+          CLOUD__UPLOAD_SSH_DIR: ${{ secrets.DEV_UPLOAD_SSH_DIR }}
+          CLOUD__SSH_PRV_KEY: ${{ secrets.DEV_SSH_PRV_KEY }}
+          CLOUD__GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |-
-          export CLOUD__GPG_PH=${{ secrets.DEV_GPG_PH }}
-          export CLOUD__IP_ADDR=${{ secrets.DEV_IP_ADDR }}
-          export CLOUD__UPLOAD_SSH_USER=${{ secrets.DEV_UPLOAD_SSH_USER }}
-          export CLOUD__UPLOAD_SSH_DIR=${{ secrets.DEV_UPLOAD_SSH_DIR }}
-          export CLOUD__SSH_PRV_KEY=${{ secrets.DEV_SSH_PRV_KEY }}
-          export CLOUD__GH_TOKEN=${{ secrets.GITHUB_TOKEN }}
-
           bash bootstrap.bash
           if [ "${{ inputs.build-type }}" = "package" ]; then
             if [ -n "${{ inputs.package-type }}" ]; then
-              bash build-deb-package.bash ${{ inputs.package-type }} --testing --verbose
-              bash build-rpm-package.bash ${{ inputs.package-type }} --testing --verbose
+              bash build-deb-package.bash ${{ inputs.package-type }} --testing
+              bash build-rpm-package.bash ${{ inputs.package-type }} --testing
             else
-              bash build-deb-package.bash ${{ inputs.project-name }} --testing --verbose
-              bash build-rpm-package.bash ${{ inputs.project-name }} --testing --verbose
+              bash build-deb-package.bash ${{ inputs.project-name }} --testing
+              bash build-rpm-package.bash ${{ inputs.project-name }} --testing
             fi
           else
-            bash build-deb-module.bash ${{ inputs.project-name }} --testing --verbose
-            bash build-rpm-module.bash ${{ inputs.project-name }} --testing --verbose
+            bash build-deb-module.bash ${{ inputs.project-name }} --testing
+            bash build-rpm-module.bash ${{ inputs.project-name }} --testing
           fi

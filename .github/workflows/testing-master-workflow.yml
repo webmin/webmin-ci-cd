@@ -16,17 +16,6 @@ on:
         type: string
         default: ''
         description: 'Specific package type if not using project name (e.g. for authentic-theme)'
-    secrets:
-      DEV_GPG_PH:
-        required: true
-      DEV_IP_ADDR:
-        required: true
-      DEV_UPLOAD_SSH_USER:
-        required: true
-      DEV_UPLOAD_SSH_DIR:
-        required: true
-      DEV_SSH_PRV_KEY:
-        required: true
 
 jobs:
   build:

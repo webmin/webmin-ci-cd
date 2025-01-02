@@ -183,7 +183,7 @@ build_module() {
 if [ -n "$1" ] && [[ "'$1'" != *"--"* ]]; then
     MODULES_REPO_URL="$VIRTUALMIN_ORG_AUTH_URL"
     build_module "$@"
-    cloud_upload_list_upload=("$ROOT_REPOS/*$1*")
+    cloud_upload_list_upload=("$ROOT_REPOS/"*)
     cloud_upload cloud_upload_list_upload
     cloud_repo_sign_and_update virtualmin.dev
 else

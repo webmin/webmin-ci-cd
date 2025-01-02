@@ -19,6 +19,7 @@ BOOTSTRAP_SCRIPTS=(
 )
 
 bootstrap() {
+	local argvs="$*"
     local base_url="$BUILD_BOOTSTRAP_URL/"
     local script_dir
     local ts
@@ -51,8 +52,8 @@ bootstrap() {
     source "$script_dir/functions.bash" || exit 1
 
     # Source build variables
-    source "$script_dir/environment.bash" || exit 1
+    source "$script_dir/environment.bash" "$argvs" || exit 1
 }
 
 # Bootstrap build environment
-bootstrap || exit 1
+bootstrap "$@" || exit 1

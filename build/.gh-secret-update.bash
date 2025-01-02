@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # .gh-secret-update.bash
-# Update or delete GitHub secrets dynamically based on organization and repository
+# Update, delete, or list GitHub secrets dynamically
+# based on organization and repository
 
 # Configuration
 SECRETS_ZIP="${ENV_SECRETS_ZIP:-$HOME/.tmp/gh-secrets.zip}"
@@ -53,6 +54,7 @@ Options:
     -r, --repo REPO       Target a specific repository (format: owner/repo)
     -s, --secret SECRET   Target a specific secret for update or delete
     -d, --delete          Delete secrets instead of updating them
+    -l, --list            List current secrets in repositories
     -h, --help            Show this help message
 
 Examples:
@@ -67,6 +69,12 @@ Examples:
 
     Delete secrets for virtualmin/virtualmin-awstats
         $0 -r virtualmin/virtualmin-awstats -d
+
+    List all secrets for all repositories
+        $0 -l
+
+    List secrets for specific repository
+        $0 -l -r webmin/webmin
 EOF
     exit 1
 }
@@ -93,10 +101,42 @@ is_valid_secret() {
     return 1
 }
 
+# Function to list secrets for a repository
+list_repo_secrets() {
+    local repo="$1"
+    local org
+    org=$(echo "$repo" | awk -F/ '{print $1}')
+    
+    echo "Listing secrets for $repo .."
+    
+    # Get all secrets from the repository
+    local secrets_json
+    secrets_json=$(gh secret list --repo "$repo" --json name,updatedAt 2>/dev/null)
+    if [ $? -ne 0 ]; then
+        echo "  Error: Failed to list secrets for $repo"
+        return 1
+    fi
+
+    if [ "$secrets_json" = "[]" ]; then
+        echo ".. warning : no secrets found"
+        return 0
+    fi
+
+    if command -v jq >/dev/null 2>&1; then
+        echo "$secrets_json" | jq -r '.[] | "  \(.name) (Last updated: \(.updatedAt))"'
+    else
+        # Fallback to simple output if jq is not available
+        echo "$secrets_json" | grep -o '"name":"[^"]*"' | cut -d'"' -f4 | while read -r secret; do
+            echo "  $secret"
+        done
+    fi
+}
+
 # Parse command line arguments
 REPO=""
 SECRET=""
 DELETE=0
+LIST=0
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -120,6 +160,10 @@ while [[ $# -gt 0 ]]; do
             DELETE=1
             shift
             ;;
+        -l|--list)
+            LIST=1
+            shift
+            ;;
         -h|--help)
             usage
             ;;
@@ -129,6 +173,24 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Handle listing secrets
+if [ "$LIST" -eq 1 ]; then
+    # Determine which repositories to list
+    repos_to_list=()
+    if [ -n "$REPO" ]; then
+        repos_to_list=("$REPO")
+    else
+        repos_to_list=("${WEBMIN_REPOS[@]}" "${VIRTUALMIN_REPOS[@]}")
+    fi
+
+    # List secrets for each repository
+    for repo in "${repos_to_list[@]}"; do
+        list_repo_secrets "$repo"
+        echo
+    done
+    exit 0
+fi
 
 # Check if the secrets zip exists unless deleting
 if [ "$DELETE" -eq 0 ] && [ ! -f "$SECRETS_ZIP" ]; then

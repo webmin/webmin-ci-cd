@@ -8,14 +8,9 @@ on:
         type: string
         description: 'Type of build: package or module'
       project-name:
-        required: true
-        type: string
-        description: 'Name of the project to build (e.g. webmin, usermin, virtualmin-nginx)'
-      package-type:
         required: false
         type: string
-        default: ''
-        description: 'Specific package type if not using project name (e.g. for authentic-theme)'
+        description: 'Name of the project to build (e.g. webmin, usermin, virtualmin-nginx)'
     secrets:
       DEV_GPG_PH:
         required: true
@@ -59,13 +54,8 @@ jobs:
         run: |-
           bash bootstrap.bash
           if [ "${{ inputs.build-type }}" = "package" ]; then
-            if [ -n "${{ inputs.package-type }}" ]; then
-              bash build-deb-package.bash ${{ inputs.package-type }} --testing
-              bash build-rpm-package.bash ${{ inputs.package-type }} --testing
-            else
-              bash build-deb-package.bash ${{ inputs.project-name }} --testing
-              bash build-rpm-package.bash ${{ inputs.project-name }} --testing
-            fi
+            bash build-deb-package.bash ${{ inputs.project-name }} --testing
+            bash build-rpm-package.bash ${{ inputs.project-name }} --testing
           else
             bash build-deb-module.bash ${{ inputs.project-name }} --testing
             bash build-rpm-module.bash ${{ inputs.project-name }} --testing

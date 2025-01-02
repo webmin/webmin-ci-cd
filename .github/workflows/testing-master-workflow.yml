@@ -49,13 +49,13 @@ jobs:
           bash bootstrap.bash
           if [ "${{ inputs.build-type }}" = "package" ]; then
             if [ -n "${{ inputs.package-type }}" ]; then
-              bash build-deb-package.bash ${{ inputs.package-type }} --testing
-              bash build-rpm-package.bash ${{ inputs.package-type }} --testing
+              bash build-deb-package.bash ${{ inputs.package-type }} --testing --verbose
+              bash build-rpm-package.bash ${{ inputs.package-type }} --testing --verbose
             else
-              bash build-deb-package.bash ${{ inputs.project-name }} --testing
-              bash build-rpm-package.bash ${{ inputs.project-name }} --testing
+              bash build-deb-package.bash ${{ inputs.project-name }} --testing --verbose
+              bash build-rpm-package.bash ${{ inputs.project-name }} --testing --verbose
             fi
           else
-            bash build-deb-module.bash ${{ inputs.project-name }} --testing
-            bash build-rpm-module.bash ${{ inputs.project-name }} --testing
+            bash build-deb-module.bash ${{ inputs.project-name }} --testing --verbose
+            bash build-rpm-module.bash ${{ inputs.project-name }} --testing --verbose
           fi

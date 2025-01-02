@@ -33,7 +33,7 @@ setup_ssh() {
 
 # Upload to cloud
 # Usage:
-#   cloud_upload_list_delete=("$CLOUD_UPLOAD_SSH_DIR/repodata")
+#   cloud_upload_list_delete=("remote_dir remote_file pre_pattern post_pattern")
 #   cloud_upload_list_upload=("$ROOT_REPOS/*" "$ROOT_REPOS/repodata")
 #   cloud_upload cloud_upload_list_upload cloud_upload_list_delete
 cloud_upload() {
@@ -53,8 +53,15 @@ cloud_upload() {
         local err=0
         for d in "${arr_del[@]}"; do
             if [ -n "$d" ]; then
+                local remote_dir="${d%% *}"
+                local remaining="${d#* }"
+                local filename="${remaining%% *}"
+                local patterns="${remaining#* }"
+                local pre_pattern="${patterns%% *}"
+                local post_pattern="${patterns#* }"
                 local cmd1="ssh $ssh_args $CLOUD_UPLOAD_SSH_USER@"
-                cmd1+="$CLOUD_UPLOAD_SSH_HOST \"rm -rf $d\" $VERBOSITY_LEVEL"
+                cmd1+="$CLOUD_UPLOAD_SSH_HOST \"cd '$remote_dir' && find . -maxdepth 1 "
+                cmd1+="-regex '${pre_pattern}${filename}${post_pattern}' -delete $VERBOSITY_LEVEL\""
                 eval "$cmd1"
                 if [ "$?" != "0" ]; then
                     err=1

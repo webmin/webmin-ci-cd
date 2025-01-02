@@ -33,6 +33,7 @@ SECRETS=(
     "DEV_UPLOAD_SSH_USER"
     "DEV_UPLOAD_SSH_DIR"
     "DEV_SSH_PRV_KEY"
+    "DEV_SIGN_BUILD_REPOS_CMD"
 )
 
 # Cleanup function

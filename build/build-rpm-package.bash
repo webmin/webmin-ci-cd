@@ -160,10 +160,10 @@ build_prod() {
 
     cd "$ROOT_DIR" || exit 1
     echo "Preparing built files for upload .."
-    cmd="cp -f $root_prod/tarballs/$prod-$ver*\.tar.gz \
+    cmd="cp -f $root_prod/tarballs/$prod*$ver*\.tar.gz \
         $ROOT_REPOS/${prod}-$ver.tar.gz $VERBOSITY_LEVEL"
     eval "$cmd"
-    cmd="find $ROOT_RPMS -name $prod-$ver-$rel*\.rpm -exec mv '{}' \
+    cmd="find $ROOT_RPMS -name $prod*$ver*\.rpm -exec mv '{}' \
         $ROOT_REPOS \; $VERBOSITY_LEVEL"
     eval "$cmd"
     # cmd="mv -f $ROOT_REPOS/$prod-$ver-$rel*\.rpm \
@@ -184,7 +184,7 @@ build_prod() {
 # Main
 if [ -n "$1" ] && [[ "$1" != --* ]]; then
     build_prod "$@"
-    cloud_upload_list_upload=("$ROOT_REPOS/$1*")
+    cloud_upload_list_upload=("$ROOT_REPOS/$1"*)
 else
     build_prod webmin "$@"
     build_prod usermin "$@"

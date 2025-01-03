@@ -33,7 +33,7 @@ setup_ssh() {
 
 # Upload to cloud
 # Usage:
-#   cloud_upload_list_delete=("remote_dir remote_file pre_pattern post_pattern")
+#   cloud_upload_list_delete=("remote_dir remote_file * [-_][0-9]*")
 #   cloud_upload_list_upload=("$ROOT_REPOS/*" "$ROOT_REPOS/repodata")
 #   cloud_upload cloud_upload_list_upload cloud_upload_list_delete
 cloud_upload() {

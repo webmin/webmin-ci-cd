@@ -23,7 +23,7 @@
 source ./bootstrap.bash || exit 1
 
 # Build module func
-build_module() {
+function build() {
     # Always return back to root directory
     cd "$ROOT_DIR" || exit 1
 
@@ -182,10 +182,10 @@ build_module() {
 # Main
 if [ -n "$1" ] && [[ "'$1'" != *"--"* ]]; then
     MODULES_REPO_URL="$VIRTUALMIN_ORG_AUTH_URL"
-    build_module "$@"
-    cloud_upload_list_upload=("$ROOT_REPOS/"*)
-    cloud_upload cloud_upload_list_upload
-    cloud_repo_sign_and_update virtualmin.dev
+    build "$@"
+    upload_list=("$ROOT_REPOS/"*)
+    cloud_upload upload_list
+    cloud_sign_and_build_repos virtualmin.dev
 else
     # Error otherwise
     echo "Error: No module specified"

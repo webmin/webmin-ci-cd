@@ -31,7 +31,7 @@
 source ./bootstrap.bash || exit 1
 
 # Build product func
-build_prod() {
+function build() {
 
     local devel=0
     if [[ "'$*'" == *"--testing"* ]]; then
@@ -183,13 +183,13 @@ build_prod() {
 
 # Main
 if [ -n "$1" ] && [[ "$1" != --* ]]; then
-    build_prod "$@"
-    cloud_upload_list_upload=("$ROOT_REPOS/$1"*)
+    build "$@"
+    upload_list=("$ROOT_REPOS/$1"*)
 else
-    build_prod webmin "$@"
-    build_prod usermin "$@"
-    cloud_upload_list_upload=("$ROOT_REPOS/"*)
+    build webmin "$@"
+    build usermin "$@"
+    upload_list=("$ROOT_REPOS/"*)
 fi
 
-cloud_upload cloud_upload_list_upload
-cloud_repo_sign_and_update webmin.dev
+cloud_upload upload_list
+cloud_sign_and_build_repos webmin.dev

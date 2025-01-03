@@ -93,7 +93,7 @@ function cloud_upload() {
 }
 
 # Sign and update repos metadata in remote
-function cloud_repo_sign_and_update() {
+function cloud_sign_and_build_repos() {
     # shellcheck disable=SC2034
     local repo_type="$1"
     # Setup SSH keys on the build machine

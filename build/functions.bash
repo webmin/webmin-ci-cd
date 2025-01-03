@@ -36,12 +36,6 @@ function setup_ssh_known_hosts() {
     local ssh_home="$HOME/.ssh"
     local ssh_known_hosts="$ssh_home/known_hosts"
 
-    # Debug output
-    echo "Debug: SSH home directory: $ssh_home" >&2
-    echo "Debug: Known hosts file: $ssh_known_hosts" >&2
-    echo "Debug: CLOUD_UPLOAD_SSH_KNOWN_HOSTS content:" >&2
-    echo "$CLOUD_UPLOAD_SSH_KNOWN_HOSTS" >&2
-
     # Create .ssh directory if it doesn't exist
     mkdir -p "$ssh_home" && chmod 700 "$ssh_home"
 
@@ -51,19 +45,11 @@ function setup_ssh_known_hosts() {
         if ! grep -qF "$CLOUD_UPLOAD_SSH_KNOWN_HOSTS" "$ssh_known_hosts" 2>/dev/null; then
             echo "$CLOUD_UPLOAD_SSH_KNOWN_HOSTS" >> "$ssh_known_hosts"
             chmod 600 "$ssh_known_hosts"
-            # Debug output
-            echo "Debug: Content of known_hosts after update:" >&2
-            cat "$ssh_known_hosts" >&2
-        else
-            echo "Debug: Known hosts entry already exists" >&2
         fi
     else
-        echo "Debug: No CLOUD_UPLOAD_SSH_KNOWN_HOSTS set" >&2
+        # Return insecure fallback SSH options
         echo "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
     fi
-
-    # Verify final permissions
-    ls -la "$ssh_home" >&2
 }
 
 # Upload to cloud
@@ -80,10 +66,9 @@ function cloud_upload() {
     # Setup SSH keys on the build machine and configure known hosts if any
     local ssh_options ssh_warning_text
     ssh_options=$(setup_ssh_known_hosts)
-    ssh_options="-o UserKnownHostsFile="$HOME/.ssh/known_hosts""
-    # if [ -n "$ssh_options" ]; then
-    #     ssh_warning_text=" (insecure)"
-    # fi
+    if [ -n "$ssh_options" ]; then
+        ssh_warning_text=" (insecure)"
+    fi
     
     # Setup SSH keys on the build machine
     setup_ssh

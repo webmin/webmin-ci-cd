@@ -65,6 +65,6 @@ jobs:
             bash build-deb-package.bash ${{ inputs.project-name }} --testing
             bash build-rpm-package.bash ${{ inputs.project-name }} --testing
           else
-            bash build-deb-module.bash ${{ inputs.project-name }} --testing --verbose
-            bash build-rpm-module.bash ${{ inputs.project-name }} --testing --verbose
+            bash build-deb-module.bash ${{ inputs.project-name }} --testing
+            bash build-rpm-module.bash ${{ inputs.project-name }} --testing
           fi

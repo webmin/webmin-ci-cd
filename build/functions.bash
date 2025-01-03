@@ -414,3 +414,163 @@ get_rpm_module_epoch() {
     fi
     awk -F= -v module="$module" '$1 == module {print $2; exit}' "$epoch_file"
 }
+
+# Cleans up package files by keeping only the latest version of each package
+# 
+# Usage:
+#   cleanup_packages [path] [max_depth] [extensions]
+#
+# Parameters:
+#   path        Directory to process (default: current directory)
+#   max_depth   Maximum depth for directory traversal (default: 1)
+#   extensions  Space-separated list of file extensions to process
+#               (default: all extensions found)
+#
+# Features:
+#   - Handles version formats: X.Y, X.Y.Z, X.Y.YYYYMMDDHHMM
+#   - Prioritizes files with '-latest' or '_latest' in name
+#   - Processes files by extension and base package name
+#   - Skips hidden directories (like .git)
+#   - Handles both hyphen (-) and underscore (_) package naming
+#
+# Examples:
+#   cleanup_packages                     # Current directory, all extensions
+#   cleanup_packages /path/to/dir        # Specific path
+#   cleanup_packages . 2                 # Current directory, depth 2
+#   cleanup_packages . 1 "rpm deb"       # Only rpm and deb files
+#   cleanup_packages /path 3 "rpm deb"   # Path, depth 3, specific extensions
+function cleanup_packages {
+    local search_path="${1:-.}" # Default to current directory if not set
+    local max_depth="${2:-1}"   # Default to 1 if not specified
+    local extensions_arg="$3"   # Optional extensions list (space-separated)
+
+    # Validate input path
+    if [[ ! -d "$search_path" ]]; then
+        echo "Error: Directory '$search_path' does not exist"
+        return 1
+    fi
+
+    function is_latest {
+        local filename="$1"
+        [[ $filename =~ [-_]latest[._] ]] && return 0
+        return 1
+    }
+
+    function get_base_package {
+        local filename="$1"
+        # Remove extension and release number
+        filename=${filename%.*}  # Remove any extension
+        filename=${filename%_all}
+        filename=${filename%.noarch}
+        filename=${filename%-[0-9]}
+        filename=${filename%-[0-9][0-9]}
+        
+        # Extract base package name
+        if [[ $filename =~ ^(.*)-[0-9]+(\.[0-9]+)* ]] || 
+           [[ $filename =~ ^(.*)_[0-9]+(\.[0-9]+)* ]] || 
+           [[ $filename =~ ^(.*)-latest ]] || 
+           [[ $filename =~ ^(.*)_latest ]]; then
+            echo "${BASH_REMATCH[1]}"
+        else
+            echo "$filename"
+        fi
+    }
+
+    function get_version {
+        local filename="$1"
+        # Extract version number
+        if [[ $filename =~ [^0-9]([0-9]+(\.[0-9]+[\.0-9]*)?)[^0-9] ]]; then
+            echo "${BASH_REMATCH[1]}"
+        fi
+    }
+
+    function version_gt {
+        test "$(printf '%s\n' "$@" | sort -V | head -n 1)" != "$1"
+    }
+
+    function process_group {
+        local files="$1"
+        local latest_ver="0"
+        local latest_file=""
+        
+        # Convert string to array
+        IFS=' ' read -r -a file_array <<< "$files"
+        
+        # Find latest version
+        for file in "${file_array[@]}"; do
+            [[ -z "$file" ]] && continue
+            
+            # If this is a latest version, keep it and skip other checks
+            if is_latest "$file"; then
+                latest_file="$file"
+                break
+            fi
+            
+            version=$(get_version "$file")
+            if [ -n "$version" ]; then
+                if [ -z "$latest_file" ] ||
+                   version_gt "$version" "$latest_ver"; then
+                    latest_ver="$version"
+                    latest_file="$file"
+                fi
+            fi
+        done
+        
+        # Remove older versions
+        for file in "${file_array[@]}"; do
+            [[ -z "$file" ]] && continue
+            if [ "$file" != "$latest_file" ]; then
+                if [ -f "$file" ]; then
+                    rm "$file" 2>/dev/null || true
+                fi
+            fi
+        done
+    }
+
+    # Process each directory up to max_depth, excluding .git directories
+    find "$search_path" -maxdepth "$max_depth" -type d -not -path "*/\.*" | \
+      while read -r dir; do
+        # Change to directory
+        pushd "$dir" >/dev/null || continue
+
+        # Initialize extensions array
+        declare -A extensions
+
+        if [ -n "$extensions_arg" ]; then
+            # Use provided extensions
+            for ext in $extensions_arg; do
+                extensions["$ext"]=1
+            done
+        else
+            # Find all unique extensions in the directory
+            for file in *.*; do
+                [[ -f "$file" ]] || continue
+                ext="${file##*.}"
+                [[ -n "$ext" ]] && extensions["$ext"]=1
+            done
+        fi
+
+        # Group files by base package name and extension
+        declare -A package_groups
+
+        # Read all files with detected extensions
+        for ext in "${!extensions[@]}"; do
+            for file in *."$ext"; do
+                [[ -f "$file" ]] || continue
+                
+                base_pkg=$(get_base_package "$file")
+                [[ -z "$base_pkg" ]] && continue
+                
+                package_groups["$base_pkg.$ext"]+=" $file"
+            done
+        done
+
+        # Process all package groups
+        for pkg_ext in "${!package_groups[@]}"; do
+            process_group "${package_groups[$pkg_ext]}"
+        done
+
+        # Return to original directory
+        popd >/dev/null || exit 1
+    done
+}

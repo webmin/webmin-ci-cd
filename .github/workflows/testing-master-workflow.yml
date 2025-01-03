@@ -16,6 +16,8 @@ on:
         required: true
       DEV_IP_ADDR:
         required: true
+      DEV_IP_KNOWN_HOSTS:
+        required: false
       DEV_UPLOAD_SSH_USER:
         required: true
       DEV_UPLOAD_SSH_DIR:
@@ -51,6 +53,7 @@ jobs:
         env:
           CLOUD__GPG_PH: ${{ secrets.DEV_GPG_PH }}
           CLOUD__IP_ADDR: ${{ secrets.DEV_IP_ADDR }}
+          CLOUD__IP_KNOWN_HOSTS: ${{ secrets.DEV_IP_KNOWN_HOSTS }}
           CLOUD__UPLOAD_SSH_USER: ${{ secrets.DEV_UPLOAD_SSH_USER }}
           CLOUD__UPLOAD_SSH_DIR: ${{ secrets.DEV_UPLOAD_SSH_DIR }}
           CLOUD__SSH_PRV_KEY: ${{ secrets.DEV_SSH_PRV_KEY }}

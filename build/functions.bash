@@ -31,6 +31,29 @@ function setup_ssh() {
     fi
 }
 
+# Set up SSH known hosts
+function setup_ssh_known_hosts() {
+    local ssh_home="$HOME/.ssh"
+    local ssh_known_hosts="$ssh_home/known_hosts"
+
+    # Create .ssh directory if it doesn't exist
+    mkdir -p "$ssh_home" && chmod 700 "$ssh_home"
+
+    # Check if known_hosts file exists
+    if [ -f "$ssh_known_hosts" ]; then
+        return 0  # Known hosts already set up
+    fi
+
+    # Set up known_hosts from environment variable
+    if [ -n "$CLOUD_UPLOAD_SSH_KNOWN_HOSTS" ]; then
+        echo "$CLOUD_UPLOAD_SSH_KNOWN_HOSTS" > "$ssh_known_hosts"
+        chmod 600 "$ssh_known_hosts"
+    else
+        # Return insecure fallback SSH options
+        echo "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+    fi
+}
+
 # Upload to cloud
 # Usage:
 #   cloud_upload_list_delete=("remote_dir remote_file * [-_][0-9]*")
@@ -38,17 +61,23 @@ function setup_ssh() {
 #   cloud_upload cloud_upload_list_upload cloud_upload_list_delete
 function cloud_upload() {
     # Print new block only if defined
-    local ssh_args="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
     if [ -n "$1" ]; then
         echo
     fi
 
+    # Setup SSH keys on the build machine and configure known hosts if any
+    local ssh_options ssh_warning_text
+    ssh_options=$(setup_ssh_known_hosts)
+    if [ -n "$ssh_options" ]; then
+        ssh_warning_text=" (insecure)"
+    fi
+    
     # Setup SSH keys on the build machine
     setup_ssh
 
     # Delete files on remote if needed
     if [ -n "$2" ]; then
-        echo "Deleting given files in $CLOUD_UPLOAD_SSH_HOST .."
+        echo "Deleting given files in $CLOUD_UPLOAD_SSH_HOST$ssh_warning_text .."
         local -n arr_del=$2
         local err=0
         for d in "${arr_del[@]}"; do
@@ -59,7 +88,7 @@ function cloud_upload() {
                 local patterns="${remaining#* }"
                 local pre_pattern="${patterns%% *}"
                 local post_pattern="${patterns#* }"
-                local cmd1="ssh $ssh_args $CLOUD_UPLOAD_SSH_USER@"
+                local cmd1="ssh $ssh_options $CLOUD_UPLOAD_SSH_USER@"
                 cmd1+="$CLOUD_UPLOAD_SSH_HOST \"cd '$remote_dir' && find . -maxdepth 1 "
                 cmd1+="-name '${pre_pattern}${filename}${post_pattern}' -delete $VERBOSITY_LEVEL\""
                 eval "$cmd1"
@@ -74,12 +103,12 @@ function cloud_upload() {
     
     # Upload files to remote
     if [ -n "$1" ]; then
-        echo "Uploading built files to $CLOUD_UPLOAD_SSH_HOST .."
+        echo "Uploading built files to $CLOUD_UPLOAD_SSH_HOST$ssh_warning_text .."
         local -n arr_upl=$1
         local err=0
         for u in "${arr_upl[@]}"; do
             if [ -n "$u" ]; then
-                local cmd2="scp $ssh_args -r $u $CLOUD_UPLOAD_SSH_USER@"
+                local cmd2="scp $ssh_options -r $u $CLOUD_UPLOAD_SSH_USER@"
                 cmd2+="$CLOUD_UPLOAD_SSH_HOST:$CLOUD_UPLOAD_SSH_DIR/ $VERBOSITY_LEVEL"
                 eval "$cmd2"
                 if [ "$?" != "0" ]; then
@@ -96,12 +125,17 @@ function cloud_upload() {
 function cloud_sign_and_build_repos() {
     # shellcheck disable=SC2034
     local repo_type="$1"
+    # Setup SSH keys on the build machine and configure known hosts if any
+    local ssh_options ssh_warning_text
+    ssh_options=$(setup_ssh_known_hosts)
+    if [ -n "$ssh_options" ]; then
+        ssh_warning_text=" (insecure)"
+    fi
     # Setup SSH keys on the build machine
     setup_ssh
     # Sign and update repos metadata in remote
-    echo "Signing and updating repos metadata in $CLOUD_UPLOAD_SSH_HOST .."
-    local ssh_args="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-    local cmd1="ssh $ssh_args $CLOUD_UPLOAD_SSH_USER@"
+    echo "Signing and updating repos metadata in $CLOUD_UPLOAD_SSH_HOST$ssh_warning_text .."
+    local cmd1="ssh $ssh_options $CLOUD_UPLOAD_SSH_USER@"
     cmd1+="$CLOUD_UPLOAD_SSH_HOST \"$CLOUD_SIGN_BUILD_REPOS_CMD\" $VERBOSITY_LEVEL"
     eval "$cmd1"
     postcmd $?

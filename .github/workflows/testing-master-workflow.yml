@@ -24,6 +24,8 @@ on:
         required: true
       DEV_SIGN_BUILD_REPOS_CMD:
         required: true
+      DEV_CHILD_GITHUB_TOKEN:
+        required: false
 
 jobs:
   build:
@@ -53,7 +55,7 @@ jobs:
           CLOUD__UPLOAD_SSH_DIR: ${{ secrets.DEV_UPLOAD_SSH_DIR }}
           CLOUD__SSH_PRV_KEY: ${{ secrets.DEV_SSH_PRV_KEY }}
           CLOUD__SIGN_BUILD_REPOS_CMD: ${{ secrets.DEV_SIGN_BUILD_REPOS_CMD }}
-          CLOUD__GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLOUD__GH_TOKEN: ${{ secrets.DEV_CHILD_GITHUB_TOKEN }}
         run: |-
           bash bootstrap.bash
           if [ "${{ inputs.build-type }}" = "package" ]; then

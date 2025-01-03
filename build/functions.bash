@@ -62,6 +62,7 @@ cloud_upload() {
                 local cmd1="ssh $ssh_args $CLOUD_UPLOAD_SSH_USER@"
                 cmd1+="$CLOUD_UPLOAD_SSH_HOST \"cd '$remote_dir' && find . -maxdepth 1 "
                 cmd1+="-regex '${pre_pattern}${filename}${post_pattern}' -delete $VERBOSITY_LEVEL\""
+                echo "del cmd : $cmd1"
                 eval "$cmd1"
                 if [ "$?" != "0" ]; then
                     err=1

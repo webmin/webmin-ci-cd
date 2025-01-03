@@ -5,7 +5,7 @@
 # Build functions for the build process
 
 # Set up SSH keys on the build machine
-setup_ssh() {
+function setup_ssh() {
     local key_path="$HOME/.ssh/id_rsa"
 
     # If SSH keys are already set up, skip this step
@@ -36,7 +36,7 @@ setup_ssh() {
 #   cloud_upload_list_delete=("remote_dir remote_file * [-_][0-9]*")
 #   cloud_upload_list_upload=("$ROOT_REPOS/*" "$ROOT_REPOS/repodata")
 #   cloud_upload cloud_upload_list_upload cloud_upload_list_delete
-cloud_upload() {
+function cloud_upload() {
     # Print new block only if defined
     local ssh_args="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
     if [ -n "$1" ]; then
@@ -93,7 +93,7 @@ cloud_upload() {
 }
 
 # Sign and update repos metadata in remote
-cloud_repo_sign_and_update() {
+function cloud_repo_sign_and_update() {
     # shellcheck disable=SC2034
     local repo_type="$1"
     # Setup SSH keys on the build machine
@@ -109,7 +109,7 @@ cloud_repo_sign_and_update() {
 }
 
 # Post command func
-postcmd() {
+function postcmd() {
     if [ "$1" != "0" ]; then
         echo ".. failed"
         exit 1
@@ -119,7 +119,7 @@ postcmd() {
 }
 
 # Get max number from array
-max() {
+function max() {
     local max="$1"
     shift
     for value in "$@"; do
@@ -131,28 +131,28 @@ max() {
 }
 
 # Mkdir and children dirs
-make_dir() {
+function make_dir() {
     if [ ! -d "$1" ]; then
         mkdir -p "$1"
     fi
 }
 
 # Remove all content in dir
-purge_dir() {
+function purge_dir() {
     for file in "$1"/*; do
         rm -rf "$file"
     done
 }
 
 # Remove dir
-remove_dir() {
+function remove_dir() {
     if [ -d "$1" ]; then
         rm -rf "$1"
     fi
 }
 
 # Get latest tag version
-get_current_repo_tag() {
+function get_current_repo_tag() {
     # shellcheck disable=SC2153
     local root_prod="$1"
     (
@@ -164,7 +164,7 @@ get_current_repo_tag() {
     )
 }
 
-get_module_version() {
+function get_module_version() {
     local module_root="$1"
     local version=""
     
@@ -184,7 +184,7 @@ get_module_version() {
     echo "$version"
 }
 
-update_module_version() {
+function update_module_version() {
     local module_root="$1"
     local version="$2"
     local version_file="$module_root/module.info"
@@ -198,12 +198,12 @@ update_module_version() {
 }
 
 # Get latest commit date
-get_current_date() {
+function get_current_date() {
     date +'%Y-%m-%d %H:%M:%S %z'
 }
 
 # Get latest commit date version
-get_latest_commit_date_version() {
+function get_latest_commit_date_version() {
     local theme_version
     local prod_version
     local max_prod
@@ -222,7 +222,7 @@ get_latest_commit_date_version() {
 }
 
 # Pull project repo and theme
-make_packages_repos() {
+function make_packages_repos() {
     local root_prod="$1"
     local prod="$2"
     local devel="$3"
@@ -285,7 +285,7 @@ return 0
 }
 
 # Make module repo
-make_module_repo_cmd() {
+function make_module_repo_cmd() {
     local module="$1"
     local target="$2"
     printf "git clone --depth 1 $target/%s.git %s" \
@@ -293,7 +293,7 @@ make_module_repo_cmd() {
 }
 
 # Get last commit date from repo
-get_last_commit_date() {
+function get_last_commit_date() {
     local repo_dir="$1"
     (
         cd "$repo_dir" || return 1
@@ -302,7 +302,7 @@ get_last_commit_date() {
 }
 
 # Get required build scripts from Webmin repo
-make_module_build_deps() {
+function make_module_build_deps() {
     # Create directory for build dependencies if it doesn't exist
     if [ ! -d "$ROOT_DIR/build-deps" ]; then
         mkdir -p "$ROOT_DIR/build-deps"
@@ -342,7 +342,7 @@ make_module_build_deps() {
 }
 
 # Adjust module filename depending on package type
-adjust_module_filename() {
+function adjust_module_filename() {
     local repo_dir="$1"
     local package_type="$2"
     local failed=0
@@ -402,7 +402,7 @@ adjust_module_filename() {
 }
 
 # Retrieve the RPM module epoch from the provided list
-get_rpm_module_epoch() {
+function get_rpm_module_epoch() {
     local module="$1"
     local script_dir
     local epoch_file

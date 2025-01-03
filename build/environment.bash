@@ -40,8 +40,9 @@ fi
 # Project links
 GIT_BASE_URL="https://github.com"
 GIT_AUTH_URL="$GIT_BASE_URL"
+echo "Token exists: $([[ -n "$CLOUD_GH_TOKEN" ]] && echo "YES" || echo "NO")"
 if [ -n "$CLOUD_GH_TOKEN" ]; then
-    GIT_AUTH_URL="https://${CLOUD_GH_TOKEN}@github.com"
+    GIT_AUTH_URL="https://oauth2:${CLOUD_GH_TOKEN}@github.com"
 fi
 WEBMIN_ORG_URL="$GIT_BASE_URL/webmin"
 WEBMIN_REPO="$WEBMIN_ORG_URL/webmin"

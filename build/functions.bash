@@ -39,15 +39,13 @@ function setup_ssh_known_hosts() {
     # Create .ssh directory if it doesn't exist
     mkdir -p "$ssh_home" && chmod 700 "$ssh_home"
 
-    # Check if known_hosts file exists
-    if [ -f "$ssh_known_hosts" ]; then
-        return 0  # Known hosts already set up
-    fi
-
     # Set up known_hosts from environment variable
     if [ -n "$CLOUD_UPLOAD_SSH_KNOWN_HOSTS" ]; then
-        echo "$CLOUD_UPLOAD_SSH_KNOWN_HOSTS" > "$ssh_known_hosts"
-        chmod 600 "$ssh_known_hosts"
+        # Check if content already exists in known_hosts
+        if ! grep -qF "$CLOUD_UPLOAD_SSH_KNOWN_HOSTS" "$ssh_known_hosts" 2>/dev/null; then
+            echo "$CLOUD_UPLOAD_SSH_KNOWN_HOSTS" >> "$ssh_known_hosts"
+            chmod 600 "$ssh_known_hosts"
+        fi
     else
         # Return insecure fallback SSH options
         echo "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"

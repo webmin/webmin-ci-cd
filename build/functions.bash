@@ -219,8 +219,9 @@ function get_module_version() {
 function get_modules_exclude() {
     local exclude
     exclude="--exclude .git --exclude .github --exclude .gitignore --exclude t"
-    exclude+=" --exclude newfeatures --exclude CHANGELOG --exclude README.md"
-    exclude+=" --exclude LICENSE --exclude .travis.yml --exclude tmp"
+    exclude+=" --exclude newfeatures --exclude CHANGELOG* --exclude README*"
+    exclude+=" --exclude LICENSE* --exclude .travis.yml --exclude tmp"
+    exclude+=" --exclude procmail-wrapper --exclude procmail-wrapper.c"
     echo "$exclude"
 }
 
@@ -325,11 +326,51 @@ return 0
 }
 
 # Make module repo
-function make_module_repo_cmd() {
+function clone_module_repo() {
     local module="$1"
     local target="$2"
-    printf "git clone --depth 1 $target/%s.git %s" \
-        "$module" "$VERBOSITY_LEVEL"
+
+    # Resolve module info mapping
+    local names repo_name dir_name ver_pref deps_repo sub_dir 
+    local cmd_clone_main cmd_clone_deps err
+    names=$(resolve_module_info "$module")
+    read -r repo_name dir_name ver_pref deps_repo sub_dir lic_id <<< "$names"
+
+    # Clean up module directory
+    remove_dir "$dir_name"
+
+    # Function to get actual clone command
+    generate_clone_cmd() {
+        local repo="$1"
+        local dir="$2"
+        echo "git clone --depth 1 $target/$repo.git $dir $VERBOSITY_LEVEL"
+    }
+
+    # Run cloning depending on the module type
+    declare -a rs=()
+    local target_dir="$dir_name"
+
+    # Move directory if set
+    if [[ -n "$sub_dir" ]]; then
+        target_dir="$sub_dir"
+    fi
+
+    # Clone dependency first if exists
+    if [[ -n "$deps_repo" ]]; then
+        cmd_clone_deps=$(generate_clone_cmd "$deps_repo" "$dir_name")
+        eval "$cmd_clone_deps" || rs+=($?)
+    fi
+
+    # Clone main module
+    cmd_clone_main=$(generate_clone_cmd "$repo_name" "$target_dir")
+    eval "$cmd_clone_main" || rs+=($?)
+
+    # Check for errors
+    err=0
+    [ -n "${rs[*]}" ] && for r in "${rs[@]}"; do [ "$r" -gt 0 ] && { err=1; break; }; done    
+
+    # Return error code and new module directory name with version prefix
+    printf "%s,%s,%s,%s" "$err" "$dir_name" "$ver_pref" "$lic_id"
 }
 
 # Get last commit date from repo
@@ -457,7 +498,7 @@ function get_rpm_module_epoch() {
 
 # Gets module mappings and dependencies from file
 #  Format in file:
-#    module=dir_name,[version_prefix],[dependency],[move_dir]
+#    module=dir_name,[ver_pref],[deps_repo],[sub_dir],[license]
 function resolve_module_info() {
     local module_name="$1"
     local mapping_file="${BASH_SOURCE[0]%/*}/modules-mapping.txt"
@@ -476,8 +517,8 @@ function resolve_module_info() {
     while IFS='=' read -r source_name target_info; do
         if [[ "$source_name" == "$module_name" ]]; then
             # Split comma-separated values into array
-            IFS=',' read -r dir_name version_prefix dependency move_dir <<< "$target_info"
-            echo "$source_name $dir_name $version_prefix $dependency $move_dir"
+            IFS=',' read -r dir_name ver_pref deps_repo sub_dir lic_id <<< "$target_info"
+            echo "$source_name $dir_name $ver_pref $deps_repo $sub_dir $lic_id"
             return 0
         fi
     done <<< "$content"

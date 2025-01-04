@@ -28,15 +28,11 @@ function build() {
     cd "$ROOT_DIR" || exit 1
 
     # Define variables
-    local last_commit_date
-    local ver=""
-    local verorig=""
+    local module_dir edition_id license last_commit_date ver rel epoch epoch_str
+    license="GPLv3"
     local module=$1
-    local rel
-    local epoch
-    local epoch_str
+    local root_module
     local devel=0
-    local root_module="$ROOT_DIR/$module"
 
     # Print build actual date
     date=$(get_current_date)
@@ -48,12 +44,18 @@ function build() {
     echo "                  module: $module                                       "
     echo -n "     downloading package: "
 
-    # Pull or clone module repository
-    remove_dir "$root_module"
-    cmd=$(make_module_repo_cmd "$module" "$MODULES_REPO_URL")
-    eval "$cmd"
-    local rs=$? # Store to print success or failure nicely later
-    if [ $rs -eq 0 ]; then
+    # Clone module repository and dependencies if any
+    IFS=$',' read -r rs module_dir edition_id lic_id <<< "$(clone_module_repo \
+        "$module" "$MODULES_REPO_URL")"
+    module="$module_dir"
+    root_module="$ROOT_DIR/$module"
+    if [ -n "$edition_id" ]; then
+        edition_id=".$edition_id"
+    fi
+    if [ -n "$lic_id" ]; then
+        license="$lic_id"
+    fi
+    if [ "$rs" -eq 0 ]; then
         echo -e "✔"
     else
         echo -e "✘"
@@ -88,7 +90,6 @@ function build() {
     fi
     if [[ "'$*'" == *"--testing"* ]]; then
         devel=1
-        verorig=$ver
         # Testing version must always be x.x.<last_commit_date>, this will
         # effectively remove the patch version from any module for testing
         # builds
@@ -96,16 +97,16 @@ function build() {
         ver="$ver.$last_commit_date"
     fi
 
-    echo "  package output version: $epoch_str$ver-$rel"
+    echo "                 version: $epoch_str$ver-$rel$edition_id"
+    echo "                 license: $license"
     echo "************************************************************************"
 
     echo "Pulling latest changes.."
-    postcmd $rs
+    postcmd "$rs"
     echo
 
     echo "Pre-clean up .."
     # Make sure directories exist
-    make_dir "$root_module/tmp"
     make_dir "$ROOT_DIR/newkey/rpm/"
     make_dir "$ROOT_DIR/umodules/"
     make_dir "$ROOT_DIR/minimal/"
@@ -118,12 +119,6 @@ function build() {
     make_dir "$ROOT_BUILD/SPECS/"
     make_dir "$ROOT_BUILD/SRPMS/"
     make_dir "$ROOT_REPOS"
-
-    # Purge old files
-    purge_dir "$root_module/tmp"
-    if [ "$module" != "" ]; then
-        rm -f "$ROOT_REPOS/$module-latest"*
-    fi
     postcmd $?
     echo
 
@@ -136,28 +131,15 @@ function build() {
         cd "$ROOT_DIR" || exit 1
         modules_exclude=$(get_modules_exclude)
         cmd="$ROOT_DIR/build-deps/makemodulerpm.pl $epoch --release \
-            $rel --rpm-depends --licence 'GPLv3' --allow-overwrite --rpm-dir \
-            $ROOT_BUILD --target-dir $root_module/tmp $modules_exclude \
+            $rel$edition_id --rpm-depends --licence '$license' --allow-overwrite --rpm-dir \
+            $ROOT_BUILD --target-dir $ROOT_REPOS $modules_exclude \
             --vendor '$BUILDER_PACKAGE_NAME' $module $ver $VERBOSITY_LEVEL"
         eval "$cmd"
         postcmd $?
     )
-
-    echo
-    echo "Preparing built files for upload .."
-    # Move RPM to repos
-    cmd="find $ROOT_RPMS -name wbm-$module*$verorig*\.rpm -exec mv '{}' \
-        $ROOT_REPOS \; $VERBOSITY_LEVEL"
-    eval "$cmd"
-    if [ "$devel" -eq 1 ]; then
-        cmd="mv -f $ROOT_REPOS/wbm-$module*$verorig*\.rpm \
-            $ROOT_REPOS/${module}-$ver-$rel.noarch.rpm $VERBOSITY_LEVEL"
-        eval "$cmd"
-    fi
-    postcmd $?
     echo
 
-    # Adjust module filename
+    # Adjust module filename for edge cases
     echo "Adjusting module filename .."
     adjust_module_filename "$ROOT_REPOS" "rpm"
     postcmd $?

@@ -1,2 +1,2 @@
 virtualmin-gpl=virtual-server,gpl
-virtualmin-pro=virtual-server,pro,virtualmin-gpl,pro
+virtualmin-pro=virtual-server,pro,virtualmin-gpl,virtual-server/pro,Commercial License

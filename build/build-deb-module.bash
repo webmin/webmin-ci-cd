@@ -109,14 +109,10 @@ function build() {
     # Build DEB package
     echo "Building packages .."
     (
-        # Update actual module testing version dynamically
-        if [ "$devel" -eq 1 ]; then
-            update_module_version "$root_module" "$ver" || exit 1
-        fi
         cd "$ROOT_DIR" || exit 1
         cmd="$ROOT_DIR/build-deps/makemoduledeb.pl --release $rel --deb-depends \
             --licence 'GPLv3' --email '$BUILDER_PACKAGE_NAME <$BUILDER_MODULE_EMAIL>' \
-            --allow-overwrite --target-dir $root_module/tmp $module $VERBOSITY_LEVEL"
+            --allow-overwrite --target-dir $root_module/tmp $module $ver $VERBOSITY_LEVEL"
         eval "$cmd"
         postcmd $?
     )

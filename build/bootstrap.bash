@@ -15,6 +15,7 @@ BOOTSTRAP_SCRIPTS=(
     "build-deb-package.bash"
     "build-rpm-module.bash"
     "build-rpm-package.bash"
+    "modules-mapping.txt"
     "rpm-modules-epoch.txt"
 )
 

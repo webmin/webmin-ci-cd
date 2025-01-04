@@ -1,0 +1,2 @@
+virtualmin-gpl=virtual-server,gpl
+virtualmin-pro=virtual-server,pro,virtualmin-gpl,pro

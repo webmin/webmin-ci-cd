@@ -455,6 +455,37 @@ function get_rpm_module_epoch() {
     awk -F= -v module="$module" '$1 == module {print $2; exit}' "$epoch_file"
 }
 
+# Gets module mappings and dependencies from file
+#  Format in file:
+#    module=dir_name,[version_prefix],[dependency],[move_dir]
+function resolve_module_info() {
+    local module_name="$1"
+    local mapping_file="${BASH_SOURCE[0]%/*}/modules-mapping.txt"
+    
+    # Check if mapping file exists
+    if [[ ! -f "$mapping_file" ]]; then
+        echo "$module_name $module_name"
+        return 0
+    fi
+    
+    # Read entire file content
+    local content
+    content=$(<"$mapping_file")
+    
+    # Process the mapping content
+    while IFS='=' read -r source_name target_info; do
+        if [[ "$source_name" == "$module_name" ]]; then
+            # Split comma-separated values into array
+            IFS=',' read -r dir_name version_prefix dependency move_dir <<< "$target_info"
+            echo "$source_name $dir_name $version_prefix $dependency $move_dir"
+            return 0
+        fi
+    done <<< "$content"
+
+    # Return original name with empty optional values
+    echo "$module_name $module_name"
+}
+
 # Cleans up package files by keeping only the latest version of each package
 # 
 # Usage:

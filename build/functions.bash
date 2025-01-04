@@ -562,45 +562,67 @@ function cleanup_packages {
         return 1
     fi
 
-    function is_latest {
+    is_latest() {
         local filename="$1"
         [[ $filename =~ [-_]latest[._] ]] && return 0
         return 1
     }
 
-    function get_base_package {
+    get_base_package() {
         local filename="$1"
         # Remove extension and release number
         filename=${filename%.*}  # Remove any extension
         filename=${filename%_all}
         filename=${filename%.noarch}
+        
+        # Extract edition if present
+        local edition
+        if [[ $filename =~ [._-]([a-zA-Z]+)$ ]]; then
+            edition="${BASH_REMATCH[1]}"
+            # Remove the detected edition from filename
+            filename=${filename%.*${edition}}
+            filename=${filename%-${edition}}
+        fi
+        
         filename=${filename%-[0-9]}
         filename=${filename%-[0-9][0-9]}
         
         # Extract base package name
+        local base
         if [[ $filename =~ ^(.*)-[0-9]+(\.[0-9]+)* ]] || 
            [[ $filename =~ ^(.*)_[0-9]+(\.[0-9]+)* ]] || 
            [[ $filename =~ ^(.*)-latest ]] || 
            [[ $filename =~ ^(.*)_latest ]]; then
-            echo "${BASH_REMATCH[1]}"
+            base="${BASH_REMATCH[1]}"
         else
-            echo "$filename"
+            base="$filename"
+        fi
+        
+        # Append edition to base name if present
+        if [ -n "$edition" ]; then
+            echo "${base}-${edition}"
+        else
+            echo "$base"
         fi
     }
 
-    function get_version {
+    get_version() {
         local filename="$1"
-        # Extract version number
-        if [[ $filename =~ [^0-9]([0-9]+(\.[0-9]+[\.0-9]*)?)[^0-9] ]]; then
+        # Extract version number and release number
+        if [[ $filename =~ [^0-9]([0-9]+(\.[0-9]+[\.0-9]*)?)-([0-9]+) ]]; then
+            # Combine version and release with a dot for proper version comparison
+            echo "${BASH_REMATCH[1]}.${BASH_REMATCH[3]}"
+        elif [[ $filename =~ [^0-9]([0-9]+(\.[0-9]+[\.0-9]*)?)[^0-9] ]]; then
+            # If no release number, just use the version
             echo "${BASH_REMATCH[1]}"
         fi
     }
 
-    function version_gt {
+    version_gt() {
         test "$(printf '%s\n' "$@" | sort -V | head -n 1)" != "$1"
     }
 
-    function process_group {
+    process_group() {
         local files="$1"
         local latest_ver="0"
         local latest_file=""

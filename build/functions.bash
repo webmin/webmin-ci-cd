@@ -446,7 +446,7 @@ function get_rpm_module_epoch() {
     local module="$1"
     local script_dir
     local epoch_file
-    script_dir=$(dirname "$(realpath "${BASH_SOURCE[0]}")")
+    script_dir="${BASH_SOURCE[0]%/*}"
     epoch_file="$script_dir/rpm-modules-epoch.txt"
     if [ ! -f "$epoch_file" ]; then
         echo "Error: $epoch_file not found" >&2

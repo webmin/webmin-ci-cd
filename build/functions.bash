@@ -708,3 +708,370 @@ function cleanup_packages {
         popd >/dev/null || exit 1
     done
 }
+
+# Build native DEB and RPM packages for Linux systems
+#
+# This function builds both DEB and RPM packages for specified architectures.
+# It handles compilation of C source files if provided and supports setting
+# permissions, dependencies, and package metadata.
+#
+# Usage:
+#   build_native_package \
+#     --architectures x64 arm64 \
+#     --files program.c \
+#     --target-dir /path/to/output \
+#     --base-name my-package-name \
+#     [additional options]
+#
+# Required options:
+#   --target-dir      Output directory for built packages
+#   --base-name       Base name for the package
+#   --files           One or more files to include in the package
+#
+# Optional:
+#   --architectures  Target architectures (default: x64)
+#                    Supported: x64 (amd64/x86_64), arm64 (arm64/aarch64), x86 (i386/i686)
+#   --version        Package version (default: 1.0)
+#   --release        Release number (default: 1)
+#   --permissions    File permissions (default: 755)
+#   --epoch          Package epoch
+#   --license        Package license (default: GPLv3)
+#   --maintainer     Package maintainer (default: $BUILDER_PACKAGE_NAME <$BUILDER_MODULE_EMAIL>)
+#   --vendor         Package vendor (default: $BUILDER_PACKAGE_NAME)
+#   --description    Package description
+#   --summary        Package summary (short description)
+#   --group          Package group
+#   --depends        Package dependencies
+#
+# Returns:
+#   0 on success, 1 on failure
+function build_native_package() {
+    # Default values
+    local arches=()
+    declare -A deb_arch_map=(
+        ["x64"]="amd64"
+        ["arm64"]="arm64"
+        ["x86"]="i386"
+    )
+    declare -A rpm_arch_map=(
+        ["x64"]="x86_64"
+        ["arm64"]="aarch64"
+        ["x86"]="i686"
+    )
+    local version="1.0"
+    local release="1"
+    local license="GPLv3"
+    local maintainer="$BUILDER_PACKAGE_NAME <$BUILDER_MODULE_EMAIL>"
+    local vendor="$BUILDER_PACKAGE_NAME"
+    local description
+    local summary
+    local group
+    local target_dir
+    local base_name
+    local epoch
+    local permissions="755"
+    local -a files=()
+    local -a depends=()
+    local cmd
+    local status=0
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --architectures)
+                shift
+                while [[ $# -gt 0 ]] && [[ "$1" != --* ]]; do
+                    arches+=("$1")
+                    shift
+                done
+                ;;
+            --files)
+                shift
+                while [[ $# -gt 0 ]] && [[ "$1" != --* ]]; do
+                    files+=("$1")
+                    shift
+                done
+                ;;
+            --permissions)
+                permissions="$2"
+                shift 2
+                ;;
+            --target-dir)
+                target_dir="$2"
+                shift 2
+                ;;
+            --base-name)
+                base_name="$2"
+                shift 2
+                ;;
+            --version)
+                version="$2"
+                shift 2
+                ;;
+            --release)
+                release="$2"
+                shift 2
+                ;;
+            --epoch)
+                epoch="$2"
+                shift 2
+                ;;
+            --license)
+                license="$2"
+                shift 2
+                ;;
+            --maintainer)
+                maintainer="$2"
+                shift 2
+                ;;
+            --vendor)
+                vendor="$2"
+                shift 2
+                ;;
+            --description)
+                description="$2"
+                shift 2
+                ;;
+            --summary)
+                summary="$2"
+                shift 2
+                ;;
+            --group)
+                group="$2"
+                shift 2
+                ;;
+            --depends)
+                shift
+                while [[ $# -gt 0 ]] && [[ "$1" != --* ]]; do
+                    depends+=("$1")
+                    shift
+                done
+                ;;
+            *)
+                echo "Unknown parameter: $1"
+                return 1
+                ;;
+        esac
+    done
+
+    # If no architectures specified, use defaults based on host architecture
+    if [ ${#arches[@]} -eq 0 ]; then
+        arches=("x64")
+    fi
+
+    # Function to map generic arch to specific format
+    get_deb_arch() {
+        local arch="$1"
+        echo "${deb_arch_map[$arch]:-$arch}"
+    }
+
+    get_rpm_arch() {
+        local arch="$1"
+        echo "${rpm_arch_map[$arch]:-$arch}"
+    }
+
+    # Validate required parameters
+    if [ -z "$target_dir" ] || [ -z "$base_name" ]; then
+        echo "Error: --target-dir and --base-name are required"
+        return 1
+    fi
+
+    # Function to build DEB package
+    build_deb() {
+        local arch="$1"
+        local work_dir
+        work_dir="$(mktemp -d)"
+        local pkg_name="${base_name}_${version}-${release}_${arch}"
+        local status=0
+        
+        echo "Building package '$pkg_name' for arch $arch .."
+        
+        # Create package structure
+        cmd="mkdir -p '$work_dir/DEBIAN' '$work_dir/usr/bin'"
+        eval "$cmd" || return 1
+        
+        # Copy and compile files
+        for file in "${files[@]}"; do
+            if [[ "$file" == *.c ]]; then
+                local basename
+                basename=$(basename "$file" .c)
+                
+                cmd="gcc -o '$work_dir/usr/bin/$basename' '$file' $VERBOSITY_LEVEL"
+                eval "$cmd"
+                postcmd $?
+                
+                cmd="chmod $permissions '$work_dir/usr/bin/$basename'"
+                eval "$cmd"
+            else
+                cmd="cp '$file' '$work_dir/usr/bin/'"
+                eval "$cmd"
+                postcmd $?
+            fi
+        done
+        
+       # Create control file
+        {
+            echo "Package: $base_name"
+            echo "Version: $version-$release"
+            echo "Architecture: $arch"
+            if [ ${#depends[@]} -gt 0 ]; then
+                echo -n "Depends: "
+                local first=true
+                for dep in "${depends[@]}"; do
+                    if [ "$first" = true ]; then
+                        echo -n "$dep"
+                        first=false
+                    else
+                        echo -n ", $dep"
+                    fi
+                done
+                echo ""
+            fi
+            echo "Maintainer: $maintainer"
+            echo "Description: ${summary:-$description}"
+            if [ -n "$summary" ] && [ -n "$description" ]; then
+                echo " $description"
+            fi
+            
+        } > "$work_dir/DEBIAN/control"
+        
+        # Build package
+        cmd="dpkg-deb --build '$work_dir' '$target_dir/${pkg_name}.deb' $VERBOSITY_LEVEL"
+        eval "$cmd"
+        status=$?
+        
+        # Cleanup
+        rm -rf "$work_dir"
+        
+        return $status
+    }
+
+    # Function to build RPM package
+    build_rpm() {
+        local arch="$1"
+        local work_dir
+        work_dir="$(mktemp -d)"
+        local pkg_name="${base_name}-${version}-${release}.${arch}"
+        local status=0
+        
+        echo "Building package '$pkg_name' for arch $arch .."
+        
+        # Create RPM build structure
+        cmd="mkdir -p '$work_dir'/{BUILD,RPMS,SOURCES,SPECS,SRPMS}"
+        eval "$cmd" || return 1
+        
+        # Compile and copy files
+        for file in "${files[@]}"; do
+            if [[ "$file" == *.c ]]; then
+                local basename
+                basename=$(basename "$file" .c)
+                
+                cmd="gcc -o '$work_dir/BUILD/$basename' '$file' $VERBOSITY_LEVEL"
+                eval "$cmd"
+                postcmd $?
+                
+                cmd="chmod $permissions '$work_dir/BUILD/$basename'"
+                eval "$cmd"
+            else
+                cmd="cp '$file' '$work_dir/BUILD/'"
+                eval "$cmd"
+                postcmd $?
+            fi
+        done
+        
+        # Create spec file
+        {
+            [ -n "$summary" ] && echo "Summary: $summary"
+            echo "Name: $base_name"
+            echo "Version: $version"
+            echo "Release: $release"
+            [ -n "$epoch" ] && echo "Epoch: $epoch"
+            echo "License: $license"
+            [ -n "$group" ] && echo "Group: $group"
+            echo "Vendor: $vendor"
+            [ ${#depends[@]} -gt 0 ] && echo "Requires: $(IFS=,; echo "${depends[*]}")"
+            echo "AutoReqProv: no"
+            echo "BuildArch: $arch"
+            echo
+            echo "%description"
+            if [ -n "$description" ]; then
+                echo "$description"
+            elif [ -n "$summary" ]; then
+                echo "$summary"
+            fi
+            echo
+            echo "%install"
+            echo "rm -rf %{buildroot}"
+            echo "mkdir -p %{buildroot}/usr/bin"
+            echo "cp %{_builddir}/* %{buildroot}/usr/bin/"
+            echo
+            echo "%files"
+            echo "%defattr(-,root,root)"
+            echo "%attr($permissions,root,root) /usr/bin/*"
+            echo
+            echo "%clean"
+            echo "rm -rf %{buildroot}"
+        } > "$work_dir/SPECS/${base_name}.spec"
+        
+        # Build package
+        cmd="rpmbuild --quiet --define '_topdir $work_dir' --target $arch-linux -bb '$work_dir/SPECS/${base_name}.spec' $VERBOSITY_LEVEL"
+        eval "$cmd"
+        status=$?
+        
+        if [ $status -eq 0 ]; then
+            # Move the built package
+            cmd="mv '$work_dir/RPMS/$arch/${pkg_name}.rpm' '$target_dir/'"
+            eval "$cmd"
+            status=$?
+        fi
+        
+        # Cleanup
+        rm -rf "$work_dir"
+        
+        return $status
+    }
+
+    # Build for all architectures
+    cmd="mkdir -p '$target_dir'"
+    eval "$cmd"
+    status=$?
+    local date
+    date=$(get_current_date)
+
+    # Build DEB packages
+    echo "************************************************************************"
+    echo "        build start date: $date                                         "
+    echo "          package format: DEB                                           "
+    echo "            package name: $base_name                                    "
+    echo "         package version: $version-$release                             "
+    echo "           architectures: $(for arch in "${arches[@]}"; do echo -n "${deb_arch_map[$arch]} "; done)"
+    echo "************************************************************************"
+
+    for arch in "${arches[@]}"; do
+        local deb_arch
+        deb_arch=$(get_deb_arch "$arch")
+        if [ -n "$deb_arch" ]; then
+            build_deb "$deb_arch"
+            [ $? -ne 0 ] && status=1
+        fi
+    done
+
+    # Build RPM packages
+    echo "************************************************************************"
+    echo "        build start date: $date                                         "
+    echo "          package format: RPM                                           "
+    echo "            package name: $base_name                                    "
+    echo "         package version: ${epoch:+$epoch:}$version-$release            "
+    echo "           architectures: $(for arch in "${arches[@]}"; do echo -n "${rpm_arch_map[$arch]} "; done)"
+    echo "************************************************************************"
+    for arch in "${arches[@]}"; do
+        local rpm_arch
+        rpm_arch=$(get_rpm_arch "$arch")
+        if [ -n "$rpm_arch" ]; then
+            build_rpm "$rpm_arch"
+            [ $? -ne 0 ] && status=1
+        fi
+    done
+
+    return $status
+}

@@ -216,6 +216,14 @@ function get_module_version() {
     echo "$version"
 }
 
+function get_modules_exclude() {
+    local exclude
+    exclude="--exclude .git --exclude .github --exclude .gitignore --exclude=t"
+    exclude+=" --exclude=newfeatures --exclude=CHANGELOG --exclude=README.md"
+    exclude+=" --exclude=LICENSE --exclude=.travis.yml --exclude=tmp"
+    echo "$exclude"
+}
+
 function update_module_version() {
     local module_root="$1"
     local version="$2"

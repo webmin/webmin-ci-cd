@@ -134,9 +134,10 @@ function build() {
     echo "Building packages.."
     (
         cd "$ROOT_DIR" || exit 1
+        modules_exclude=$(get_modules_exclude)
         cmd="$ROOT_DIR/build-deps/makemodulerpm.pl $epoch --release \
             $rel --rpm-depends --licence 'GPLv3' --allow-overwrite --rpm-dir \
-            $ROOT_BUILD --target-dir $root_module/tmp \
+            $ROOT_BUILD --target-dir $root_module/tmp $modules_exclude \
             --vendor '$BUILDER_PACKAGE_NAME' $module $ver $VERBOSITY_LEVEL"
         eval "$cmd"
         postcmd $?

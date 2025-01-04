@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
-# .gh-secret-update.bash
+# shellcheck disable=SC2181
+# sync-gh-secrets.bash
 # Update, delete, or list GitHub secrets dynamically
 # based on organization and repository
 
 # Configuration
-SECRETS_ZIP="${ENV_SECRETS_ZIP:-$HOME/.tmp/gh-secrets.zip}"
-TEMP_DIR="/tmp/gh-secrets-$$"
+secrets_zip="${ENV_SECRETS_ZIP:-$HOME/.tmp/gh-secrets.zip}"
+temp_dir="/tmp/gh-secrets-$$"
 
 # Repository lists
-WEBMIN_REPOS=(
+webmin_repos=(
     "webmin/webmin"
     "webmin/usermin"
 
     "webmin/authentic-theme"
 )
 
-VIRTUALMIN_REPOS=(
+virtualmin_repos=(
     "virtualmin/virtualmin-gpl"
     "virtualmin/virtualmin-pro"
     
@@ -26,13 +27,14 @@ VIRTUALMIN_REPOS=(
     "virtualmin/virtualmin-nginx"
     "virtualmin/virtualmin-registrar"
     "virtualmin/virtualmin-support"
-    
     "virtualmin/ruby-gems"
     "virtualmin/webmin-jailkit"
+
+    "virtualmin/procmail-wrapper"
 )
 
-# Secret names
-SECRETS=(
+# Secret names to interact with
+secrets=(
     "DEV_GPG_PH"
     "DEV_IP_ADDR"
     "DEV_IP_KNOWN_HOSTS"
@@ -43,25 +45,25 @@ SECRETS=(
 )
 
 # Cleanup function
-cleanup() {
-    if [ -d "$TEMP_DIR" ]; then
-        rm -rf "$TEMP_DIR"
+function cleanup {
+    if [ -d "$temp_dir" ]; then
+        rm -rf "$temp_dir"
     fi
 }
 
 trap cleanup EXIT
 
 # Function to print usage
-usage() {
+function usage {
     cat << EOF
 Usage: $0 [OPTIONS]
 
 Options:
-    -r, --repo REPO       Target a specific repository (format: owner/repo)
-    -s, --secret SECRET   Target a specific secret for update or delete
-    -d, --delete          Delete secrets instead of updating them
-    -l, --list            List current secrets in repositories
-    -h, --help            Show this help message
+    -r, --repo <repo>      Target a specific repository (format: owner/repo)
+    -s, --secret <secret>  Target a specific secret for update or delete
+    -d, --delete           Delete secrets instead of updating them
+    -l, --list             List current secrets in repositories
+    -h, --help             Show this help message
 
 Examples:
     Update all secrets for all repositories
@@ -86,9 +88,9 @@ EOF
 }
 
 # Function to check if a repository is valid
-is_valid_repo() {
+function is_valid_repo {
     local repo="$1"
-    for r in "${WEBMIN_REPOS[@]}" "${VIRTUALMIN_REPOS[@]}"; do
+    for r in "${webmin_repos[@]}" "${virtualmin_repos[@]}"; do
         if [ "$r" = "$repo" ]; then
             return 0
         fi
@@ -97,9 +99,9 @@ is_valid_repo() {
 }
 
 # Function to check if a secret is valid
-is_valid_secret() {
+function is_valid_secret {
     local secret="$1"
-    for s in "${SECRETS[@]}"; do
+    for s in "${secrets[@]}"; do
         if [[ "$secret" == "$s" ]]; then
             return 0
         fi
@@ -108,7 +110,7 @@ is_valid_secret() {
 }
 
 # Function to list secrets for a repository
-list_repo_secrets() {
+function list_repo_secrets {
     local repo="$1"
     local org
     org=$(echo "$repo" | awk -F/ '{print $1}')
@@ -139,35 +141,35 @@ list_repo_secrets() {
 }
 
 # Parse command line arguments
-REPO=""
-SECRET=""
-DELETE=0
-LIST=0
+repo=""
+secret=""
+delete=0
+list=0
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         -r|--repo)
-            REPO="$2"
-            if ! is_valid_repo "$REPO"; then
-                echo "Error: Invalid repository: $REPO"
+            repo="$2"
+            if ! is_valid_repo "$repo"; then
+                echo "Error: Invalid repository: $repo"
                 exit 1
             fi
             shift 2
             ;;
         -s|--secret)
-            SECRET="$2"
-            if ! is_valid_secret "$SECRET"; then
-                echo "Error: Invalid secret: $SECRET"
+            secret="$2"
+            if ! is_valid_secret "$secret"; then
+                echo "Error: Invalid secret: $secret"
                 exit 1
             fi
             shift 2
             ;;
         -d|--delete)
-            DELETE=1
+            delete=1
             shift
             ;;
         -l|--list)
-            LIST=1
+            list=1
             shift
             ;;
         -h|--help)
@@ -181,13 +183,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Handle listing secrets
-if [ "$LIST" -eq 1 ]; then
+if [ "$list" -eq 1 ]; then
     # Determine which repositories to list
     repos_to_list=()
-    if [ -n "$REPO" ]; then
-        repos_to_list=("$REPO")
+    if [ -n "$repo" ]; then
+        repos_to_list=("$repo")
     else
-        repos_to_list=("${WEBMIN_REPOS[@]}" "${VIRTUALMIN_REPOS[@]}")
+        repos_to_list=("${webmin_repos[@]}" "${virtualmin_repos[@]}")
     fi
 
     # List secrets for each repository
@@ -199,29 +201,29 @@ if [ "$LIST" -eq 1 ]; then
 fi
 
 # Check if the secrets zip exists unless deleting
-if [ "$DELETE" -eq 0 ] && [ ! -f "$SECRETS_ZIP" ]; then
-    echo "Error: Secrets zip '$SECRETS_ZIP' file not found"
+if [ "$delete" -eq 0 ] && [ ! -f "$secrets_zip" ]; then
+    echo "Error: Secrets zip '$secrets_zip' file not found"
     exit 1
 fi
 
 # Create a temporary directory
-mkdir -p "$TEMP_DIR"
+mkdir -p "$temp_dir"
 
 # Extract secrets if updating
-if [ "$DELETE" -eq 0 ]; then
+if [ "$delete" -eq 0 ]; then
     # Ask for the ZIP passphrase
-    read -s -p "Enter passphrase for secrets zip: " ZIP_PASS
+    read -r -s -p "Enter passphrase for secrets zip: " zip_pass
     echo
 
     # Extract secrets to the temporary directory
-    if ! unzip -P "$ZIP_PASS" -d "$TEMP_DIR" "$SECRETS_ZIP" > /dev/null 2>&1; then
+    if ! unzip -P "$zip_pass" -d "$temp_dir" "$secrets_zip" > /dev/null 2>&1; then
         echo "Error: Failed to extract secrets—invalid passphrase or insufficient access to the documents"
         exit 1
     fi
 fi
 
 # Function to update secrets for a repository
-update_repo_secrets() {
+function update_repo_secrets {
     local repo="$1"
     local org
     org=$(echo "$repo" | awk -F/ '{print $1}')
@@ -229,15 +231,15 @@ update_repo_secrets() {
     echo "Updating secrets for $repo .."
     
     # Determine which secrets to update
-    local secrets_to_update=("${SECRETS[@]}")
-    if [ -n "$SECRET" ]; then
-        secrets_to_update=("${SECRET#*__}")
+    local secrets_to_update=("${secrets[@]}")
+    if [ -n "$secret" ]; then
+        secrets_to_update=("${secret#*__}")
     fi
     
     # Update each secret
     for secret in "${secrets_to_update[@]}"; do
         local full_secret_name="${org}__${secret}"
-        local secret_file="$TEMP_DIR/${full_secret_name}"
+        local secret_file="$temp_dir/${full_secret_name}"
         echo "  Updating $secret .."
         if [ -f "$secret_file" ]; then
             local err
@@ -254,7 +256,7 @@ update_repo_secrets() {
 }
 
 # Function to delete secrets for a repository
-delete_repo_secrets() {
+function delete_repo_secrets {
     local repo="$1"
     local org
     org=$(echo "$repo" | awk -F/ '{print $1}')
@@ -262,9 +264,9 @@ delete_repo_secrets() {
     echo "Deleting secrets for $repo .."
     
     # Determine which secrets to delete
-    local secrets_to_delete=("${SECRETS[@]}")
-    if [ -n "$SECRET" ]; then
-        secrets_to_delete=("${SECRET#*__}")
+    local secrets_to_delete=("${secrets[@]}")
+    if [ -n "$secret" ]; then
+        secrets_to_delete=("${secret#*__}")
     fi
     
     # Delete each secret
@@ -282,15 +284,15 @@ delete_repo_secrets() {
 
 # Determine which repositories to update or delete
 repos_to_update=()
-if [ -n "$REPO" ]; then
-    repos_to_update=("$REPO")
+if [ -n "$repo" ]; then
+    repos_to_update=("$repo")
 else
-    repos_to_update=("${WEBMIN_REPOS[@]}" "${VIRTUALMIN_REPOS[@]}")
+    repos_to_update=("${webmin_repos[@]}" "${virtualmin_repos[@]}")
 fi
 
 # Perform the update or delete operation for each repository
 for repo in "${repos_to_update[@]}"; do
-    if [ "$DELETE" -eq 1 ]; then
+    if [ "$delete" -eq 1 ]; then
         delete_repo_secrets "$repo"
     else
         update_repo_secrets "$repo"

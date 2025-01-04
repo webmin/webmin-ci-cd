@@ -11,11 +11,14 @@ TEMP_DIR="/tmp/gh-secrets-$$"
 WEBMIN_REPOS=(
     "webmin/webmin"
     "webmin/usermin"
+
     "webmin/authentic-theme"
 )
 
 VIRTUALMIN_REPOS=(
-    "virtualmin/ruby-gems"
+    "virtualmin/virtualmin-gpl"
+    "virtualmin/virtualmin-pro"
+    
     "virtualmin/virtualmin-awstats"
     "virtualmin/virtualmin-htpasswd"
     "virtualmin/virtualmin-mailman"
@@ -23,6 +26,8 @@ VIRTUALMIN_REPOS=(
     "virtualmin/virtualmin-nginx"
     "virtualmin/virtualmin-registrar"
     "virtualmin/virtualmin-support"
+    
+    "virtualmin/ruby-gems"
     "virtualmin/webmin-jailkit"
 )
 

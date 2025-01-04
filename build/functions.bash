@@ -580,8 +580,8 @@ function cleanup_packages {
         if [[ $filename =~ [._-]([a-zA-Z]+)$ ]]; then
             edition="${BASH_REMATCH[1]}"
             # Remove the detected edition from filename
-            filename=${filename%.*${edition}}
-            filename=${filename%-${edition}}
+            filename=${filename%.*"${edition}"}
+            filename=${filename%-"${edition}"}
         fi
         
         filename=${filename%-[0-9]}

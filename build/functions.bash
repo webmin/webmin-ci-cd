@@ -738,10 +738,19 @@ function cleanup_packages {
 #   --license        Package license (default: GPLv3)
 #   --maintainer     Package maintainer (default: $BUILDER_PACKAGE_NAME <$BUILDER_MODULE_EMAIL>)
 #   --vendor         Package vendor (default: $BUILDER_PACKAGE_NAME)
+#   --homepage       Package homepage URL
 #   --description    Package description
 #   --summary        Package summary (short description)
 #   --group          Package group
 #   --depends        Package dependencies
+#   --section        Package section for DEB (default: admin)
+#   --priority       Package priority for DEB (default: optional)
+#   --provides       Package provides
+#   --conflicts      Package conflicts
+#   --replaces       Package replaces/obsoletes
+#   --recommends     Recommended packages
+#   --suggests       Suggested packages
+#   --breaks         Packages this package breaks
 #
 # Returns:
 #   0 on success, 1 on failure
@@ -763,6 +772,7 @@ function build_native_package() {
     local license="GPLv3"
     local maintainer="$BUILDER_PACKAGE_NAME <$BUILDER_MODULE_EMAIL>"
     local vendor="$BUILDER_PACKAGE_NAME"
+    local homepage
     local description
     local summary
     local group
@@ -770,8 +780,16 @@ function build_native_package() {
     local base_name
     local epoch
     local permissions="755"
+    local section="admin"
+    local priority="optional"
     local -a files=()
     local -a depends=()
+    local -a provides=()
+    local -a conflicts=()
+    local -a replaces=()
+    local -a recommends=()
+    local -a suggests=()
+    local -a breaks=()
     local cmd
     local status=0
 
@@ -828,6 +846,10 @@ function build_native_package() {
                 vendor="$2"
                 shift 2
                 ;;
+            --homepage)
+                homepage="$2"
+                shift 2
+                ;;
             --description)
                 description="$2"
                 shift 2
@@ -844,6 +866,56 @@ function build_native_package() {
                 shift
                 while [[ $# -gt 0 ]] && [[ "$1" != --* ]]; do
                     depends+=("$1")
+                    shift
+                done
+                ;;
+            --section)
+                section="$2"
+                shift 2
+                ;;
+            --priority)
+                priority="$2"
+                shift 2
+                ;;
+            --provides)
+                shift
+                while [[ $# -gt 0 ]] && [[ "$1" != --* ]]; do
+                    provides+=("$1")
+                    shift
+                done
+                ;;
+            --conflicts)
+                shift
+                while [[ $# -gt 0 ]] && [[ "$1" != --* ]]; do
+                    conflicts+=("$1")
+                    shift
+                done
+                ;;
+            --replaces)
+                shift
+                while [[ $# -gt 0 ]] && [[ "$1" != --* ]]; do
+                    replaces+=("$1")
+                    shift
+                done
+                ;;
+            --recommends)
+                shift
+                while [[ $# -gt 0 ]] && [[ "$1" != --* ]]; do
+                    recommends+=("$1")
+                    shift
+                done
+                ;;
+            --suggests)
+                shift
+                while [[ $# -gt 0 ]] && [[ "$1" != --* ]]; do
+                    suggests+=("$1")
+                    shift
+                done
+                ;;
+            --breaks)
+                shift
+                while [[ $# -gt 0 ]] && [[ "$1" != --* ]]; do
+                    breaks+=("$1")
                     shift
                 done
                 ;;
@@ -914,6 +986,7 @@ function build_native_package() {
             echo "Package: $base_name"
             echo "Version: $version-$release"
             echo "Architecture: $arch"
+            echo "Maintainer: $maintainer"
             if [ ${#depends[@]} -gt 0 ]; then
                 echo -n "Depends: "
                 local first=true
@@ -927,12 +1000,20 @@ function build_native_package() {
                 done
                 echo ""
             fi
-            echo "Maintainer: $maintainer"
+            echo "Section: $section"
+            echo "Priority: $priority"
+            [ ${#provides[@]} -gt 0 ] && echo "Provides: $(IFS=,; echo "${provides[*]}")"
+            [ ${#conflicts[@]} -gt 0 ] && echo "Conflicts: $(IFS=,; echo "${conflicts[*]}")"
+            [ ${#replaces[@]} -gt 0 ] && echo "Replaces: $(IFS=,; echo "${replaces[*]}")"
+            [ ${#recommends[@]} -gt 0 ] && echo "Recommends: $(IFS=,; echo "${recommends[*]}")"
+            [ ${#suggests[@]} -gt 0 ] && echo "Suggests: $(IFS=,; echo "${suggests[*]}")"
+            [ ${#breaks[@]} -gt 0 ] && echo "Breaks: $(IFS=,; echo "${breaks[*]}")"
+            [ -n "$homepage" ] && echo "Homepage: $homepage"
             echo "Description: ${summary:-$description}"
             if [ -n "$summary" ] && [ -n "$description" ]; then
                 echo " $description"
             fi
-            
+
         } > "$work_dir/DEBIAN/control"
         
         # Build package
@@ -989,7 +1070,14 @@ function build_native_package() {
             echo "License: $license"
             [ -n "$group" ] && echo "Group: $group"
             echo "Vendor: $vendor"
+            [ -n "$homepage" ] && echo "URL: $homepage"
             [ ${#depends[@]} -gt 0 ] && echo "Requires: $(IFS=,; echo "${depends[*]}")"
+            [ ${#provides[@]} -gt 0 ] && echo "Provides: $(IFS=,; echo "${provides[*]}")"
+            [ ${#conflicts[@]} -gt 0 ] && echo "Conflicts: $(IFS=,; echo "${conflicts[*]}")"
+            [ ${#breaks[@]} -gt 0 ] && echo "Conflicts: $(IFS=,; echo "${breaks[*]}")"
+            [ ${#replaces[@]} -gt 0 ] && echo "Obsoletes: $(IFS=,; echo "${replaces[*]}")"
+            [ ${#recommends[@]} -gt 0 ] && echo "Recommends: $(IFS=,; echo "${recommends[*]}")"
+            [ ${#suggests[@]} -gt 0 ] && echo "Suggests: $(IFS=,; echo "${suggests[*]}")"
             echo "AutoReqProv: no"
             echo "BuildArch: $arch"
             echo

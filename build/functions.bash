@@ -75,7 +75,7 @@ function cloud_upload {
 
     # Delete files on remote if needed
     if [ -n "${2-}" ]; then
-        echo "Deleting given files in $CLOUD_UPLOAD_SSH_HOST$ssh_warning_text .."
+        echo "Deleting given files in $CLOUD_UPLOAD_SSH_HOST${ssh_warning_text-} .."
         local -n arr_del=$2
         local err=0
         for d in "${arr_del[@]}"; do
@@ -101,7 +101,7 @@ function cloud_upload {
     
     # Upload files to remote
     if [ -n "${1-}" ]; then
-        echo "Uploading built files to $CLOUD_UPLOAD_SSH_HOST$ssh_warning_text .."
+        echo "Uploading built files to $CLOUD_UPLOAD_SSH_HOST${ssh_warning_text-} .."
         local -n arr_upl=$1
         local err=0
         for u in "${arr_upl[@]}"; do
@@ -132,7 +132,7 @@ function cloud_sign_and_build_repos {
     # Setup SSH keys on the build machine
     setup_ssh
     # Sign and update repos metadata in remote
-    echo "Signing and updating repos metadata in $CLOUD_UPLOAD_SSH_HOST$ssh_warning_text .."
+    echo "Signing and updating repos metadata in $CLOUD_UPLOAD_SSH_HOST${ssh_warning_text-} .."
     local cmd1="ssh $ssh_options $CLOUD_UPLOAD_SSH_USER@"
     cmd1+="$CLOUD_UPLOAD_SSH_HOST \"$CLOUD_SIGN_BUILD_REPOS_CMD\" $VERBOSITY_LEVEL"
     eval "$cmd1"

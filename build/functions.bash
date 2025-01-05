@@ -1068,8 +1068,13 @@ function build_native_package() {
         local rpm_arch
         rpm_arch=$(get_rpm_arch "$arch")
         if [ -n "$rpm_arch" ]; then
-            build_rpm "$rpm_arch"
-            [ $? -ne 0 ] && status=1
+            if [ "$rpm_arch" == "$(uname -m)" ]; then
+                build_rpm "$rpm_arch"
+                [ $? -ne 0 ] && status=1
+            else
+                echo "Skipping package build for arch $arch .."
+                echo ".. not supported"
+            fi
         fi
     done
 

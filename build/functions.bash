@@ -142,11 +142,18 @@ function cloud_sign_and_build_repos {
 
 # Post command func
 function postcmd {
-    if [ "$1" != "0" ]; then
-        echo ".. failed"
+    local status="$1"
+    local spaces="${2:-0}"
+
+    # Create the padding with the specified number of spaces
+    local padding
+    padding=$(printf "%*s" "$spaces" "")
+
+    if [ "$status" -ne 0 ]; then
+        echo "${padding}.. failed"
         exit 1
     else
-        echo ".. done"
+        echo "${padding}.. done"
     fi
 }
 
@@ -967,17 +974,20 @@ function build_native_package {
             if [[ "$file" == *.c ]]; then
                 local basename
                 basename=$(basename "$file" .c)
-                
+                echo "  Compiling $file .."
                 cmd="gcc -o '$work_dir/usr/bin/$basename' '$file' $VERBOSITY_LEVEL"
                 eval "$cmd"
-                postcmd $?
+                postcmd $? 2
                 
+                echo "  Setting permissions for $basename .."
                 cmd="chmod $permissions '$work_dir/usr/bin/$basename'"
                 eval "$cmd"
+                postcmd $? 2
             else
+                echo "  Copying $file .."
                 cmd="cp '$file' '$work_dir/usr/bin/'"
                 eval "$cmd"
-                postcmd $?
+                postcmd $? 2
             fi
         done
         
@@ -1017,9 +1027,13 @@ function build_native_package {
         } > "$work_dir/DEBIAN/control"
         
         # Build package
+        echo "  Building package .."
         cmd="dpkg-deb --build '$work_dir' '$target_dir/${pkg_name}.deb' $VERBOSITY_LEVEL"
         eval "$cmd"
         status=$?
+        postcmd $status 2
+
+        postcmd $status
         
         # Cleanup
         rm -rf "$work_dir"
@@ -1046,14 +1060,17 @@ function build_native_package {
             if [[ "$file" == *.c ]]; then
                 local basename
                 basename=$(basename "$file" .c)
-                
+                echo "  Compiling $file .."
                 cmd="gcc -o '$work_dir/BUILD/$basename' '$file' $VERBOSITY_LEVEL"
                 eval "$cmd"
-                postcmd $?
+                postcmd $? 2
                 
+                echo "  Setting permissions for $basename .."
                 cmd="chmod $permissions '$work_dir/BUILD/$basename'"
                 eval "$cmd"
+                postcmd $? 2
             else
+                echo "  Copying $file .."
                 cmd="cp '$file' '$work_dir/BUILD/'"
                 eval "$cmd"
                 postcmd $?
@@ -1102,16 +1119,22 @@ function build_native_package {
         } > "$work_dir/SPECS/${base_name}.spec"
         
         # Build package
+        echo "  Building package .."
         cmd="rpmbuild --quiet --define '_topdir $work_dir' --target $arch-linux -bb '$work_dir/SPECS/${base_name}.spec' $VERBOSITY_LEVEL"
         eval "$cmd"
         status=$?
+        postcmd $status 2
         
         if [ $status -eq 0 ]; then
             # Move the built package
+            echo "  Moving package to target directory .."
             cmd="mv '$work_dir/RPMS/$arch/${pkg_name}.rpm' '$target_dir/'"
             eval "$cmd"
             status=$?
+            postcmd $status 2
         fi
+
+        postcmd $status
         
         # Cleanup
         rm -rf "$work_dir"

@@ -577,7 +577,7 @@ function cleanup_packages {
         
         # Extract edition if present
         local edition
-        if [[ $filename =~ [._-]([a-zA-Z]+)$ ]]; then
+        if [[ $filename =~ [._-]([a-zA-Z0-9_]+)$ ]]; then
             edition="${BASH_REMATCH[1]}"
             # Remove the detected edition from filename
             filename=${filename%.*"${edition}"}

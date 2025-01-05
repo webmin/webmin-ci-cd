@@ -8,10 +8,10 @@
 set +u
 
 # Bootstrap URL
-BUILD_BOOTSTRAP_URL="https://raw.githubusercontent.com/webmin/webmin-ci-cd/main/build"
+build_bootstrap_url="https://raw.githubusercontent.com/webmin/webmin-ci-cd/main/build"
 
 # Bootstrap scripts
-BOOTSTRAP_SCRIPTS=(
+bootstrap_scripts=(
     "environment.bash"
     "functions.bash"
     "build-deb-module.bash"
@@ -24,7 +24,7 @@ BOOTSTRAP_SCRIPTS=(
 
 bootstrap() {
 	local argvs="$*"
-    local base_url="$BUILD_BOOTSTRAP_URL/"
+    local base_url="$build_bootstrap_url/"
     local script_dir
     local ts
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -42,7 +42,7 @@ bootstrap() {
 		done
 		return 1
 	}
-    for script in "${BOOTSTRAP_SCRIPTS[@]}"; do
+    for script in "${bootstrap_scripts[@]}"; do
 	local script_path="$script_dir/$script"
 	if [ ! -f "$script_path" ]; then
 	    if ! download_script "${base_url}${script}" "$script_path"; then

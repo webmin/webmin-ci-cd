@@ -763,16 +763,16 @@ function build_native_package() {
     local license="GPLv3"
     local maintainer="$BUILDER_PACKAGE_NAME <$BUILDER_MODULE_EMAIL>"
     local vendor="$BUILDER_PACKAGE_NAME"
-    local description=""
-    local summary=""
-    local group=""
-    local target_dir=""
-    local base_name=""
-    local epoch=""
+    local description
+    local summary
+    local group
+    local target_dir
+    local base_name
+    local epoch
     local permissions="755"
     local -a files=()
     local -a depends=()
-    local cmd=""
+    local cmd
     local status=0
 
     # Parse arguments

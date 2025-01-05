@@ -4,6 +4,9 @@
 # Copyright Ilia Ross <ilia@webmin.dev>
 # Bootstrap the build process
 
+# Disable strict mode for unset variables
+set +u
+
 # Bootstrap URL
 BUILD_BOOTSTRAP_URL="https://raw.githubusercontent.com/webmin/webmin-ci-cd/main/build"
 

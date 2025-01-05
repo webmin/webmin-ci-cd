@@ -15,11 +15,6 @@ export ROOT_REPOS="${ENV__ROOT_REPOS:-$ROOT_DIR/repo}"
 export ROOT_BUILD="${ENV__ROOT_BUILD:-$ROOT_DIR/rpmbuild}"
 export ROOT_RPMS="${ENV__ROOT_RPMS:-$ROOT_BUILD/RPMS/noarch}"
 
-# Create symlinks for Perl
-PERL_SOURCE="/usr/bin/perl"
-PERL_TARGET="/usr/local/bin/perl"
-ln -fs "$PERL_SOURCE" "$PERL_TARGET"
-
 # Cloud upload config
 export CLOUD_UPLOAD_GPG_PASSPHRASE="${CLOUD__GPG_PH-}"
 export CLOUD_UPLOAD_SSH_HOST="${CLOUD__IP_ADDR-}"
@@ -31,11 +26,21 @@ export CLOUD_SIGN_BUILD_REPOS_CMD="${CLOUD__SIGN_BUILD_REPOS_CMD-}"
 export CLOUD_GH_TOKEN="${CLOUD__GH_TOKEN-}"
 
 # Define verbosity level
+export VERBOSE_MODE=0
 export VERBOSITY_LEVEL=' >/dev/null 2>&1 </dev/null'
 export VERBOSITY_LEVEL_TO_FILE='2> /dev/null'
 export VERBOSITY_LEVEL_WITH_INPUT=' >/dev/null 2>&1'
 if [[ "'$*'" == *"--verbose"* ]]; then
-    unset VERBOSITY_LEVEL VERBOSITY_LEVEL_TO_FILE VERBOSITY_LEVEL_WITH_INPUT
+    VERBOSE_MODE=1
+    VERBOSITY_LEVEL=''
+    VERBOSITY_LEVEL_TO_FILE=''
+    VERBOSITY_LEVEL_WITH_INPUT=''
+fi
+
+# Define testing build
+export TESTING_BUILD=0
+if [[ "'$*'" == *"--testing"* ]]; then
+    export TESTING_BUILD=1
 fi
 
 # Project links

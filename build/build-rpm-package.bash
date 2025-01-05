@@ -31,10 +31,10 @@
 source ./bootstrap.bash || exit 1
 
 # Build product func
-function build() {
+function build {
 
     local devel=0
-    if [[ "'$*'" == *"--testing"* ]]; then
+    if [ "$TESTING_BUILD" -eq 1 ]; then
         devel=1
     fi
 
@@ -42,12 +42,16 @@ function build() {
     cd "$ROOT_DIR" || exit 1
 
     # Define root
-    local ver=""
     local prod=$1
     local root_prod="$ROOT_DIR/$prod"
+    local ver
+    local rel=1
 
     # Print build actual date
     date=$(get_current_date)
+
+    # Create required symlinks
+    create_symlinks
 
     # Print opening header
     echo "************************************************************************"
@@ -75,18 +79,16 @@ function build() {
     date_version=$(get_latest_commit_date_version "$root_prod")
 
     # Handle other params
-    if [[ "'$2'" != *"--"* ]]; then
+    if [ -n "${2-}" ] && [[ "${2-}" != *"--"* ]]; then
         ver=$2
     fi
-    if [[ "'$3'" != *"--"* ]] && [[ -n "$3" ]]; then
+    if [[ -n "${3-}" ]] && [[ "${3-}" != *"--"* ]]; then
         rel=$3
-    else
-        rel=1
     fi
-    if [ -z "$ver" ]; then
+    if [ -z "${ver-}" ]; then
         ver=$(get_current_repo_tag "$root_prod")
     fi
-    if [[ "'$*'" == *"--testing"* ]]; then
+    if [ "$TESTING_BUILD" -eq 1 ]; then
         ver="$ver.$date_version"
         # Set actual product version
         echo "${ver}" >"version"
@@ -127,7 +129,7 @@ function build() {
     purge_dir "$ROOT_BUILD/SPECS"
     purge_dir "$ROOT_BUILD/SRPMS"
     remove_dir "$ROOT_REPOS/repodata"
-    if [ "$prod" != "" ]; then
+    if [ -n "${prod-}" ]; then
         rm -f "$ROOT_REPOS/$prod-"*
         rm -f "$ROOT_REPOS/${prod}_"*
     fi
@@ -139,8 +141,7 @@ function build() {
     cd "$root_prod" || exit 1
 
     echo "Pre-building package .."
-    eval "$cmd"
-    if [ "$rel" = "1" ]; then
+    if [ "$rel" -eq 1 ]; then
         args="$ver"
     else
         args="$ver-$rel"
@@ -182,7 +183,7 @@ function build() {
 }
 
 # Main
-if [ -n "$1" ] && [[ "$1" != --* ]]; then
+if [ -n "${1-}" ] && [[ "${1-}" != --* ]]; then
     build "$@"
     upload_list=("$ROOT_REPOS/$1"*)
 else

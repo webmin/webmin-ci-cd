@@ -23,7 +23,7 @@
 source ./bootstrap.bash || exit 1
 
 # Build module func
-function build() {
+function build {
     # Always return back to root directory
     cd "$ROOT_DIR" || exit 1
 
@@ -37,6 +37,9 @@ function build() {
     # Print build actual date
     date=$(get_current_date)
 
+    # Create required symlinks
+    create_symlinks
+
     # Print opening header
     echo "************************************************************************"
     echo "        build start date: $date                                         "
@@ -49,10 +52,10 @@ function build() {
         "$module" "$MODULES_REPO_URL")"
     module="$module_dir"
     root_module="$ROOT_DIR/$module"
-    if [ -n "$edition_id" ]; then
+    if [ -n "${edition_id-}" ]; then
         edition_id="-$edition_id"
     fi
-    if [ -n "$lic_id" ]; then
+    if [ -n "${lic_id-}" ]; then
         license="$lic_id"
     fi
     if [ "$rs" -eq 0 ]; then
@@ -66,18 +69,18 @@ function build() {
 
     # Handle other params
     cd "$root_module" || exit 1
-    if [[ "'$2'" != *"--"* ]]; then
+    if [ -n "${2-}" ] && [[ "${2-}" != *"--"* ]]; then
         ver=$2
     fi
-    if [[ "'$3'" != *"--"* ]] && [[ -n "$3" ]]; then
+    if [[ -n "${3-}" ]] && [[ "${3-}" != *"--"* ]]; then
         rel=$3
     else
         rel=1
     fi
-    if [ -z "$ver" ]; then
+    if [ -z "${ver-}" ]; then
         ver=$(get_module_version "$root_module")
     fi
-    if [[ "'$*'" == *"--testing"* ]]; then
+    if [ "$TESTING_BUILD" -eq 1 ]; then
         devel=1
         # Testing version must always be x.x.<last_commit_date>, this will
         # effectively remove the patch version from any module for testing
@@ -129,7 +132,7 @@ function build() {
 }
 
 # Main
-if [ -n "$1" ] && [[ "'$1'" != *"--"* ]]; then
+if [ -n "${1-}" ] && [[ "'${1-}'" != *"--"* ]]; then
     MODULES_REPO_URL="$VIRTUALMIN_ORG_AUTH_URL"
     build "$@"
     upload_list=("$ROOT_REPOS/"*)

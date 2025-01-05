@@ -5,7 +5,7 @@
 # Build functions for the build process
 
 # Set up SSH keys on the build machine
-function setup_ssh() {
+function setup_ssh {
     local key_path="$HOME/.ssh/id_rsa"
 
     # If SSH keys are already set up, skip this step
@@ -22,7 +22,7 @@ function setup_ssh() {
     # Remove generated public key for consistency
     rm -f "$key_path.pub"
     
-    if [[ -n "${CLOUD_SSH_PRV_KEY:-}" ]]; then
+    if [[ -n "${CLOUD_SSH_PRV_KEY-}" ]]; then
         echo "Setting up SSH key .."
         postcmd $rs
         echo
@@ -32,7 +32,7 @@ function setup_ssh() {
 }
 
 # Set up SSH known hosts
-function setup_ssh_known_hosts() {
+function setup_ssh_known_hosts {
     local ssh_home="$HOME/.ssh"
     local ssh_known_hosts="$ssh_home/known_hosts"
 
@@ -40,7 +40,7 @@ function setup_ssh_known_hosts() {
     mkdir -p "$ssh_home" && chmod 700 "$ssh_home"
 
     # Set up known_hosts from environment variable
-    if [ -n "$CLOUD_UPLOAD_SSH_KNOWN_HOSTS" ]; then
+    if [ -n "${CLOUD_UPLOAD_SSH_KNOWN_HOSTS-}" ]; then
         # Check if content already exists in known_hosts
         if ! grep -qF "$CLOUD_UPLOAD_SSH_KNOWN_HOSTS" "$ssh_known_hosts" 2>/dev/null; then
             echo "$CLOUD_UPLOAD_SSH_KNOWN_HOSTS" >> "$ssh_known_hosts"
@@ -57,16 +57,16 @@ function setup_ssh_known_hosts() {
 #   cloud_upload_list_delete=("remote_dir remote_file * [-_][0-9]*")
 #   cloud_upload_list_upload=("$ROOT_REPOS/*" "$ROOT_REPOS/repodata")
 #   cloud_upload cloud_upload_list_upload cloud_upload_list_delete
-function cloud_upload() {
+function cloud_upload {
     # Print new block only if defined
-    if [ -n "$1" ]; then
+    if [ -n "${1-}" ]; then
         echo
     fi
 
     # Setup SSH keys on the build machine and configure known hosts if any
     local ssh_options ssh_warning_text
     ssh_options=$(setup_ssh_known_hosts)
-    if [ -n "$ssh_options" ]; then
+    if [ -n "${ssh_options-}" ]; then
         ssh_warning_text=" (insecure)"
     fi
     
@@ -74,7 +74,7 @@ function cloud_upload() {
     setup_ssh
 
     # Delete files on remote if needed
-    if [ -n "$2" ]; then
+    if [ -n "${2-}" ]; then
         echo "Deleting given files in $CLOUD_UPLOAD_SSH_HOST$ssh_warning_text .."
         local -n arr_del=$2
         local err=0
@@ -100,7 +100,7 @@ function cloud_upload() {
     fi
     
     # Upload files to remote
-    if [ -n "$1" ]; then
+    if [ -n "${1-}" ]; then
         echo "Uploading built files to $CLOUD_UPLOAD_SSH_HOST$ssh_warning_text .."
         local -n arr_upl=$1
         local err=0
@@ -120,13 +120,13 @@ function cloud_upload() {
 }
 
 # Sign and update repos metadata in remote
-function cloud_sign_and_build_repos() {
+function cloud_sign_and_build_repos {
     # shellcheck disable=SC2034
     local repo_type="$1"
     # Setup SSH keys on the build machine and configure known hosts if any
     local ssh_options ssh_warning_text
     ssh_options=$(setup_ssh_known_hosts)
-    if [ -n "$ssh_options" ]; then
+    if [ -n "${ssh_options-}" ]; then
         ssh_warning_text=" (insecure)"
     fi
     # Setup SSH keys on the build machine
@@ -141,7 +141,7 @@ function cloud_sign_and_build_repos() {
 }
 
 # Post command func
-function postcmd() {
+function postcmd {
     if [ "$1" != "0" ]; then
         echo ".. failed"
         exit 1
@@ -151,7 +151,7 @@ function postcmd() {
 }
 
 # Get max number from array
-function max() {
+function max {
     local max="$1"
     shift
     for value in "$@"; do
@@ -163,28 +163,28 @@ function max() {
 }
 
 # Mkdir and children dirs
-function make_dir() {
+function make_dir {
     if [ ! -d "$1" ]; then
         mkdir -p "$1"
     fi
 }
 
 # Remove all content in dir
-function purge_dir() {
+function purge_dir {
     for file in "$1"/*; do
         rm -rf "$file"
     done
 }
 
 # Remove dir
-function remove_dir() {
+function remove_dir {
     if [ -d "$1" ]; then
         rm -rf "$1"
     fi
 }
 
 # Get latest tag version
-function get_current_repo_tag() {
+function get_current_repo_tag {
     # shellcheck disable=SC2153
     local root_prod="$1"
     (
@@ -196,7 +196,7 @@ function get_current_repo_tag() {
     )
 }
 
-function get_module_version() {
+function get_module_version {
     local module_root="$1"
     local version=""
     
@@ -208,7 +208,7 @@ function get_module_version() {
     fi
 
     # Fallback to get_current_repo_tag if no version found
-    if [ -z "$version" ]; then
+    if [ -z "${version-}" ]; then
         version=$(get_current_repo_tag "$module_root")
     fi
     
@@ -216,7 +216,7 @@ function get_module_version() {
     echo "$version"
 }
 
-function get_modules_exclude() {
+function get_modules_exclude {
     local exclude
     exclude="--exclude .git --exclude .github --exclude .gitignore --exclude t"
     exclude+=" --exclude newfeatures --exclude CHANGELOG* --exclude README*"
@@ -225,7 +225,7 @@ function get_modules_exclude() {
     echo "$exclude"
 }
 
-function update_module_version() {
+function update_module_version {
     local module_root="$1"
     local version="$2"
     local version_file="$module_root/module.info"
@@ -239,12 +239,12 @@ function update_module_version() {
 }
 
 # Get latest commit date
-function get_current_date() {
+function get_current_date {
     date +'%Y-%m-%d %H:%M:%S %z'
 }
 
 # Get latest commit date version
-function get_latest_commit_date_version() {
+function get_latest_commit_date_version {
     local theme_version
     local prod_version
     local max_prod
@@ -263,7 +263,7 @@ function get_latest_commit_date_version() {
 }
 
 # Pull project repo and theme
-function make_packages_repos() {
+function make_packages_repos {
     local root_prod="$1"
     local prod="$2"
     local devel="$3"
@@ -326,7 +326,7 @@ return 0
 }
 
 # Make module repo
-function clone_module_repo() {
+function clone_module_repo {
     local module="$1"
     local target="$2"
 
@@ -351,12 +351,12 @@ function clone_module_repo() {
     local target_dir="$dir_name"
 
     # Move directory if set
-    if [[ -n "$sub_dir" ]]; then
+    if [[ -n "${sub_dir-}" ]]; then
         target_dir="$sub_dir"
     fi
 
     # Clone dependency first if exists
-    if [[ -n "$deps_repo" ]]; then
+    if [[ -n "${deps_repo-}" ]]; then
         cmd_clone_deps=$(generate_clone_cmd "$deps_repo" "$dir_name")
         eval "$cmd_clone_deps" || rs+=($?)
     fi
@@ -367,14 +367,14 @@ function clone_module_repo() {
 
     # Check for errors
     err=0
-    [ -n "${rs[*]}" ] && for r in "${rs[@]}"; do [ "$r" -gt 0 ] && { err=1; break; }; done    
+    [ -n "${rs[*]}" ] && for r in "${rs[@]}"; do [ "$r" -gt 0 ] && { err=1; break; }; done
 
     # Return error code and new module directory name with version prefix
     printf "%s,%s,%s,%s" "$err" "$dir_name" "$ver_pref" "$lic_id"
 }
 
 # Get last commit date from repo
-function get_last_commit_date() {
+function get_last_commit_date {
     local repo_dir="$1"
     (
         cd "$repo_dir" || return 1
@@ -383,7 +383,7 @@ function get_last_commit_date() {
 }
 
 # Get required build scripts from Webmin repo
-function make_module_build_deps() {
+function make_module_build_deps {
     # Create directory for build dependencies if it doesn't exist
     if [ ! -d "$ROOT_DIR/build-deps" ]; then
         mkdir -p "$ROOT_DIR/build-deps"
@@ -423,7 +423,7 @@ function make_module_build_deps() {
 }
 
 # Adjust module filename depending on package type
-function adjust_module_filename() {
+function adjust_module_filename {
     local repo_dir="$1"
     local package_type="$2"
     local failed=0
@@ -483,7 +483,7 @@ function adjust_module_filename() {
 }
 
 # Retrieve the RPM module epoch from the provided list
-function get_rpm_module_epoch() {
+function get_rpm_module_epoch {
     local module="$1"
     local script_dir
     local epoch_file
@@ -499,7 +499,7 @@ function get_rpm_module_epoch() {
 # Gets module mappings and dependencies from file
 #  Format in file:
 #    module=dir_name,[ver_pref],[deps_repo],[sub_dir],[license]
-function resolve_module_info() {
+function resolve_module_info {
     local module_name="$1"
     local mapping_file="${BASH_SOURCE[0]%/*}/modules-mapping.txt"
     
@@ -599,7 +599,7 @@ function cleanup_packages {
         fi
         
         # Append edition to base name if present
-        if [ -n "$edition" ]; then
+        if [ -n "${edition-}" ]; then
             echo "${base}-${edition}"
         else
             echo "$base"
@@ -632,7 +632,7 @@ function cleanup_packages {
         
         # Find latest version
         for file in "${file_array[@]}"; do
-            [[ -z "$file" ]] && continue
+            [[ -z "${file-}" ]] && continue
             
             # If this is a latest version, keep it and skip other checks
             if is_latest "$file"; then
@@ -641,9 +641,9 @@ function cleanup_packages {
             fi
             
             version=$(get_version "$file")
-            if [ -n "$version" ]; then
-                if [ -z "$latest_file" ] ||
-                   version_gt "$version" "$latest_ver"; then
+            if [ -n "${version-}" ]; then
+                if [ -z "${latest_file-}" ] ||
+                    version_gt "$version" "$latest_ver"; then
                     latest_ver="$version"
                     latest_file="$file"
                 fi
@@ -652,7 +652,7 @@ function cleanup_packages {
         
         # Remove older versions
         for file in "${file_array[@]}"; do
-            [[ -z "$file" ]] && continue
+            [[ -z "${file-}" ]] && continue
             if [ "$file" != "$latest_file" ]; then
                 if [ -f "$file" ]; then
                     rm "$file" 2>/dev/null || true
@@ -670,7 +670,7 @@ function cleanup_packages {
         # Initialize extensions array
         declare -A extensions
 
-        if [ -n "$extensions_arg" ]; then
+        if [ -n "${extensions_arg-}" ]; then
             # Use provided extensions
             for ext in $extensions_arg; do
                 extensions["$ext"]=1
@@ -680,7 +680,7 @@ function cleanup_packages {
             for file in *.*; do
                 [[ -f "$file" ]] || continue
                 ext="${file##*.}"
-                [[ -n "$ext" ]] && extensions["$ext"]=1
+                [[ -n "${ext-}" ]] && extensions["$ext"]=1
             done
         fi
 
@@ -693,7 +693,7 @@ function cleanup_packages {
                 [[ -f "$file" ]] || continue
                 
                 base_pkg=$(get_base_package "$file")
-                [[ -z "$base_pkg" ]] && continue
+                [[ -z "${base_pkg-}" ]] && continue
                 
                 package_groups["$base_pkg.$ext"]+=" $file"
             done
@@ -754,7 +754,7 @@ function cleanup_packages {
 #
 # Returns:
 #   0 on success, 1 on failure
-function build_native_package() {
+function build_native_package {
     # Default values
     local arches=()
     declare -A deb_arch_map=(
@@ -943,7 +943,7 @@ function build_native_package() {
     }
 
     # Validate required parameters
-    if [ -z "$target_dir" ] || [ -z "$base_name" ]; then
+    if [ -z "${target_dir-}" ] || [ -z "${base_name-}" ]; then
         echo "Error: --target-dir and --base-name are required"
         return 1
     fi
@@ -1008,9 +1008,9 @@ function build_native_package() {
             [ ${#recommends[@]} -gt 0 ] && echo "Recommends: $(IFS=,; echo "${recommends[*]}")"
             [ ${#suggests[@]} -gt 0 ] && echo "Suggests: $(IFS=,; echo "${suggests[*]}")"
             [ ${#breaks[@]} -gt 0 ] && echo "Breaks: $(IFS=,; echo "${breaks[*]}")"
-            [ -n "$homepage" ] && echo "Homepage: $homepage"
+            [ -n "${homepage-}" ] && echo "Homepage: $homepage"
             echo "Description: ${summary:-$description}"
-            if [ -n "$summary" ] && [ -n "$description" ]; then
+            if [ -n "${summary-}" ] && [ -n "${description-}" ]; then
                 echo " $description"
             fi
 
@@ -1062,15 +1062,15 @@ function build_native_package() {
         
         # Create spec file
         {
-            [ -n "$summary" ] && echo "Summary: $summary"
+            [ -n "${summary-}" ] && echo "Summary: $summary"
             echo "Name: $base_name"
             echo "Version: $version"
             echo "Release: $release"
-            [ -n "$epoch" ] && echo "Epoch: $epoch"
+            [ -n "${epoch-}" ] && echo "Epoch: $epoch"
             echo "License: $license"
-            [ -n "$group" ] && echo "Group: $group"
+            [ -n "${group-}" ] && echo "Group: $group"
             echo "Vendor: $vendor"
-            [ -n "$homepage" ] && echo "URL: $homepage"
+            [ -n "${homepage-}" ] && echo "URL: $homepage"
             [ ${#depends[@]} -gt 0 ] && echo "Requires: $(IFS=,; echo "${depends[*]}")"
             [ ${#provides[@]} -gt 0 ] && echo "Provides: $(IFS=,; echo "${provides[*]}")"
             [ ${#conflicts[@]} -gt 0 ] && echo "Conflicts: $(IFS=,; echo "${conflicts[*]}")"
@@ -1082,9 +1082,9 @@ function build_native_package() {
             echo "BuildArch: $arch"
             echo
             echo "%description"
-            if [ -n "$description" ]; then
+            if [ -n "${description-}" ]; then
                 echo "$description"
-            elif [ -n "$summary" ]; then
+            elif [ -n "${summary-}" ]; then
                 echo "$summary"
             fi
             echo
@@ -1138,7 +1138,7 @@ function build_native_package() {
     for arch in "${arches[@]}"; do
         local deb_arch
         deb_arch=$(get_deb_arch "$arch")
-        if [ -n "$deb_arch" ]; then
+        if [ -n "${deb_arch-}" ]; then
             build_deb "$deb_arch"
             [ $? -ne 0 ] && status=1
         fi
@@ -1155,7 +1155,7 @@ function build_native_package() {
     for arch in "${arches[@]}"; do
         local rpm_arch
         rpm_arch=$(get_rpm_arch "$arch")
-        if [ -n "$rpm_arch" ]; then
+        if [ -n "${rpm_arch-}" ]; then
             if [ "$rpm_arch" == "$(uname -m)" ]; then
                 build_rpm "$rpm_arch"
                 [ $? -ne 0 ] && status=1
@@ -1167,4 +1167,9 @@ function build_native_package() {
     done
 
     return $status
+}
+
+# Function to create needed symlinks for the build
+function create_symlinks {
+    ln -fs "/usr/bin/perl" "/usr/local/bin/perl"
 }

@@ -4,8 +4,8 @@
 # Copyright Ilia Ross <ilia@webmin.dev>
 # Bootstrap the build process
 
-# Disable strict mode for unset variables
-set +u
+# Enable strict mode
+set -euo pipefail
 
 # Bootstrap URL
 build_bootstrap_url="https://raw.githubusercontent.com/webmin/webmin-ci-cd/main/build"
@@ -52,11 +52,11 @@ bootstrap() {
 	fi
     done
 
-    # Source general build functions
-    source "$script_dir/functions.bash" || exit 1
-
     # Source build variables
     source "$script_dir/environment.bash" "$argvs" || exit 1
+
+    # Source general build functions
+    source "$script_dir/functions.bash" || exit 1
 }
 
 # Bootstrap build environment

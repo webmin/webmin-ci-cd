@@ -1023,7 +1023,7 @@ function build_native_package {
             [ -n "${homepage-}" ] && echo "Homepage: $homepage"
             echo "Description: ${summary:-$description}"
             if [ -n "${summary-}" ] && [ -n "${description-}" ]; then
-                echo " $description"
+                echo "$description" | fmt -w 74 | sed 's/^/ /'
             fi
 
         } > "$work_dir/DEBIAN/control"
@@ -1102,7 +1102,7 @@ function build_native_package {
             echo
             echo "%description"
             if [ -n "${description-}" ]; then
-                echo "$description"
+                echo "$description" | fmt -w 74
             elif [ -n "${summary-}" ]; then
                 echo "$summary"
             fi

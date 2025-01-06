@@ -137,7 +137,6 @@ function cloud_sign_and_build_repos {
     cmd1+="$CLOUD_UPLOAD_SSH_HOST \"$CLOUD_SIGN_BUILD_REPOS_CMD \
         '$CLOUD_UPLOAD_GPG_PASSPHRASE' '$CLOUD_UPLOAD_SSH_DIR' '$repo_type'\" \
         $VERBOSITY_LEVEL"
-    echo "SSH command: $cmd1"
     eval "$cmd1"
     postcmd $?
     echo

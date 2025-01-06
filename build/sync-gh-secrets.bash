@@ -4,7 +4,7 @@
 # Update, delete, or list GitHub secrets dynamically
 # based on organization and repository
 
-# Enable bash strict mode
+# Enable strict mode
 set -euo pipefail
 
 # Configuration

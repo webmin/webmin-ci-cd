@@ -83,7 +83,7 @@ function build {
     else
         # Check if module has epoch
         epoch=$(get_rpm_module_epoch "$module")
-        if [ -n "$epoch" ]; then
+        if [ -n "${epoch-}" ]; then
             epoch_str="$epoch:"
             epoch="--epoch $epoch"
         fi
@@ -100,7 +100,7 @@ function build {
         ver="$ver.$last_commit_date"
     fi
 
-    echo "                 version: $epoch_str$ver-$rel$edition_id"
+    echo "                 version: ${epoch_str-}$ver-$rel$edition_id"
     echo "                 license: $license"
     echo "************************************************************************"
 
@@ -133,7 +133,7 @@ function build {
     (
         cd "$ROOT_DIR" || exit 1
         modules_exclude=$(get_modules_exclude)
-        cmd="$ROOT_DIR/build-deps/makemodulerpm.pl $epoch --release \
+        cmd="$ROOT_DIR/build-deps/makemodulerpm.pl ${epoch-} --release \
             $rel$edition_id --rpm-depends --licence '$license' --allow-overwrite --rpm-dir \
             $ROOT_BUILD --target-dir $ROOT_REPOS $modules_exclude \
             --vendor '$BUILDER_PACKAGE_NAME' $module $ver $VERBOSITY_LEVEL"

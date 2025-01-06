@@ -12,14 +12,12 @@ temp_dir="/tmp/gh-secrets-$$"
 webmin_repos=(
     "webmin/webmin"
     "webmin/usermin"
-
     "webmin/authentic-theme"
 )
 
 virtualmin_repos=(
     "virtualmin/virtualmin-gpl"
     "virtualmin/virtualmin-pro"
-    
     "virtualmin/virtualmin-awstats"
     "virtualmin/virtualmin-htpasswd"
     "virtualmin/virtualmin-mailman"
@@ -29,11 +27,10 @@ virtualmin_repos=(
     "virtualmin/virtualmin-support"
     "virtualmin/ruby-gems"
     "virtualmin/webmin-jailkit"
-
     "virtualmin/procmail-wrapper"
 )
 
-# Secret names to interact with
+# Secret names
 secrets=(
     "DEV_GPG_PH"
     "DEV_IP_ADDR"
@@ -62,8 +59,8 @@ Options:
     -r, --repo <repo>      Target a specific repository (format: owner/repo)
     -s, --secret <secret>  Target a specific secret for update or delete
     -d, --delete           Delete secrets instead of updating them
-    -l, --list             List current secrets in repositories
-    -h, --help             Show this help message
+    -l, --list            List current secrets in repositories
+    -h, --help            Show this help message
 
 Examples:
     Update all secrets for all repositories
@@ -237,20 +234,20 @@ function update_repo_secrets {
     fi
     
     # Update each secret
-    for secret in "${secrets_to_update[@]}"; do
-        local full_secret_name="${org}__${secret}"
+    for s in "${secrets_to_update[@]}"; do
+        local full_secret_name="${org}__${s}"
         local secret_file="$temp_dir/${full_secret_name}"
-        echo "  Updating $secret .."
+        echo "  Updating $s .."
         if [ -f "$secret_file" ]; then
             local err
-            err=$(gh secret set "$secret" --repo "$repo" < "$secret_file" 2>&1)
+            err=$(gh secret set "$s" --repo "$repo" < "$secret_file" 2>&1)
             if [ $? -ne 0 ]; then
                 echo "  .. failed : $err"
             else
                 echo "  .. done"
             fi
         else
-            echo "  .. warning : secret file '$secret_file' not found for '$secret'"
+            echo "  .. warning : secret file '$secret_file' not found for '$s'"
         fi
     done
 }
@@ -270,10 +267,10 @@ function delete_repo_secrets {
     fi
     
     # Delete each secret
-    for secret in "${secrets_to_delete[@]}"; do
-        echo "  Deleting $secret .."
+    for s in "${secrets_to_delete[@]}"; do
+        echo "  Deleting $s .."
         local err
-        err=$(gh secret remove "$secret" --repo "$repo" 2>&1)
+        err=$(gh secret remove "$s" --repo "$repo" 2>&1)
         if [ $? -ne 0 ]; then
             echo "  .. failed : $err"
         else

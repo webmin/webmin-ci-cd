@@ -4,6 +4,9 @@
 # Update, delete, or list GitHub secrets dynamically
 # based on organization and repository
 
+# Enable bash strict mode
+set -euo pipefail
+
 # Configuration
 secrets_zip="${ENV_SECRETS_ZIP:-$HOME/.tmp/gh-secrets.zip}"
 temp_dir="/tmp/gh-secrets-$$"
@@ -59,18 +62,21 @@ Options:
     -r, --repo <repo>      Target a specific repository (format: owner/repo)
     -s, --secret <secret>  Target a specific secret for update or delete
     -d, --delete           Delete secrets instead of updating them
-    -l, --list            List current secrets in repositories
-    -h, --help            Show this help message
+    -l, --list             List current secrets in repositories
+    -h, --help             Show this help message
 
 Examples:
     Update all secrets for all repositories
         $0
 
-    Update all secrets for webmin/webmin                     
-        $0 -r webmin/webmin
+    Update all secrets for specific repositories                     
+        $0 -r webmin/webmin -r webmin/usermin
 
-    Update webmin__DEV_GPG_PH for all repositories
-        $0 -s webmin__DEV_GPG_PH
+    Update specific secrets for all repositories
+        $0 -s DEV_GPG_PH -s DEV_IP_ADDR
+
+    Update specific secrets for specific repositories
+        $0 -r webmin/webmin -r webmin/usermin -s DEV_GPG_PH -s DEV_IP_ADDR
 
     Delete secrets for virtualmin/virtualmin-awstats
         $0 -r virtualmin/virtualmin-awstats -d
@@ -138,27 +144,35 @@ function list_repo_secrets {
 }
 
 # Parse command line arguments
-repo=""
-secret=""
+declare -a selected_repos=()
+declare -a selected_secrets=()
 delete=0
 list=0
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         -r|--repo)
-            repo="$2"
-            if ! is_valid_repo "$repo"; then
-                echo "Error: Invalid repository: $repo"
+            if [[ -z "$2" || "$2" == -* ]]; then
+                echo "Error: --repo requires a value"
                 exit 1
             fi
+            if ! is_valid_repo "$2"; then
+                echo "Error: Invalid repository: $2"
+                exit 1
+            fi
+            selected_repos+=("$2")
             shift 2
             ;;
         -s|--secret)
-            secret="$2"
-            if ! is_valid_secret "$secret"; then
-                echo "Error: Invalid secret: $secret"
+            if [[ -z "$2" || "$2" == -* ]]; then
+                echo "Error: --secret requires a value"
                 exit 1
             fi
+            if ! is_valid_secret "$2"; then
+                echo "Error: Invalid secret: $2"
+                exit 1
+            fi
+            selected_secrets+=("$2")
             shift 2
             ;;
         -d|--delete)
@@ -183,8 +197,8 @@ done
 if [ "$list" -eq 1 ]; then
     # Determine which repositories to list
     repos_to_list=()
-    if [ -n "$repo" ]; then
-        repos_to_list=("$repo")
+    if [ ${#selected_repos[@]} -gt 0 ]; then
+        repos_to_list=("${selected_repos[@]}")
     else
         repos_to_list=("${webmin_repos[@]}" "${virtualmin_repos[@]}")
     fi
@@ -228,9 +242,13 @@ function update_repo_secrets {
     echo "Updating secrets for $repo .."
     
     # Determine which secrets to update
-    local secrets_to_update=("${secrets[@]}")
-    if [ -n "$secret" ]; then
-        secrets_to_update=("${secret#*__}")
+    local secrets_to_update=()
+    if [ ${#selected_secrets[@]} -gt 0 ]; then
+        for s in "${selected_secrets[@]}"; do
+            secrets_to_update+=("${s#*__}")
+        done
+    else
+        secrets_to_update=("${secrets[@]}")
     fi
     
     # Update each secret
@@ -261,9 +279,13 @@ function delete_repo_secrets {
     echo "Deleting secrets for $repo .."
     
     # Determine which secrets to delete
-    local secrets_to_delete=("${secrets[@]}")
-    if [ -n "$secret" ]; then
-        secrets_to_delete=("${secret#*__}")
+    local secrets_to_delete=()
+    if [ ${#selected_secrets[@]} -gt 0 ]; then
+        for s in "${selected_secrets[@]}"; do
+            secrets_to_delete+=("${s#*__}")
+        done
+    else
+        secrets_to_delete=("${secrets[@]}")
     fi
     
     # Delete each secret
@@ -281,8 +303,8 @@ function delete_repo_secrets {
 
 # Determine which repositories to update or delete
 repos_to_update=()
-if [ -n "$repo" ]; then
-    repos_to_update=("$repo")
+if [ ${#selected_repos[@]} -gt 0 ]; then
+    repos_to_update=("${selected_repos[@]}")
 else
     repos_to_update=("${webmin_repos[@]}" "${virtualmin_repos[@]}")
 fi

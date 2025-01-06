@@ -134,7 +134,9 @@ function cloud_sign_and_build_repos {
     # Sign and update repos metadata in remote
     echo "Signing and updating repos metadata in $CLOUD_UPLOAD_SSH_HOST${ssh_warning_text-} .."
     local cmd1="ssh $ssh_options $CLOUD_UPLOAD_SSH_USER@"
-    cmd1+="$CLOUD_UPLOAD_SSH_HOST \"$CLOUD_SIGN_BUILD_REPOS_CMD\" $VERBOSITY_LEVEL"
+    cmd1+="$CLOUD_UPLOAD_SSH_HOST \"$CLOUD_SIGN_BUILD_REPOS_CMD \
+        '$CLOUD_UPLOAD_GPG_PASSPHRASE' '$CLOUD_UPLOAD_SSH_DIR' '$repo_type'\" \
+        $VERBOSITY_LEVEL"
     echo "SSH command: $cmd1"
     eval "$cmd1"
     postcmd $?

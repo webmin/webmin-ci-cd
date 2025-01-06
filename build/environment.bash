@@ -31,7 +31,6 @@ export VERBOSITY_LEVEL=' >/dev/null 2>&1 </dev/null'
 export VERBOSITY_LEVEL_TO_FILE='2> /dev/null'
 export VERBOSITY_LEVEL_WITH_INPUT=' >/dev/null 2>&1'
 if [[ "'$*'" == *"--verbose"* ]]; then
-    echo "Enabling verbose mode"
     VERBOSE_MODE=1
     VERBOSITY_LEVEL=''
     VERBOSITY_LEVEL_TO_FILE=''
@@ -41,7 +40,6 @@ fi
 # Define testing build
 export TESTING_BUILD=0
 if [[ "'$*'" == *"--testing"* ]]; then
-    echo "Enabling testing build"
     export TESTING_BUILD=1
 fi
 

@@ -239,9 +239,12 @@ process_rpm_file() {
     local current_sum cached_sum
     current_sum=$(sha256sum "$rpm_file" | cut -d' ' -f1)
     cached_sum=$(grep "^${rpm_file}:" "$checksum_cache" | cut -d: -f2 || true)
-    
+
     if [ "$current_sum" != "$cached_sum" ]; then
-        if ! rpm --delsign "$rpm_file" && rpm --resign "$rpm_file"; then
+        if ! rpm --delsign "$rpm_file"; then
+            echo "Warning: Failed to delete signature from $rpm_file" >&2
+        fi
+        if ! rpm --addsign "$rpm_file"; then
             echo "Error: Failed to sign $rpm_file" >&2
             exit 1
         fi

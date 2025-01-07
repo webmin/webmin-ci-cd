@@ -259,7 +259,7 @@ main() {
 
     # Call pre build tasks if available
     if command -v pre_build >/dev/null 2>&1; then
-        pre_build "$home_dir"
+        pre_build "$gpg_ph" "$home_dir" "$repo_target"
     fi
 
     # Generate structured APT repository
@@ -270,7 +270,7 @@ main() {
 
     # Call post build tasks if available
     if command -v post_build >/dev/null 2>&1; then
-        post_build "$home_dir"
+        post_build "$gpg_ph" "$home_dir" "$repo_target"
     fi
 }
 

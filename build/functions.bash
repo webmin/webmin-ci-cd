@@ -195,6 +195,19 @@ function remove_dir {
     fi
 }
 
+function get_remote_repo_tag {
+    local repo_url="$1"
+
+    # Fetch tags and extract the latest version
+    git ls-remote --tags "$repo_url" 2>/dev/null | \
+        awk -F/ '{print $3}' | \
+        sort -V | \
+        tail -n1 || {
+            echo "Error: Failed to fetch tags from $repo_url." >&2
+            return 1
+        }
+}
+
 # Get latest tag version
 function get_current_repo_tag {
     # shellcheck disable=SC2153

@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC1091
-# bootstrap.bash
+# bootstrap.bash (https://github.com/webmin/webmin-ci-cd)
 # Copyright Ilia Ross <ilia@webmin.dev>
+# Licensed under the MIT License
+#
 # Bootstrap the build process
 
 # Enable strict mode

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2155 disable=SC2034
-# sign-and-build-repos.bash
-# Copyright (c) 2024 Ilia Ross <ilia@webmin.dev>
+# sign-and-build-repos.bash (https://github.com/webmin/webmin-ci-cd)
+# Copyright Ilia Ross <ilia@webmin.dev>
 # Licensed under the MIT License
 #
 # Script to sign and build repositories in remote system

@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2181
-# sync-gh-secrets.bash
+# sync-github-secrets.bash (https://github.com/webmin/webmin-ci-cd)
+# Copyright Ilia Ross <ilia@webmin.dev>
+# Licensed under the MIT License
+#
 # Update, delete, or list GitHub secrets dynamically
 # based on organization and repository
 

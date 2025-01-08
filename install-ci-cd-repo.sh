@@ -1,6 +1,6 @@
 #!/bin/sh
 # install-ci-cd-repo.sh (https://github.com/webmin/webmin-ci-cd)
-# Copyright 2025 Ilia Ross <ilia@webmin.dev>
+# Copyright Ilia Ross <ilia@webmin.dev>
 # Licensed under the MIT License
 #
 # Installs package repository configuration for CI/CD builds

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2034
-# build-deb-package.bash
+# build-deb-package.bash (https://github.com/webmin/webmin-ci-cd)
 # Copyright Ilia Ross <ilia@webmin.dev>
+# Licensed under the MIT License
 #
 # Automatically builds DEB packages of Webmin and Usermin with the latest
 # Authentic Theme, pulls changes from GitHub, creates testing builds from the

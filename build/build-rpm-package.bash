@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2034
-# build-rpm-package.bash
+# build-rpm-package.bash (https://github.com/webmin/webmin-ci-cd)
 # Copyright Ilia Ross <ilia@webmin.dev>
+# Licensed under the MIT License
 #
 # Automatically builds RPM packages of Webmin and Usermin with the latest
 # Authentic Theme, pulls changes from GitHub, creates testing builds from the

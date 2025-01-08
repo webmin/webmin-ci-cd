@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2034
-# build-rpm-module.bash
+# build-rpm-module.bash (https://github.com/webmin/webmin-ci-cd)
 # Copyright Ilia Ross <ilia@webmin.dev>
+# Licensed under the MIT License
 #
 # Automatically builds DEB Webmin module pulls changes from GitHub, creates
 # testing builds from the latest code with English-only support, production

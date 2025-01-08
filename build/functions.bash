@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2181
-# functions.bash
+# functions.bash (https://github.com/webmin/webmin-ci-cd)
 # Copyright Ilia Ross <ilia@webmin.dev>
+# Licensed under the MIT License
+#
 # Build functions for the build process
 
 # Set up SSH keys on the build machine

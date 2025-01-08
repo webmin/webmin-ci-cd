@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2034
-# environment.bash
+# environment.bash (https://github.com/webmin/webmin-ci-cd)
 # Copyright Ilia Ross <ilia@webmin.dev>
+# Licensed under the MIT License
+#
 # Configures environment variables for the build process
 
 # Builder email

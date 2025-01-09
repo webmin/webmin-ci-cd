@@ -1,0 +1,78 @@
+name: Master Workflow
+
+on:
+  workflow_call:
+    inputs:
+      build-type:
+        required: true
+        type: string
+        description: 'Type of build: package or module'
+      project-name:
+        required: false
+        type: string
+        description: 'Name of the project to build (e.g. webmin, usermin, virtualmin-gpl)'
+      tagged-release:
+        required: false
+        type: boolean
+        default: false
+        description: 'Whether this is a tagged release or a testing build'
+    secrets:
+      DEV_GPG_PH:
+        required: true
+      DEV_IP_ADDR:
+        required: true
+      DEV_IP_KNOWN_HOSTS:
+        required: false
+      DEV_UPLOAD_SSH_USER:
+        required: true
+      DEV_UPLOAD_SSH_DIR:
+        required: true
+      PRERELEASE_UPLOAD_SSH_DIR:
+        required: false
+      DEV_SSH_PRV_KEY:
+        required: true
+      DEV_SIGN_BUILD_REPOS_CMD:
+        required: true
+      DEV_CHILD_GITHUB_TOKEN:
+        required: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.event.head_commit.message, '[no-build]') }}
+    steps:
+      - uses: actions/checkout@v3
+      
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with: 
+          packages: git tar gzip openssl curl openssh-client rpm perl libjson-pp-perl libdigest-sha-perl liblist-moreutils-perl libencode-detect-perl zstd
+          version: 1.0
+      
+      - uses: szenius/set-timezone@v1.2
+        with:
+          timezoneLinux: "Europe/Nicosia"
+      
+      - name: Fetch dependencies
+        run: |-
+          curl -O https://raw.githubusercontent.com/webmin/webmin-ci-cd/main/build/bootstrap.bash
+      
+      - name: Build and upload
+        env:
+          CLOUD__GPG_PH: ${{ secrets.DEV_GPG_PH }}
+          CLOUD__IP_ADDR: ${{ secrets.DEV_IP_ADDR }}
+          CLOUD__IP_KNOWN_HOSTS: ${{ secrets.DEV_IP_KNOWN_HOSTS }}
+          CLOUD__UPLOAD_SSH_USER: ${{ secrets.DEV_UPLOAD_SSH_USER }}
+          CLOUD__UPLOAD_SSH_DIR: ${{ secrets.PRERELEASE_UPLOAD_SSH_DIR || secrets.DEV_UPLOAD_SSH_DIR }}
+          CLOUD__SSH_PRV_KEY: ${{ secrets.DEV_SSH_PRV_KEY }}
+          CLOUD__SIGN_BUILD_REPOS_CMD: ${{ secrets.DEV_SIGN_BUILD_REPOS_CMD }}
+          CLOUD__GH_TOKEN: ${{ secrets.DEV_CHILD_GITHUB_TOKEN }}
+        run: |-
+          build_args="${{ inputs.tagged-release && '' || ' --testing' }}"
+          bash bootstrap.bash
+          if [ "${{ inputs.build-type }}" = "package" ]; then
+            bash build-deb-package.bash ${{ inputs.project-name }}$build_args
+            bash build-rpm-package.bash ${{ inputs.project-name }}$build_args
+          else
+            bash build-deb-module.bash ${{ inputs.project-name }}$build_args
+            bash build-rpm-module.bash ${{ inputs.project-name }}$build_args
+          fi

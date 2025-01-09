@@ -67,7 +67,9 @@ jobs:
           CLOUD__SIGN_BUILD_REPOS_CMD: ${{ secrets.DEV_SIGN_BUILD_REPOS_CMD }}
           CLOUD__GH_TOKEN: ${{ secrets.DEV_CHILD_GITHUB_TOKEN }}
         run: |-
-          build_args="${{ inputs.tagged-release && '' || ' --testing' }}"
+          if [ "${{ inputs.tagged-release }}" = "false" ]; then
+            build_args=" --testing"
+          fi
           bash bootstrap.bash
           if [ "${{ inputs.build-type }}" = "package" ]; then
             bash build-deb-package.bash ${{ inputs.project-name }}$build_args

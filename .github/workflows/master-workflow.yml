@@ -28,7 +28,7 @@ on:
       DEV_UPLOAD_SSH_DIR:
         required: true
       PRERELEASE_UPLOAD_SSH_DIR:
-        required: false
+        required: true
       DEV_SSH_PRV_KEY:
         required: true
       DEV_SIGN_BUILD_REPOS_CMD:
@@ -62,7 +62,7 @@ jobs:
           CLOUD__IP_ADDR: ${{ secrets.DEV_IP_ADDR }}
           CLOUD__IP_KNOWN_HOSTS: ${{ secrets.DEV_IP_KNOWN_HOSTS }}
           CLOUD__UPLOAD_SSH_USER: ${{ secrets.DEV_UPLOAD_SSH_USER }}
-          CLOUD__UPLOAD_SSH_DIR: ${{ secrets.PRERELEASE_UPLOAD_SSH_DIR || secrets.DEV_UPLOAD_SSH_DIR }}
+          CLOUD__UPLOAD_SSH_DIR: ${{ inputs.tagged-release && secrets.PRERELEASE_UPLOAD_SSH_DIR || secrets.DEV_UPLOAD_SSH_DIR }}
           CLOUD__SSH_PRV_KEY: ${{ secrets.DEV_SSH_PRV_KEY }}
           CLOUD__SIGN_BUILD_REPOS_CMD: ${{ secrets.DEV_SIGN_BUILD_REPOS_CMD }}
           CLOUD__GH_TOKEN: ${{ secrets.DEV_CHILD_GITHUB_TOKEN }}

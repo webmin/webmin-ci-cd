@@ -287,6 +287,27 @@ function get_latest_commit_date_version {
     )
 }
 
+# Generate git clone command based on build type
+generate_git_clone_cmd() {
+    local repo_url="$1"
+    local target_dir="$2"
+    local tag_cmd
+
+    # Check if building from tagged release
+    if [ "$TESTING_BUILD" -eq 0 ]; then
+        # Get the tag for this repo
+        local tag
+        tag=$(get_remote_repo_tag "$repo_url")
+        
+        # If we got a valid tag, use it
+        if [ -n "$tag" ]; then
+            tag_cmd="--branch $tag"
+        fi
+    fi
+
+    echo "git clone --depth 1 ${tag_cmd-} $repo_url $target_dir $VERBOSITY_LEVEL"
+}
+
 # Pull project repo and theme
 function make_packages_repos {
     local root_prod="$1"
@@ -301,7 +322,7 @@ function make_packages_repos {
     
     # Clone repo
     if [ ! -d "$root_prod" ]; then
-        cmd="git clone --depth 1 $GIT_BASE_URL/$repo $VERBOSITY_LEVEL"
+        cmd=$(generate_git_clone_cmd "$GIT_BASE_URL/$repo" "$root_prod")
         eval "$cmd"
         if [ "$?" != "0" ]; then
             return 1
@@ -315,7 +336,7 @@ function make_packages_repos {
 
     # Clone required repo
     if [ ! -d "$reqrepo" ]; then
-        cmd="git clone --depth 1 $WEBMIN_REPO $VERBOSITY_LEVEL"
+        cmd=$(generate_git_clone_cmd "$WEBMIN_REPO" "$reqrepo")
         eval "$cmd"
         if [ "$?" != "0" ]; then
             return 1
@@ -341,13 +362,13 @@ function make_packages_repos {
     if [ ! -d "$root_prod/$theme" ]; then
         cd "$root_prod" || exit 1
         repo="$reqrepo/$theme.git"
-        cmd="git clone --depth 1 $GIT_BASE_URL/$repo $VERBOSITY_LEVEL"
+        cmd=$(generate_git_clone_cmd "$GIT_BASE_URL/$repo" "$theme")
         eval "$cmd"
         if [ "$?" != "0" ]; then
             return 1
         fi
     fi
-return 0
+    return 0
 }
 
 # Make module repo
@@ -364,13 +385,6 @@ function clone_module_repo {
     # Clean up module directory
     remove_dir "$dir_name"
 
-    # Function to get actual clone command
-    generate_clone_cmd() {
-        local repo="$1"
-        local dir="$2"
-        echo "git clone --depth 1 $target/$repo.git $dir $VERBOSITY_LEVEL"
-    }
-
     # Run cloning depending on the module type
     declare -a rs=()
     local target_dir="$dir_name"
@@ -382,12 +396,12 @@ function clone_module_repo {
 
     # Clone dependency first if exists
     if [[ -n "${deps_repo-}" ]]; then
-        cmd_clone_deps=$(generate_clone_cmd "$deps_repo" "$dir_name")
+        cmd_clone_deps=$(generate_git_clone_cmd "$target/$deps_repo.git" "$dir_name")
         eval "$cmd_clone_deps" || rs+=($?)
     fi
 
     # Clone main module
-    cmd_clone_main=$(generate_clone_cmd "$repo_name" "$target_dir")
+    cmd_clone_main=$(generate_git_clone_cmd "$target/$repo_name.git" "$target_dir")
     eval "$cmd_clone_main" || rs+=($?)
 
     # Check for errors

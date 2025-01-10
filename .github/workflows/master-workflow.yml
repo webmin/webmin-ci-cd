@@ -11,11 +11,11 @@ on:
         required: false
         type: string
         description: 'Name of the project to build (e.g. webmin, usermin, virtualmin-gpl)'
-      tagged-release:
+      is-release:
         required: false
         type: boolean
         default: false
-        description: 'Whether this is a tagged release or a testing build'
+        description: 'Whether this is a release or just a testing build'
     secrets:
       DEV_GPG_PH:
         required: true
@@ -62,12 +62,12 @@ jobs:
           CLOUD__IP_ADDR: ${{ secrets.DEV_IP_ADDR }}
           CLOUD__IP_KNOWN_HOSTS: ${{ secrets.DEV_IP_KNOWN_HOSTS }}
           CLOUD__UPLOAD_SSH_USER: ${{ secrets.DEV_UPLOAD_SSH_USER }}
-          CLOUD__UPLOAD_SSH_DIR: ${{ inputs.tagged-release && secrets.PRERELEASE_UPLOAD_SSH_DIR || secrets.DEV_UPLOAD_SSH_DIR }}
+          CLOUD__UPLOAD_SSH_DIR: ${{ inputs.is-release && secrets.PRERELEASE_UPLOAD_SSH_DIR || secrets.DEV_UPLOAD_SSH_DIR }}
           CLOUD__SSH_PRV_KEY: ${{ secrets.DEV_SSH_PRV_KEY }}
           CLOUD__SIGN_BUILD_REPOS_CMD: ${{ secrets.DEV_SIGN_BUILD_REPOS_CMD }}
           CLOUD__GH_TOKEN: ${{ secrets.DEV_CHILD_GITHUB_TOKEN }}
         run: |-
-          if [ "${{ inputs.tagged-release }}" = "false" ]; then
+          if [ "${{ inputs.is-release }}" = "false" ]; then
             build_args=" --testing"
           fi
           bash bootstrap.bash

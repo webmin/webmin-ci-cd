@@ -567,6 +567,32 @@ function resolve_module_info {
     echo "$module_name $module_name"
 }
 
+# Function to get related modules
+get_related_modules() {
+    local module="$1"
+    local mapping_file="module-groups.txt"
+
+    # Check if the file exists
+    if [ ! -f "$mapping_file" ]; then
+        echo "$module"
+        return
+    fi
+
+    # Loop through the file to find related modules
+    while IFS='=' read -r key value; do
+        if [ "$key" = "$module" ]; then
+            echo "$module $value"
+            return
+        elif [ "$value" = "$module" ]; then
+            echo "$module $key"
+            return
+        fi
+    done < "$mapping_file"
+
+    # Default to just the module if no match found
+    echo "$module"
+}
+
 # Cleans up package files by keeping only the latest version of each package
 # 
 # Usage:

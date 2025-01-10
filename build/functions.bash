@@ -4,7 +4,7 @@
 # Copyright Ilia Ross <ilia@webmin.dev>
 # Licensed under the MIT License
 #
-# Build functions for the build process
+# Functions for the build process
 
 # Set up SSH keys on the build machine
 function setup_ssh {

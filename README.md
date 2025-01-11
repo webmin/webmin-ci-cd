@@ -65,6 +65,43 @@ This repository provides CI/CD pipelines to automate the building and distributi
 
 <img width="203" alt="Webmin Development Unstable Repo Screenshot" src="https://github.com/user-attachments/assets/b737c81d-49c4-4214-bb37-9df162cb0569#gh-dark-mode-only" /> <img width="203" alt="Webmin Development Prerelease Repo Screenshot" src="https://github.com/user-attachments/assets/f342149a-9404-4e8b-b343-31c2de39df10#gh-dark-mode-only" /> <img width="203" alt="Virtualmin Development Unstable Repo Screenshot" src="https://github.com/user-attachments/assets/a86f8f7b-ef50-4905-9cf8-2261d9496715#gh-dark-mode-only" /> <img width="203" alt="Virtualmin Development Prerelease Repo Screenshot" src="https://github.com/user-attachments/assets/d379450b-2d86-44b2-9d96-39b414185399#gh-dark-mode-only" />
 
+## Objective
+
+The goal of this automation is to make building and distributing Webmin modules and Virtualmin plugins easy and reliable, enabling developers and users always have access to the latest updates and features without needing to handle everything manually.
+
+Even though GitHub Actions is used to manage builds, the entire process is handled by scripts within this repository. These scripts—around 2,500 lines of carefully written and tested Bash code—give us full control over the build process. This setup isn't tied to GitHub, making it possible to run the same code seamlessly on other platforms like GitLab or even a local machine. This approach makes the system flexible, portable, and easy to migrate without being locked into any single platform.
+
+## Design
+
+The repositories design works to make accessing and managing packages as straightforward as possible. Each repository provides a clean, single-page list of built packages, allowing users to download packages manually by simply clicking on the package name. This makes finding and grabbing the package you need quick and easy without navigating through multiple confusing pages and directories.
+
+To support a wide range of systems, the repositories provide packages for all major architectures, including older ones like i386 (i686), popular options like amd64 (x86_64), and the increasingly widespread arm64 (aarch64).
+
+Despite providing a single directory for all architectures, modern package managers like APT and DNF handle this effortlessly, automatically picking the correct package for installation. Since only one package is architecture-dependent, splitting repositories by architecture would add unnecessary complexity without any real advantage.
+
+All repositories and packages are signed with the Webmin Developers signing key, the same one used for standard Webmin installations. This makes configuration straightforward, with just a single repository file and a simple, easy-to-remember URL.
+
+In the unstable repositories, only the latest package versions are kept, with older ones removed on every push. The pre-release repositories, on the other hand, keep all versions so users can go back to older releases if needed.
+
+## Versioning
+The repositories use a structured versioning system to differentiate between unstable and pre-release packages while maintaining consistency with production repositories.
+
+For unstable repositories, the versioning always follows the full semantic format with three numeric segments separated by periods. The last segment, usually reserved for bug fixes, is replaced with a timestamp in `YYYYMMDDHHMM` format. This creates a version like `7.30.202501111200`, where the timestamp reflects the exact build time.
+
+For pre-release repositories, the package version is derived directly from the module or plugin itself. These versions may use standard versioning, like `7.30.4`, or other schemes, such as `3.6`, depending on the package.
+
+For RPM-based packages, some include an epoch due to historical reasons. The epoch is consistent with production repositories, providing full compatibility across unstable, pre-release, and production repositories. This consistency allows packages to seamlessly replace one another based solely on their version, regardless of the repository they originate from.
+
+## Workflows
+
+Currently, we use GitHub Actions to manage builds, which brings several advantages. As mentioned earlier, we intentionally avoid relying on third-party projects beyond GitHub Actions to keep the build process independent and easily migratable to other platforms if needed.
+
+At the core of the system is a master workflow, which is also stored in this repository. This master workflow is the single source of truth, containing all the logic for builds. There are no additional templates for Webmin modules or Virtualmin plugins, making it straightforward to manage. Any changes to the build process only need to be made in the master workflow.
+
+Each product repository includes a child workflow that reuses the master workflow. The primary role of the child workflow is to define when builds should be triggered, such as on a push to a specific branch or when a release is created. Additionally, the child workflow is responsible for passing repository-specific secrets to the master workflow. This is necessary because, for security reasons, GitHub restricts the sharing of secrets across organizations and user accounts, requiring each child workflow located elsewhere to explicitly set and pass its own secrets.
+
+In some cases, fine-grained tokens are required for builds involving private repositories. For instance, if changes in a public repository rely on a private one, GitHub's permission model prevents workflows from accessing the private repository unless an additional token with the necessary permissions is provided for cloning the private repository. Conversely, when a workflow is triggered directly by a private repository, GitHub automatically provides an authentication token, making it easy to clone the repository without any additional steps.
+
 ## License
 
 This project is licensed under the MIT License.

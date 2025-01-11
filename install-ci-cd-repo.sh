@@ -65,10 +65,10 @@ setup_repo() {
     }
     
     # Call package preference function if it exists
-    pkg_priority=""
+    pkg_prefs=""
     func="set_${product}_package_preferences"
     if command -v "$func" >/dev/null 2>&1; then
-      pkg_priority=$(eval "$func" "$auth_user" "$auth_pass")
+      pkg_prefs=$(eval "$func" "$auth_user" "$auth_pass")
     fi
 
     case "$product" in
@@ -93,7 +93,7 @@ setup_repo() {
                     
                     [ -n "$auth_user" ] && set -- "$@" "$auth_user"
                     [ -n "$auth_pass" ] && set -- "$@" "$auth_pass"
-                    [ -n "$pkg_priority" ] && set -- "$@" "--pkg-excl=$pkg_priority"
+                    [ -n "$pkg_prefs" ] && set -- "$@" "--pkg-prefs=$pkg_prefs"
                     
                     sh "$script" "$@"
                     ;;
@@ -110,7 +110,7 @@ setup_repo() {
                     
                     [ -n "$auth_user" ] && set -- "$@" "$auth_user"
                     [ -n "$auth_pass" ] && set -- "$@" "$auth_pass"
-                    [ -n "$pkg_priority" ] && set -- "$@" "--pkg-excl=$pkg_priority"
+                    [ -n "$pkg_prefs" ] && set -- "$@" "--pkg-prefs=$pkg_prefs"
                     
                     sh "$script" "$@"
                     ;;

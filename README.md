@@ -1,6 +1,6 @@
 &nbsp;
 
-<p align="center"><img src="https://github.com/user-attachments/assets/67406507-cdf1-44ce-a87a-06c0132b33eb#gh-light-mode-only" alt="Webmin" width="340px"><img src="https://github.com/user-attachments/assets/ebef5699-74a7-46ff-95e7-7f07ae5b2ba0#gh-dark-mode-only" alt="Webmin" width="340px"></p>
+<p align="center"><img src="https://github.com/user-attachments/assets/1501dd57-e48f-4c05-8adf-4fbdf580a8c4" alt="Webmin CI/CD logo" width="360px"></p>
 <br>
 <p align="center"> <a href="https://github.com/webmin/webmin-ci-cd/stargazers"><img src="https://img.shields.io/github/stars/webmin/webmin-ci-cd" alt="Stars"></a> <a href="https://github.com/webmin/webmin-ci-cd/network/members"><img src="https://img.shields.io/github/forks/webmin/webmin-ci-cd" alt="Members"></a> <a href="https://github.com/webmin/webmin-ci-cd/contributors/"><img src="https://img.shields.io/github/contributors/webmin/webmin-ci-cd" alt="Contributors"></a> <a href="https://github.com/webmin/webmin-ci-cd/issues/"><img src="https://img.shields.io/github/issues-raw/webmin/webmin-ci-cd" alt="Issues"></a> <a href="https://github.com/webmin/webmin-ci-cd/blob/master/LICENCE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a> </p>
 

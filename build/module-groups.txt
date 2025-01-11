@@ -1,2 +1,1 @@
 virtualmin-gpl=virtualmin-pro
-virtualmin-pro=virtualmin-gpl

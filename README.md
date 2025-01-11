@@ -102,6 +102,36 @@ Each product repository includes a child workflow that reuses the master workflo
 
 In some cases, fine-grained tokens are required for builds involving private repositories. For instance, if changes in a public repository rely on a private one, GitHub's permission model prevents workflows from accessing the private repository unless an additional token with the necessary permissions is provided for cloning the private repository. Conversely, when a workflow is triggered directly by a private repository, GitHub automatically provides an authentication token, making it easy to clone the repository without any additional steps.
 
+## Architecture
+This is a quick overview of the key files involved in the build process, highlighting their roles, functionality, and purpose.
+
+- **bootstrap.bash** — this script bootstraps the build process by downloading and preparing all necessary dependencies and files required for the build. It acts as the single entry point to initiate the build, making it easier to make changes to the project. Additionally, it loads essential environment variables and includes all required functions.
+
+- **environment.bash** — this script configures and exports the environment variables needed for the build, some of which are derived from the GitHub Actions workflow. It controls verbosity and determines the build type based on parameters passed by the calling script.
+
+- **functions.bash** — this script includes all the functions used throughout the build process, with over two dozen functions.
+
+- **build-product-deb.bash**, **build-product-rpm.bash**, **build-module-deb.bash**, **build-module-rpm.bash** — these scripts are designed specifically to handle builds for either a product (e.g., Webmin or Usermin) or a plugin (e.g., Virtualmin GPL, Virtualmin Nginx, Virtualmin AWStats, etc.). They are called directly from the workflow and manage the build process for the respective product or plugin.
+
+**sync-github-secrets.bash** — this script dynamically updates, deletes, or lists GitHub secrets for a given repository or all repositories. It's especially useful for batch updating secrets across all projects in one go. The script expects a ZIP file containing the secrets, either specified via the `ENV_SECRETS_ZIP` environment variable or placed in `~/Git/.secrets/gh-secrets.zip` file.
+
+The ZIP file should follow a specific structure where secrets are named using the file format `organization__SECRET_NAME`.
+
+For example:
+
+- `webmin__UPLOAD_SSH_DIR`: Sets `UPLOAD_SSH_DIR` secret for `webmin` organization for all repositories listed in the `webmin_repos` variable
+- `virtualmin__IP_KNOWN_HOSTS`: Sets `IP_KNOWN_HOSTS` secret for `virtualmin` organization for all repositories listed in the `virtualmin_repos` variable
+
+**sign-and-build-repos.bash** — this script signs and builds repositories on a remote system. It's called at the final stage of the workflow, after all packages have been uploaded to the remote server. It's versatile and can be reused independently.
+
+**module-groups.txt** — this text file defines groups of modules that need to be rebuilt if certain modules are changed. For instance, changes in the Virtualmin GPL module will trigger a rebuild of the Virtualmin Pro package.
+
+**modules-mapping.txt** — this text file provides a mapping between repository names and package names, addressing cases where the package name differs from the repository name. It also allows configuration of the package edition, license type, and other options, such as the package target directory.
+
+**rpm-modules-epoch.txt** — this text file lists the epoch values for each RPM package that needs one.
+
+**install-ci-cd-repo.sh** — this script installs the unstable or prerelease repository on the system, making it simple for developers and users to access the latest packages.
+
 ## License
 
 This project is licensed under the MIT License.

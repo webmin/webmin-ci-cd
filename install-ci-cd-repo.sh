@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck disable=SC2317
 # install-ci-cd-repo.sh (https://github.com/webmin/webmin-ci-cd)
 # Copyright Ilia Ross <ilia@webmin.dev>
 # Licensed under the MIT License
@@ -39,6 +40,15 @@ check_virtualmin_license() {
     return 0
 }
 
+set_virtualmin_package_preferences() {
+    fn_auth_user="$1"
+    fn_auth_pass="$2"
+    if [ -z "$fn_auth_user" ] || [ -z "$fn_auth_pass" ]; then
+        echo "deb:webmin-virtual-server=1001=gpl rpm:wbm-virtual-server*pro*"
+    fi
+    return 0
+}
+
 setup_repo() {
     product="$1"
     type="$2"
@@ -54,6 +64,13 @@ setup_repo() {
         auth_pass=$(echo "$license_data" | awk '{print $2}')
     }
     
+    # Call package preference function if it exists
+    pkg_priority=""
+    func="set_${product}_package_preferences"
+    if command -v "$func" >/dev/null 2>&1; then
+      pkg_priority=$(eval "$func" "$auth_user" "$auth_pass")
+    fi
+
     case "$product" in
         webmin)
             case "$type" in
@@ -76,6 +93,7 @@ setup_repo() {
                     
                     [ -n "$auth_user" ] && set -- "$@" "$auth_user"
                     [ -n "$auth_pass" ] && set -- "$@" "$auth_pass"
+                    [ -n "$pkg_priority" ] && set -- "$@" "--pkg-excl=$pkg_priority"
                     
                     sh "$script" "$@"
                     ;;
@@ -92,6 +110,7 @@ setup_repo() {
                     
                     [ -n "$auth_user" ] && set -- "$@" "$auth_user"
                     [ -n "$auth_pass" ] && set -- "$@" "$auth_pass"
+                    [ -n "$pkg_priority" ] && set -- "$@" "--pkg-excl=$pkg_priority"
                     
                     sh "$script" "$@"
                     ;;

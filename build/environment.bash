@@ -33,23 +33,23 @@ export VERBOSITY_LEVEL=' >/dev/null 2>&1 </dev/null'
 export VERBOSITY_LEVEL_TO_FILE='2> /dev/null'
 export VERBOSITY_LEVEL_WITH_INPUT=' >/dev/null 2>&1'
 if [[ "'$*'" == *"--verbose"* ]]; then
-    VERBOSE_MODE=1
-    VERBOSITY_LEVEL=''
-    VERBOSITY_LEVEL_TO_FILE=''
-    VERBOSITY_LEVEL_WITH_INPUT=''
+	VERBOSE_MODE=1
+	VERBOSITY_LEVEL=''
+	VERBOSITY_LEVEL_TO_FILE=''
+	VERBOSITY_LEVEL_WITH_INPUT=''
 fi
 
 # Define testing build
 export TESTING_BUILD=0
 if [[ "'$*'" == *"--testing"* ]]; then
-    export TESTING_BUILD=1
+	export TESTING_BUILD=1
 fi
 
 # Project links
 export GIT_BASE_URL="https://github.com"
 export GIT_AUTH_URL="$GIT_BASE_URL"
 if [ -n "$CLOUD_GH_TOKEN" ]; then
-    export GIT_AUTH_URL="https://oauth2:${CLOUD_GH_TOKEN}@github.com"
+	export GIT_AUTH_URL="https://oauth2:${CLOUD_GH_TOKEN}@github.com"
 fi
 export WEBMIN_ORG_URL="$GIT_BASE_URL/webmin"
 export WEBMIN_REPO="$WEBMIN_ORG_URL/webmin"

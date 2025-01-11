@@ -27,10 +27,10 @@ bootstrap_scripts=(
 
 bootstrap() {
 	local argvs="$*"
-    local base_url="$build_bootstrap_url/"
-    local script_dir
-    local ts
-    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+	local base_url="$build_bootstrap_url/"
+	local script_dir
+	local ts
+	script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 	ts=$(date +%s)
 	download_script() {
 		local script_url="$1?$ts"
@@ -45,21 +45,21 @@ bootstrap() {
 		done
 		return 1
 	}
-    for script in "${bootstrap_scripts[@]}"; do
+	for script in "${bootstrap_scripts[@]}"; do
 	local script_path="$script_dir/$script"
 	if [ ! -f "$script_path" ]; then
-	    if ! download_script "${base_url}${script}" "$script_path"; then
+		if ! download_script "${base_url}${script}" "$script_path"; then
 		echo "Error: Failed to download $script. Cannot continue."
 		exit 1
-	    fi
+		fi
 	fi
-    done
+	done
 
-    # Source build variables
-    source "$script_dir/environment.bash" "$argvs" || exit 1
+	# Source build variables
+	source "$script_dir/environment.bash" "$argvs" || exit 1
 
-    # Source general build functions
-    source "$script_dir/functions.bash" || exit 1
+	# Source general build functions
+	source "$script_dir/functions.bash" || exit 1
 }
 
 # Bootstrap build environment

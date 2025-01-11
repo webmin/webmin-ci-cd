@@ -11,7 +11,7 @@
 set -euo pipefail
 
 # Configuration
-secrets_zip="${ENV_SECRETS_ZIP:-$HOME/.tmp/gh-secrets.zip}"
+secrets_zip="${ENV_SECRETS_ZIP:-$HOME/Git/.secrets/gh-secrets.zip}"
 temp_dir="/tmp/gh-secrets-$$"
 
 # Repository lists

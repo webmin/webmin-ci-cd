@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2034
-# build-deb-package.bash (https://github.com/webmin/webmin-ci-cd)
+# build-product-deb.bash (https://github.com/webmin/webmin-ci-cd)
 # Copyright Ilia Ross <ilia@webmin.dev>
 # Licensed under the MIT License
 #
@@ -13,18 +13,18 @@
 # Usage:
 #
 #   Pull and build production versions of both Webmin and Usermin
-#     ./build-deb-package.bash
+#     ./build-product-deb.bash
 #
 #   Pull and build testing versions of both Webmin and Usermin
-#     ./build-deb-package.bash --testing
+#     ./build-product-deb.bash --testing
 #
 #   Pull and build production Webmin version 2.101, forcing
 #   release version 3, displaying verbose output
-#     ./build-deb-package.bash webmin 2.101 3 --testing
+#     ./build-product-deb.bash webmin 2.101 3 --testing
 #
 #   Pull and build production Usermin version 2.000,
 #   automatically setting release version
-#     ./build-deb-package.bash usermin 2.000
+#     ./build-product-deb.bash usermin 2.000
 #
 
 # shellcheck disable=SC1091

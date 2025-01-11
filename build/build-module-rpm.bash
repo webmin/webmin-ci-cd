@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2034
-# build-deb-module.bash (https://github.com/webmin/webmin-ci-cd)
+# build-module-rpm.bash (https://github.com/webmin/webmin-ci-cd)
 # Copyright Ilia Ross <ilia@webmin.dev>
 # Licensed under the MIT License
 #
@@ -13,10 +13,10 @@
 # Usage:
 #
 #   Build testing module with in verbose mode
-#     ./build-deb-module.bash virtualmin-nginx --testing --verbose
+#     ./build-module-rpm.bash virtualmin-nginx --testing --verbose
 #
 #   Build specific module with version and release
-#     ./build-deb-module.bash virtualmin-nginx 2.36 2
+#     ./build-module-rpm.bash virtualmin-nginx 2.36 2
 #
 
 # shellcheck disable=SC1091
@@ -29,7 +29,7 @@ function build {
     cd "$ROOT_DIR" || exit 1
 
     # Define variables
-    local module_dir edition_id license last_commit_date ver rel
+    local module_dir edition_id license last_commit_date ver rel epoch epoch_str
     license="GPLv3"
     local module=$1
     local root_module
@@ -44,7 +44,7 @@ function build {
     # Print opening header
     echo "************************************************************************"
     echo "        build start date: $date                                         "
-    echo "          package format: DEB                                           "
+    echo "          package format: RPM                                           "
     echo "                  module: $module                                       "
     echo -n "     downloading package: "
 
@@ -54,7 +54,7 @@ function build {
     module="$module_dir"
     root_module="$ROOT_DIR/$module"
     if [ -n "${edition_id-}" ]; then
-        edition_id="-$edition_id"
+        edition_id=".$edition_id"
     fi
     if [ -n "${lic_id-}" ]; then
         license="$lic_id"
@@ -78,6 +78,17 @@ function build {
     else
         rel=1
     fi
+    if [[ -n "${4-}" ]] && [[ "${4-}" != *"--"* ]]; then
+        epoch_str="$4:"
+        epoch="--epoch $4"
+    else
+        # Check if module has epoch
+        epoch=$(get_rpm_module_epoch "$module")
+        if [ -n "${epoch-}" ]; then
+            epoch_str="$epoch:"
+            epoch="--epoch $epoch"
+        fi
+    fi
     if [ -z "${ver-}" ]; then
         ver=$(get_module_version "$root_module")
     fi
@@ -90,7 +101,7 @@ function build {
         ver="$ver.$last_commit_date"
     fi
 
-    echo "                 version: $ver-$rel$edition_id"
+    echo "                 version: ${epoch_str-}$ver-$rel$edition_id"
     echo "                 license: $license"
     echo "************************************************************************"
 
@@ -100,35 +111,54 @@ function build {
 
     echo "Pre-clean up .."
     # Make sure directories exist
+    make_dir "$ROOT_DIR/newkey/rpm/"
+    make_dir "$ROOT_DIR/umodules/"
+    make_dir "$ROOT_DIR/minimal/"
+    make_dir "$ROOT_DIR/tarballs/"
+    make_dir "$ROOT_BUILD/BUILD/"
+    make_dir "$ROOT_BUILD/BUILDROOT/"
+    make_dir "$ROOT_BUILD/RPMS/"
+    make_dir "$ROOT_RPMS"
+    make_dir "$ROOT_BUILD/SOURCES/"
+    make_dir "$ROOT_BUILD/SPECS/"
+    make_dir "$ROOT_BUILD/SRPMS/"
     make_dir "$ROOT_REPOS"
     postcmd $?
     echo
 
     # Download required build dependencies
     make_module_build_deps
-    
-    # Build DEB package
-    echo "Building packages .."
+
+    # Build RPM package
+    echo "Building packages.."
     (
         cd "$ROOT_DIR" || exit 1
         modules_exclude=$(get_modules_exclude)
-        cmd="$ROOT_DIR/build-deps/makemoduledeb.pl --release $rel$edition_id --deb-depends \
-            --licence '$license' --email '$BUILDER_PACKAGE_NAME <$BUILDER_MODULE_EMAIL>' \
-            --allow-overwrite --target-dir $ROOT_REPOS $modules_exclude \
-            $module $ver $VERBOSITY_LEVEL"
+        cmd="$ROOT_DIR/build-deps/makemodulerpm.pl ${epoch-} --release \
+            $rel$edition_id --rpm-depends --licence '$license' --allow-overwrite --rpm-dir \
+            $ROOT_BUILD --target-dir $ROOT_REPOS $modules_exclude \
+            --vendor '$BUILDER_PACKAGE_NAME' $module $ver $VERBOSITY_LEVEL"
         eval "$cmd"
         postcmd $?
     )
     echo
-    
+
     # Adjust module filename for edge cases
     echo "Adjusting module filename .."
-    adjust_module_filename "$ROOT_REPOS" "deb"
+    adjust_module_filename "$ROOT_REPOS" "rpm"
     postcmd $?
     echo
 
     echo "Post-clean up .."
     remove_dir "$root_module"
+    # Purge old files
+    purge_dir "$ROOT_BUILD/BUILD"
+    purge_dir "$ROOT_BUILD/BUILDROOT"
+    purge_dir "$ROOT_BUILD/RPMS"
+    purge_dir "$ROOT_BUILD/SOURCES"
+    purge_dir "$ROOT_BUILD/SPECS"
+    purge_dir "$ROOT_BUILD/SRPMS"
+    remove_dir "$ROOT_REPOS/repodata"
     postcmd $?
 }
 

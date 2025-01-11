@@ -72,9 +72,9 @@ jobs:
           fi
           bash bootstrap.bash
           if [ "${{ inputs.build-type }}" = "package" ]; then
-            bash build-deb-package.bash ${{ inputs.project-name }}$build_args
-            bash build-rpm-package.bash ${{ inputs.project-name }}$build_args
+            bash build-product-deb.bash ${{ inputs.project-name }}$build_args
+            bash build-product-rpm.bash ${{ inputs.project-name }}$build_args
           else
-            bash build-deb-module.bash ${{ inputs.project-name }}$build_args
-            bash build-rpm-module.bash ${{ inputs.project-name }}$build_args
+            bash build-module-deb.bash ${{ inputs.project-name }}$build_args
+            bash build-module-rpm.bash ${{ inputs.project-name }}$build_args
           fi

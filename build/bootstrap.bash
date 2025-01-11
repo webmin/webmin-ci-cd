@@ -14,14 +14,14 @@ build_bootstrap_url="https://raw.githubusercontent.com/webmin/webmin-ci-cd/main/
 
 # Bootstrap scripts
 bootstrap_scripts=(
-    "environment.bash"
-    "functions.bash"
-    "build-deb-module.bash"
-    "build-deb-package.bash"
-    "build-rpm-module.bash"
-    "build-rpm-package.bash"
-    "rpm-modules-epoch.txt"
-    "modules-mapping.txt"
+	"environment.bash"
+	"functions.bash"
+	"build-module-deb.bash"
+	"build-product-deb.bash"
+	"build-module-rpm.bash"
+	"build-product-rpm.bash"
+	"rpm-modules-epoch.txt"
+	"modules-mapping.txt"
 	"module-groups.txt"
 )
 

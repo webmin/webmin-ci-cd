@@ -113,24 +113,24 @@ This is a quick overview of the key files involved in the build process, highlig
 
 - **build-product-deb.bash**, **build-product-rpm.bash**, **build-module-deb.bash**, **build-module-rpm.bash** — these scripts are designed specifically to handle builds for either a product (e.g., Webmin or Usermin) or a plugin (e.g., Virtualmin GPL, Virtualmin Nginx, Virtualmin AWStats, etc.). They are called directly from the workflow and manage the build process for the respective product or plugin.
 
-**sync-github-secrets.bash** — this script dynamically updates, deletes, or lists GitHub secrets for a given repository or all repositories. It's especially useful for batch updating secrets across all projects in one go. The script expects a ZIP file containing the secrets, either specified via the `ENV_SECRETS_ZIP` environment variable or placed in `~/Git/.secrets/gh-secrets.zip` file.
+- **sync-github-secrets.bash** — this script dynamically updates, deletes, or lists GitHub secrets for a given repository or all repositories. It's especially useful for batch updating secrets across all projects in one go. The script expects a ZIP file containing the secrets, either specified via the `ENV_SECRETS_ZIP` environment variable or placed in `~/Git/.secrets/gh-secrets.zip` file.
 
-The ZIP file should follow a specific structure where secrets are named using the file format `organization__SECRET_NAME`.
+  The ZIP file should follow a specific structure where secrets are named using the file format `organization__SECRET_NAME`.
 
-For example:
+  For example:
 
-- `webmin__UPLOAD_SSH_DIR`: Sets `UPLOAD_SSH_DIR` secret for `webmin` organization for all repositories listed in the `webmin_repos` variable
-- `virtualmin__IP_KNOWN_HOSTS`: Sets `IP_KNOWN_HOSTS` secret for `virtualmin` organization for all repositories listed in the `virtualmin_repos` variable
+  - `webmin__UPLOAD_SSH_DIR`: Sets `UPLOAD_SSH_DIR` secret for `webmin` organization for all repositories listed in the `webmin_repos` variable
+  - `virtualmin__IP_KNOWN_HOSTS`: Sets `IP_KNOWN_HOSTS` secret for `virtualmin` organization for all repositories listed in the `virtualmin_repos` variable
 
-**sign-and-build-repos.bash** — this script signs and builds repositories on a remote system. It's called at the final stage of the workflow, after all packages have been uploaded to the remote server. It's versatile and can be reused independently.
+- **sign-and-build-repos.bash** — this script signs and builds repositories on a remote system. It's called at the final stage of the workflow, after all packages have been uploaded to the remote server. It's versatile and can be reused independently.
 
-**module-groups.txt** — this text file defines groups of modules that need to be rebuilt if certain modules are changed. For instance, changes in the Virtualmin GPL module will trigger a rebuild of the Virtualmin Pro package.
+- **module-groups.txt** — this text file defines groups of modules that need to be rebuilt if certain modules are changed. For instance, changes in the Virtualmin GPL module will trigger a rebuild of the Virtualmin Pro package.
 
-**modules-mapping.txt** — this text file provides a mapping between repository names and package names, addressing cases where the package name differs from the repository name. It also allows configuration of the package edition, license type, and other options, such as the package target directory.
+- **modules-mapping.txt** — this text file provides a mapping between repository names and package names, addressing cases where the package name differs from the repository name. It also allows configuration of the package edition, license type, and other options, such as the package target directory.
 
-**rpm-modules-epoch.txt** — this text file lists the epoch values for each RPM package that needs one.
+- **rpm-modules-epoch.txt** — this text file lists the epoch values for each RPM package that needs one.
 
-**install-ci-cd-repo.sh** — this script installs the unstable or prerelease repository on the system, making it simple for developers and users to access the latest packages.
+- **install-ci-cd-repo.sh** — this script installs the unstable or prerelease repository on the system, making it simple for developers and users to access the latest packages.
 
 ## License
 

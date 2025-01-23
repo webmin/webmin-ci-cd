@@ -43,7 +43,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - uses: awalsh128/cache-apt-pkgs-action@latest
+      - uses: awalsh128/cache-apt-pkgs-action@v1.4.3
         with: 
           packages: git tar gzip openssl curl openssh-client rpm perl libjson-pp-perl libdigest-sha-perl liblist-moreutils-perl libencode-detect-perl zstd
           version: 1.0

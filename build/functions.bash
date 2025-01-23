@@ -827,11 +827,13 @@ function build_native_package {
 		["x64"]="amd64"
 		["arm64"]="arm64"
 		["x86"]="i386"
+		["noarch"]="all"
 	)
 	declare -A rpm_arch_map=(
 		["x64"]="x86_64"
 		["arm64"]="aarch64"
 		["x86"]="i686"
+		["noarch"]="noarch"
 	)
 	local version="1.0"
 	local release="1"
@@ -1014,6 +1016,16 @@ function build_native_package {
 		return 1
 	fi
 
+	# Check for noarch with C files
+	if [[ " ${arches[*]} " =~ " noarch " ]]; then
+		for file in "${files[@]}"; do
+			if [[ "$file" =~ \.c$ ]]; then
+				echo "Error: Cannot build noarch package with C source files"
+				return 1
+			fi
+		done
+	fi
+
 	# Function to build DEB package
 	build_deb() {
 		local arch="$1"
@@ -1025,15 +1037,17 @@ function build_native_package {
 		echo "Building package '$pkg_name' for arch $arch .."
 		
 		# Create package structure
-		cmd="mkdir -p '$work_dir/DEBIAN' '$work_dir/usr/bin'"
+		cmd="mkdir -p '$work_dir/DEBIAN'"
 		eval "$cmd" || return 1
 		
-		# Copy and compile files
+		# Process files
 		for file in "${files[@]}"; do
 			if [[ "$file" == *.c ]]; then
 				local basename
 				basename=$(basename "$file" .c)
 				echo "  Compiling $file .."
+				cmd="mkdir -p '$work_dir/usr/bin'"
+				eval "$cmd" || return 1
 				cmd="gcc -o '$work_dir/usr/bin/$basename' '$file' $VERBOSITY_LEVEL"
 				eval "$cmd"
 				postcmd $? 2
@@ -1042,9 +1056,18 @@ function build_native_package {
 				cmd="chmod $permissions '$work_dir/usr/bin/$basename'"
 				eval "$cmd"
 				postcmd $? 2
+			elif [ -d "$file" ]; then
+				echo "  Preparing directory $file .."
+				cmd="cp -r '$file'/* '$work_dir/'"
+				eval "$cmd"
+				postcmd $? 2
 			else
-				echo "  Copying $file .."
-				cmd="cp '$file' '$work_dir/usr/bin/'"
+				echo "  Preparing file $file .."
+				local dir
+				dir=$(dirname "$file")
+				cmd="mkdir -p '$work_dir/$dir'"
+				eval "$cmd" || return 1
+				cmd="cp '$file' '$work_dir/$dir/'"
 				eval "$cmd"
 				postcmd $? 2
 			fi
@@ -1114,30 +1137,42 @@ function build_native_package {
 		cmd="mkdir -p '$work_dir'/{BUILD,RPMS,SOURCES,SPECS,SRPMS}"
 		eval "$cmd" || return 1
 		
-		# Compile and copy files
+		# Process files
 		for file in "${files[@]}"; do
 			if [[ "$file" == *.c ]]; then
 				local basename
 				basename=$(basename "$file" .c)
 				echo "  Compiling $file .."
-				cmd="gcc -o '$work_dir/BUILD/$basename' '$file' $VERBOSITY_LEVEL"
+				cmd="mkdir -p '$work_dir/BUILD/usr/bin'"
+				eval "$cmd" || return 1
+				cmd="gcc -o '$work_dir/BUILD/usr/bin/$basename' '$file' $VERBOSITY_LEVEL"
 				eval "$cmd"
 				postcmd $? 2
 				
 				echo "  Setting permissions for $basename .."
-				cmd="chmod $permissions '$work_dir/BUILD/$basename'"
+				cmd="chmod $permissions '$work_dir/BUILD/usr/bin/$basename'"
+				eval "$cmd"
+				postcmd $? 2
+			elif [ -d "$file" ]; then
+				echo "  Preparing directory $file .."
+				cmd="cp -r '$file' '$work_dir/BUILD/'"
 				eval "$cmd"
 				postcmd $? 2
 			else
-				echo "  Copying $file .."
-				cmd="cp '$file' '$work_dir/BUILD/'"
+				echo "  Preparing file $file .."
+				local dir
+				dir=$(dirname "$file")
+				cmd="mkdir -p '$work_dir/BUILD/$dir'"
+				eval "$cmd" || return 1
+				cmd="cp '$file' '$work_dir/BUILD/$dir/'"
 				eval "$cmd"
-				postcmd $?
+				postcmd $? 2
 			fi
 		done
 		
 		# Create spec file
 		{
+			echo "%define _build_id_links none"
 			[ -n "${summary-}" ] && echo "Summary: $summary"
 			echo "Name: $base_name"
 			echo "Version: $version"
@@ -1164,14 +1199,39 @@ function build_native_package {
 				echo "$summary"
 			fi
 			echo
+			
+			# Install section
 			echo "%install"
 			echo "rm -rf %{buildroot}"
-			echo "mkdir -p %{buildroot}/usr/bin"
-			echo "cp %{_builddir}/* %{buildroot}/usr/bin/"
-			echo
+			echo "mkdir -p %{buildroot}"
+			for file in "${files[@]}"; do
+				if [[ "$file" == *.c ]]; then
+					echo "mkdir -p %{buildroot}%{_bindir}"
+					echo "cp -f %{_builddir}/usr/bin/* %{buildroot}%{_bindir}/"
+				elif [ -d "$file" ]; then
+					echo "cp -R '$file'/* %{buildroot}/"
+				fi
+			done
+			
+			# Files section
 			echo "%files"
 			echo "%defattr(-,root,root)"
-			echo "%attr($permissions,root,root) /usr/bin/*"
+			for file in "${files[@]}"; do
+				if [[ "$file" == *.c ]]; then
+					basename=$(basename "$file" .c)
+					echo "%attr($permissions,root,root) %{_bindir}/$basename"
+				elif [ -d "$file" ]; then
+					find "$file" -mindepth 1 -type d | while read -r dir; do
+						clean_dir=${dir#"$file"/}
+						echo "%dir /$clean_dir"
+					done
+					find "$file" -type f | while read -r f; do
+						clean_file=${f#"$file"/}
+						echo "%attr(-,root,root) /$clean_file"
+					done
+				fi
+			done
+			
 			echo
 			echo "%clean"
 			echo "rm -rf %{buildroot}"
@@ -1238,7 +1298,7 @@ function build_native_package {
 		local rpm_arch
 		rpm_arch=$(get_rpm_arch "$arch")
 		if [ -n "${rpm_arch-}" ]; then
-			if [ "$rpm_arch" == "$(uname -m)" ]; then
+			if [ "$rpm_arch" == "$(uname -m)" ] || [ "$rpm_arch" == "noarch" ]; then
 				build_rpm "$rpm_arch"
 				[ $? -ne 0 ] && status=1
 			else

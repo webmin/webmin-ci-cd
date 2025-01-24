@@ -1122,7 +1122,7 @@ function build_native_package {
 		
 		# Build package
 		echo "  Building package .."
-		cmd="dpkg-deb --build '$work_dir' '$target_dir/${pkg_name}.deb' $VERBOSITY_LEVEL"
+		cmd="dpkg-deb --verbose --build '$work_dir' '$target_dir/${pkg_name}.deb' $VERBOSITY_LEVEL"
 		eval "$cmd"
 		status=$?
 		postcmd $status 2
@@ -1257,7 +1257,7 @@ function build_native_package {
 		
 		# Build package
 		echo "  Building package .."
-		cmd="rpmbuild --quiet --define '_topdir $work_dir' --target $arch-linux -bb '$work_dir/SPECS/${base_name}.spec' $VERBOSITY_LEVEL"
+		cmd="rpmbuild --verbose --define '_topdir $work_dir' --target $arch-linux -bb '$work_dir/SPECS/${base_name}.spec' $VERBOSITY_LEVEL"
 		eval "$cmd"
 		status=$?
 		postcmd $status 2

@@ -135,8 +135,9 @@ function build {
 		cd "$ROOT_DIR" || exit 1
 		modules_exclude=$(get_modules_exclude)
 		cmd="$ROOT_DIR/build-deps/makemodulerpm.pl ${epoch-} --release \
-			$rel$edition_id --rpm-depends --licence '$license' --allow-overwrite --rpm-dir \
-			$ROOT_BUILD --target-dir $ROOT_REPOS $modules_exclude \
+			$rel$edition_id --rpm-depends --rpm-recommends --licence '$license' \
+			--allow-overwrite --rpm-dir $ROOT_BUILD \
+			--target-dir $ROOT_REPOS $modules_exclude \
 			--vendor '$BUILDER_PACKAGE_NAME' $module $ver $VERBOSITY_LEVEL"
 		eval "$cmd"
 		postcmd $?

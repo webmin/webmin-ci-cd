@@ -112,8 +112,9 @@ function build {
 	(
 		cd "$ROOT_DIR" || exit 1
 		modules_exclude=$(get_modules_exclude)
-		cmd="$ROOT_DIR/build-deps/makemoduledeb.pl --release $rel$edition_id --deb-depends \
-			--licence '$license' --email '$BUILDER_PACKAGE_NAME <$BUILDER_MODULE_EMAIL>' \
+		cmd="$ROOT_DIR/build-deps/makemoduledeb.pl --release $rel$edition_id \
+			--deb-depends --deb-recommends --licence '$license' \
+			--email '$BUILDER_PACKAGE_NAME <$BUILDER_MODULE_EMAIL>' \
 			--allow-overwrite --target-dir $ROOT_REPOS $modules_exclude \
 			$module $ver $VERBOSITY_LEVEL"
 		eval "$cmd"

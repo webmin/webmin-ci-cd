@@ -1241,7 +1241,12 @@ function build_native_package {
 				elif [ -d "$file" ]; then
 					find "$file" -mindepth 1 -type d | while read -r dir; do
 						clean_dir=${dir#"$file"/}
-						echo "%dir /$clean_dir"
+						# Avoid clash with filesystem package directories
+						slash_count=${clean_dir//[^\/]/}
+						slash_count=${#slash_count}
+						if (( slash_count > 1 )); then
+							echo "%dir /$clean_dir"
+						fi
 					done
 					find "$file" -type f | while read -r f; do
 						clean_file=${f#"$file"/}

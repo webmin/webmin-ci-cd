@@ -859,6 +859,7 @@ function build_native_package {
 	local -a recommends=()
 	local -a suggests=()
 	local -a breaks=()
+	local spec_files_depth=1
 	local skip
 	local cmd
 	local status=0
@@ -988,6 +989,10 @@ function build_native_package {
 					breaks+=("$1")
 					shift
 				done
+				;;
+			--spec-files-depth)
+				spec_files_depth="$2"
+				shift 2
 				;;
 			--skip)
 				skip="$2"
@@ -1244,7 +1249,7 @@ function build_native_package {
 						# Avoid clash with filesystem package directories
 						slash_count=${clean_dir//[^\/]/}
 						slash_count=${#slash_count}
-						if (( slash_count > 1 )); then
+						if (( slash_count > spec_files_depth )); then
 							echo "%dir /$clean_dir"
 						fi
 					done

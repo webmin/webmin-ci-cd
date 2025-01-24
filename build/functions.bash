@@ -817,6 +817,7 @@ function cleanup_packages {
 #   --recommends     Recommended packages
 #   --suggests       Suggested packages
 #   --breaks         Packages this package breaks
+#   --skip           Skip building the package of the specified type
 #
 # Returns:
 #   0 on success, 1 on failure
@@ -858,6 +859,7 @@ function build_native_package {
 	local -a recommends=()
 	local -a suggests=()
 	local -a breaks=()
+	local skip
 	local cmd
 	local status=0
 
@@ -987,6 +989,10 @@ function build_native_package {
 					shift
 				done
 				;;
+			--skip)
+				skip="$2"
+				shift 2
+				;;
 			*)
 				echo "Unknown parameter: $1"
 				return 1
@@ -1035,6 +1041,12 @@ function build_native_package {
 		local status=0
 		
 		echo "Building package '$pkg_name' for arch $arch .."
+
+		# Can be skipped
+		if [ -n "${skip-}"  ] && [ "$skip" = "deb" ]; then
+			echo ".. skipped"
+			return 0
+		fi
 		
 		# Create package structure
 		cmd="mkdir -p '$work_dir/DEBIAN'"
@@ -1132,6 +1144,12 @@ function build_native_package {
 		local status=0
 		
 		echo "Building package '$pkg_name' for arch $arch .."
+		
+		# Can be skipped
+		if [ -n "${skip-}"  ] && [ "$skip" = "rpm" ]; then
+			echo ".. skipped"
+			return 0
+		fi
 		
 		# Create RPM build structure
 		cmd="mkdir -p '$work_dir'/{BUILD,RPMS,SOURCES,SPECS,SRPMS}"

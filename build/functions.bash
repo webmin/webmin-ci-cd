@@ -1245,6 +1245,10 @@ function build_native_package {
 					done
 					find "$file" -type f | while read -r f; do
 						clean_file=${f#"$file"/}
+						# Check if files will be compressed
+						if [[ "$clean_file" =~ /man[0-9]/ ]]; then
+							clean_file="${clean_file}.gz"
+						fi
 						echo "%attr(-,root,root) /$clean_file"
 					done
 				fi

@@ -43,12 +43,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - uses: awalsh128/cache-apt-pkgs-action@v1.4.3
+      - uses: awalsh128/cache-apt-pkgs-action@latest
         with: 
           packages: git tar gzip openssl curl openssh-client rpm perl libjson-pp-perl libdigest-sha-perl liblist-moreutils-perl libencode-detect-perl zstd
           version: 1.0
       
-      - uses: szenius/set-timezone@v1.2
+      - uses: szenius/set-timezone@v2.0
         with:
           timezoneLinux: "Europe/Nicosia"
       

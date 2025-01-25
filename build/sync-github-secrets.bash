@@ -34,6 +34,7 @@ virtualmin_repos=(
 	"virtualmin/ruby-gems"
 	"virtualmin/webmin-jailkit"
 	"virtualmin/procmail-wrapper"
+	"virtualmin/Virtualmin-Config"
 )
 
 # Secret names

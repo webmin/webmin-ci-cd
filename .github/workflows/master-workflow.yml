@@ -53,8 +53,10 @@ jobs:
       - name: Fetch dependencies
         run: |-
           curl -O https://raw.githubusercontent.com/webmin/webmin-ci-cd/main/build/bootstrap.bash
+
       - name: Set timezone
         run: sudo timedatectl set-timezone ${{ env.TZ }}
+
       - name: Build and upload
         env:
           CLOUD__GPG_PH: ${{ secrets.DEV_GPG_PH }}

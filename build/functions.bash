@@ -1047,12 +1047,6 @@ function build_native_package {
 		
 		echo "Building package '$pkg_name' for arch $arch .."
 
-		# Can be skipped
-		if [ -n "${skip-}"  ] && [ "$skip" = "deb" ]; then
-			echo ".. skipped"
-			return 0
-		fi
-		
 		# Create package structure
 		cmd="mkdir -p '$work_dir/DEBIAN'"
 		eval "$cmd" || return 1
@@ -1137,12 +1131,6 @@ function build_native_package {
 		local status=0
 		
 		echo "Building package '$pkg_name' for arch $arch .."
-		
-		# Can be skipped
-		if [ -n "${skip-}"  ] && [ "$skip" = "rpm" ]; then
-			echo ".. skipped"
-			return 0
-		fi
 		
 		# Create RPM build structure
 		cmd="mkdir -p '$work_dir'/{BUILD,RPMS,SOURCES,SPECS,SRPMS}"
@@ -1288,45 +1276,49 @@ function build_native_package {
 	local date
 	date=$(get_current_date)
 
-	# Build DEB packages
-	echo "************************************************************************"
-	echo "        build start date: $date                                         "
-	echo "          package format: DEB                                           "
-	echo "            package name: $base_name                                    "
-	echo "         package version: $version-$release                             "
-	echo "           architectures: $(for arch in "${arches[@]}"; do echo -n "${deb_arch_map[$arch]} "; done)"
-	echo "************************************************************************"
+	if [ -z "${skip-}" ] || [ "$skip" != "deb" ]; then
+		# Build DEB packages
+		echo "************************************************************************"
+		echo "        build start date: $date                                         "
+		echo "          package format: DEB                                           "
+		echo "            package name: $base_name                                    "
+		echo "         package version: $version-$release                             "
+		echo "           architectures: $(for arch in "${arches[@]}"; do echo -n "${deb_arch_map[$arch]} "; done)"
+		echo "************************************************************************"
 
-	for arch in "${arches[@]}"; do
-		local deb_arch
-		deb_arch=$(get_deb_arch "$arch")
-		if [ -n "${deb_arch-}" ]; then
-			build_deb "$deb_arch"
-			[ $? -ne 0 ] && status=1
-		fi
-	done
-
-	# Build RPM packages
-	echo "************************************************************************"
-	echo "        build start date: $date                                         "
-	echo "          package format: RPM                                           "
-	echo "            package name: $base_name                                    "
-	echo "         package version: ${epoch:+$epoch:}$version-$release            "
-	echo "           architectures: $(for arch in "${arches[@]}"; do echo -n "${rpm_arch_map[$arch]} "; done)"
-	echo "************************************************************************"
-	for arch in "${arches[@]}"; do
-		local rpm_arch
-		rpm_arch=$(get_rpm_arch "$arch")
-		if [ -n "${rpm_arch-}" ]; then
-			if [ "$rpm_arch" == "$(uname -m)" ] || [ "$rpm_arch" == "noarch" ]; then
-				build_rpm "$rpm_arch"
+		for arch in "${arches[@]}"; do
+			local deb_arch
+			deb_arch=$(get_deb_arch "$arch")
+			if [ -n "${deb_arch-}" ]; then
+				build_deb "$deb_arch"
 				[ $? -ne 0 ] && status=1
-			else
-				echo "Skipping package build for arch $arch .."
-				echo ".. not supported"
 			fi
-		fi
-	done
+		done
+	fi
+
+	if [ -z "${skip-}" ] || [ "$skip" != "rpm" ]; then
+		# Build RPM packages
+		echo "************************************************************************"
+		echo "        build start date: $date                                         "
+		echo "          package format: RPM                                           "
+		echo "            package name: $base_name                                    "
+		echo "         package version: ${epoch:+$epoch:}$version-$release            "
+		echo "           architectures: $(for arch in "${arches[@]}"; do echo -n "${rpm_arch_map[$arch]} "; done)"
+		echo "************************************************************************"
+		for arch in "${arches[@]}"; do
+			local rpm_arch
+			rpm_arch=$(get_rpm_arch "$arch")
+			if [ -n "${rpm_arch-}" ]; then
+				if [ "$rpm_arch" == "$(uname -m)" ] || [ "$rpm_arch" == "noarch" ]; then
+					build_rpm "$rpm_arch"
+					[ $? -ne 0 ] && status=1
+				else
+					echo "Skipping package build for arch $arch .."
+					echo ".. not supported"
+				fi
+			fi
+		done
+	fi
 
 	return $status
 }

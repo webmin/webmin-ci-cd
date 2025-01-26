@@ -1106,7 +1106,13 @@ function build_native_package {
 			fi
 
 		} > "$work_dir/DEBIAN/control"
-		
+
+		# Set permissions	
+		echo "  Setting ownership .."
+		cmd="chown -R root:root '$work_dir'"
+		eval "$cmd"
+		postcmd $? 2
+
 		# Build package
 		echo "  Building package .."
 		cmd="dpkg-deb --verbose --build '$work_dir' '$target_dir/${pkg_name}.deb' $VERBOSITY_LEVEL"

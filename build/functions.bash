@@ -1096,27 +1096,15 @@ function build_native_package {
 			echo "Version: $version-$release"
 			echo "Architecture: $arch"
 			echo "Maintainer: $maintainer"
-			if [ ${#depends[@]} -gt 0 ]; then
-				echo -n "Depends: "
-				local first=true
-				for dep in "${depends[@]}"; do
-					if [ "$first" = true ]; then
-						echo -n "$dep"
-						first=false
-					else
-						echo -n ", $dep"
-					fi
-				done
-				echo ""
-			fi
 			echo "Section: $section"
 			echo "Priority: $priority"
-			[ ${#provides[@]} -gt 0 ] && echo "Provides: $(IFS=,; echo "${provides[*]}")"
-			[ ${#conflicts[@]} -gt 0 ] && echo "Conflicts: $(IFS=,; echo "${conflicts[*]}")"
-			[ ${#replaces[@]} -gt 0 ] && echo "Replaces: $(IFS=,; echo "${replaces[*]}")"
-			[ ${#recommends[@]} -gt 0 ] && echo "Recommends: $(IFS=,; echo "${recommends[*]}")"
-			[ ${#suggests[@]} -gt 0 ] && echo "Suggests: $(IFS=,; echo "${suggests[*]}")"
-			[ ${#breaks[@]} -gt 0 ] && echo "Breaks: $(IFS=,; echo "${breaks[*]}")"
+			[ ${#depends[@]} -gt 0 ] && echo "Depends: $(printf "%s, " "${depends[@]}" | sed 's/, $//')"
+			[ ${#provides[@]} -gt 0 ] && echo "Provides: $(printf "%s, " "${provides[@]}" | sed 's/, $//')"
+			[ ${#conflicts[@]} -gt 0 ] && echo "Conflicts: $(printf "%s, " "${conflicts[@]}" | sed 's/, $//')"
+			[ ${#replaces[@]} -gt 0 ] && echo "Replaces: $(printf "%s, " "${replaces[@]}" | sed 's/, $//')"
+			[ ${#recommends[@]} -gt 0 ] && echo "Recommends: $(printf "%s, " "${recommends[@]}" | sed 's/, $//')"
+			[ ${#suggests[@]} -gt 0 ] && echo "Suggests: $(printf "%s, " "${suggests[@]}" | sed 's/, $//')"
+			[ ${#breaks[@]} -gt 0 ] && echo "Breaks: $(printf "%s, " "${breaks[@]}" | sed 's/, $//')"
 			[ -n "${homepage-}" ] && echo "Homepage: $homepage"
 			echo "Description: ${summary:-$description}"
 			if [ -n "${summary-}" ] && [ -n "${description-}" ]; then

@@ -35,6 +35,8 @@ virtualmin_repos=(
 	"virtualmin/webmin-jailkit"
 	"virtualmin/procmail-wrapper"
 	"virtualmin/Virtualmin-Config"
+	"virtualmin/virtualmin-core-meta"
+	"virtualmin/virtualmin-stack-meta"
 )
 
 # Secret names

@@ -1331,6 +1331,55 @@ function build_native_package {
 	return $status
 }
 
+# Parses Debian control files and extracts package metadata. Supports both
+# regular and testing builds, where testing builds append timestamp to version.
+#
+# Usage: parse_debian_control directory [testing]
+#   directory:  Path containing .ctl files
+#   testing: If set, appends timestamp to version for testing builds
+#
+# Returns: Package metadata in the order of:
+#   package, version, depends, recommends, suggests, replaces
+function parse_debian_control() {
+	local ctl_dir="${1:?'Directory path required'}"
+	local testing="${2:-}"
+
+	# Validate directory and check for .ctl files
+	[[ -d "$ctl_dir" ]] || { echo "Directory not found: $ctl_dir" >&2; return 1; }
+	shopt -s nullglob
+	local ctl_files=("$ctl_dir"/*.ctl)
+	[[ ${#ctl_files[@]} -gt 0 ]] || { echo "No .ctl files found" >&2; return 1; }
+
+	for ctl_file in "${ctl_files[@]}"; do
+		# Initialize package metadata fields
+		local package version depends recommends suggests replaces
+		
+		while IFS= read -r line; do
+			case "${line,,}" in  # Case-insensitive matching
+				package:*)    package=${line#*: }    ;;
+				version:*)    
+					version=${line#*: }
+					version=${version%-*}            # Strip revision
+					;;
+				depends:*)    depends=${line#*: }    ;;
+				recommends:*) recommends=${line#*: } ;;
+				suggests:*)   suggests=${line#*: }   ;;
+				replaces:*)   replaces=${line#*: }   ;;
+			esac
+		done < "$ctl_file"
+
+		# Skip if required fields are missing
+		[[ -n "${package:-}" && -n "${version:-}" ]] || continue
+
+		# Append timestamp for testing builds
+		if [[ -n "$testing" && "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+			version="${version%.*}.$(date +%Y%m%d%H%M)"
+		fi
+
+		printf '%s\n' "${package:-}" "${version:-}" "${depends:-}" "${recommends:-}" "${suggests:-}" "${replaces:-}"
+	done
+}
+
 # Function to create needed symlinks for the build
 function create_symlinks {
 	ln -fs "/usr/bin/perl" "/usr/local/bin/perl"

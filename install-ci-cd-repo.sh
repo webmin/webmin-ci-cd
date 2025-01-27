@@ -49,6 +49,37 @@ set_virtualmin_package_preferences() {
 	return 0
 }
 
+set_virtualmin_repo_preferences() {
+	type="$1"
+	prefix="$2"
+	param="$3"
+	rpm_virtualmin_repo_preferences() {
+		type="$1"
+		param="$2"
+		
+		# Handle priority parameter
+		if [ "$param" = "priority" ]; then
+			case "$type" in
+				"unstable")
+					echo "rpm:priority=10"
+					;;
+				"prerelease")
+					echo "rpm:priority=20"
+					;;
+			esac
+		fi
+	}
+
+	# Construct the function name
+	func_name="${prefix}_virtualmin_repo_preferences"
+
+	# Check if the function exists using POSIX compatible method
+	if command -v "$func_name" >/dev/null 2>&1; then
+		# Call the function with type and param
+		"$func_name" "$type" "$param"
+	fi
+}
+
 setup_repo() {
 	product="$1"
 	type="$2"
@@ -69,6 +100,13 @@ setup_repo() {
 	func="set_${product}_package_preferences"
 	if command -v "$func" >/dev/null 2>&1; then
 	  pkg_prefs=$(eval "$func" "$auth_user" "$auth_pass")
+	fi
+
+	# Call repo preference function if it exists
+	repo_prefs=""
+	func="set_${product}_repo_preferences"
+	if command -v "$func" >/dev/null 2>&1; then
+	  repo_prefs=$(eval "$func" "$type" "rpm" "priority")
 	fi
 
 	case "$product" in
@@ -94,6 +132,7 @@ setup_repo() {
 					[ -n "$auth_user" ] && set -- "$@" "$auth_user"
 					[ -n "$auth_pass" ] && set -- "$@" "$auth_pass"
 					[ -n "$pkg_prefs" ] && set -- "$@" "--pkg-prefs=$pkg_prefs"
+					[ -n "$repo_prefs" ] && set -- "$@" "--repo-prefs=$repo_prefs"
 					
 					sh "$script" "$@"
 					;;
@@ -111,6 +150,7 @@ setup_repo() {
 					[ -n "$auth_user" ] && set -- "$@" "$auth_user"
 					[ -n "$auth_pass" ] && set -- "$@" "$auth_pass"
 					[ -n "$pkg_prefs" ] && set -- "$@" "--pkg-prefs=$pkg_prefs"
+					[ -n "$repo_prefs" ] && set -- "$@" "--repo-prefs=$repo_prefs"
 					
 					sh "$script" "$@"
 					;;

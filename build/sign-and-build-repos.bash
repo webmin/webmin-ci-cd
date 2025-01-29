@@ -75,7 +75,7 @@ generate_structured_apt_repo() {
 
 	# Generate metadata
 	local sha256_entries sha512_entries
-	generate_architecture_metadata "$apt_repo_component_dir" sha256_entries sha512_entries
+	generate_arch_metadata "$apt_repo_component_dir" sha256_entries sha512_entries
 
 	# Create and sign release files
 	create_release_files "$apt_repo_dists_codename_dir" "$apt_origin" "$codename" \
@@ -97,12 +97,28 @@ update_pool_symlinks() {
 	find "$home_dir" -type f -name "*.deb" -exec ln -s {} "$apt_pool_dir/" \;
 }
 
-generate_architecture_metadata() {
+filter_arch_metadata() {
+    local arch=$1
+    
+    # For webmin.dev repository, we only need 'all' architecture
+    if [ "$repo_target" = "webmin.dev" ] && [ "$arch" != "all" ]; then
+        return 1
+    fi
+    
+    # Allow all default architectures for other repositories
+    return 0
+}
+
+generate_arch_metadata() {
 	local component_dir=$1
 	local -n sha256_ref=$2
 	local -n sha512_ref=$3
 
 	for arch in "${apt_architectures[@]}"; do
+		if ! filter_arch_metadata "$arch"; then
+			continue
+		fi
+
 		local arch_dir="$component_dir/binary-$arch"
 		local packages_file="$arch_dir/Packages"
 		local packages_gz="$arch_dir/Packages.gz"

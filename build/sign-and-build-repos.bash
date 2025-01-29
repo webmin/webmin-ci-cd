@@ -26,6 +26,10 @@ readonly apt_pool_component_dir="$apt_pool_dir_name/$apt_component"
 readonly apt_pool_dir="$home_dir/$apt_pool_component_dir"
 readonly apt_repo_dists="$home_dir/dists"
 
+# Temp directory
+readonly temp_dir=$(mktemp -d)
+trap 'rm -rf -- "$temp_dir"' EXIT INT TERM
+
 load_helper_functions() {
 	local functions_file="${BASH_SOURCE[0]%/*}/functions.bash"
 	if [ -f "$functions_file" ]; then
@@ -231,6 +235,95 @@ sign_release_files() {
 		--default-key "$gpg_key" --digest-algo SHA512 -abs -o "$dists_dir/Release.gpg" "$release_file"
 }
 
+make_dnf_groups_param() {
+	local home="${HOME_BASE:-$HOME}"
+	local config_file="${home}/.config/dnf-groups/${repo_target}"
+	local param=""
+
+	# Check if the config file exists
+	[[ -f "$config_file" ]] || return 0
+
+	# Validate config file (must not be empty and must be readable)
+	[[ -s "$config_file" && -r "$config_file" ]] || {
+		echo "Error: Config file is empty or unreadable at $config_file" >&2
+		return 1
+	}
+
+	# Read URLs from config file
+	local urls=()
+	while IFS= read -r line || [[ -n "$line" ]]; do
+		[[ -n "$line" ]] || continue  # Skip empty lines
+		urls+=("$line")
+	done < "$config_file" || { 
+		echo "Error: Failed to read URLs from $config_file" >&2
+		return 1
+	}
+
+	# Validate URLs array
+	[[ "${#urls[@]}" -gt 0 ]] || { 
+		echo "Error: No URLs found in $config_file" >&2
+		return 1
+	}
+
+	# Process URLs and get parameter
+	param=$(handle_dnf_groups "${urls[@]}") || { 
+		echo "Error: Failed to process URLs" >&2
+		return 1
+	}
+
+	echo "$param"
+}
+
+handle_dnf_groups() {
+
+    # Check if URLs were passed
+    if [ "$#" -lt 1 ]; then
+        echo "Error: No URLs provided" >&2
+        return 1
+    fi
+
+    # Download each file
+    echo "Downloading comps files .." >&2
+    local downloaded_files=()
+    for url in "$@"; do
+        local filename="$temp_dir/${url##*/}"
+        if ! curl -fsS "$url" -o "$filename"; then
+			echo ".. error : failed to download $url" >&2
+			return 1
+		fi
+        downloaded_files+=("$filename")
+    done
+    echo ".. done" >&2
+
+    # Create merged comps file
+    local comps_all="$temp_dir/merged-comps.xml"
+    {
+        echo '<?xml version="1.0" encoding="UTF-8"?>'
+        echo '<!DOCTYPE comps PUBLIC "-//Red Hat, Inc.//DTD Comps info//EN" "comps.dtd">'
+        echo '<comps>'
+        for file in "${downloaded_files[@]}"; do
+            sed -n '/<group>/,/<\/group>/p' "$file"
+        done
+        echo '</comps>'
+    } > "$comps_all"
+
+    # Validate XML
+    if ! command -v xmllint >/dev/null 2>&1; then
+        echo "Error: xmllint not found, validation required" >&2
+        return 1
+    fi
+
+    echo "Validating merged XML .." >&2
+    if ! xmllint --noout "$comps_all" 2>/dev/null; then
+        echo ".. error : XML validation failed" >&2
+        return 1
+    fi
+    echo ".. done" >&2
+
+    # If all good, return the --groupfile parameter with the merged groups file
+    echo "--groupfile $comps_all"
+}
+
 handle_rpm_packages() {
 	mkdir -p "$rpm_repo"
 	local checksum_cache="$rpm_repo/.known_checksums"
@@ -251,7 +344,9 @@ handle_rpm_packages() {
 	rm -f "$checksum_cache.$$" 2>/dev/null || true
 
 	# Create and sign repository
-	createrepo_c "$home_dir"
+	local -a groups
+	IFS=' ' read -r -a groups <<< "$(make_dnf_groups_param)"
+	createrepo_c "${groups[@]}" "$home_dir"
 	echo "$gpg_ph" | gpg --batch --yes --passphrase-fd 0 --pinentry-mode loopback \
 		--default-key "$gpg_key" --digest-algo SHA512 -abs -o \
 		"$home_dir/repodata/repomd.xml.asc" "$home_dir/repodata/repomd.xml"

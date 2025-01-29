@@ -37,6 +37,7 @@ virtualmin_repos=(
 	"virtualmin/Virtualmin-Config"
 	"virtualmin/virtualmin-core-meta"
 	"virtualmin/virtualmin-stack-meta"
+	"virtualmin/virtualmin-yum-groups"
 )
 
 # Secret names

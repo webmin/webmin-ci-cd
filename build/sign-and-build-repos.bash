@@ -83,13 +83,22 @@ generate_structured_apt_repo() {
 }
 
 cleanup_old_builds() {
-	if [[ "$repo_target" =~ ^(webmin|usermin|virtualmin|cloudmin)\.dev$ ]]; then        
-		if ! command -v cleanup_packages >/dev/null; then
-			echo "Warning: cleanup_packages function not available" >&2
-		else
-			cleanup_packages "$home_dir" 1 "rpm deb tar.gz"
-		fi
-	fi
+    # Skip cleanup if path contains "/rc." (like production has all releases)
+    if [[ "$home_dir" =~ /rc\. ]]; then
+        return 0
+    fi
+
+    # Skip cleanup if not a .dev repository
+    if ! [[ "$repo_target" =~ ^(webmin|usermin|virtualmin|cloudmin)\.dev$ ]]; then
+        return 0
+    fi
+
+    if ! command -v cleanup_packages >/dev/null; then
+        echo "Warning: cleanup_packages function not available" >&2
+		return 1
+    else
+        cleanup_packages "$home_dir" 1 "rpm deb tar.gz"
+    fi
 }
 
 update_pool_symlinks() {

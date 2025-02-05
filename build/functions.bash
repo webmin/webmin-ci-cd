@@ -322,8 +322,11 @@ function make_packages_repos {
 	local lcmd="./bin/language-manager --mode=clean --yes $VERBOSITY_LEVEL_WITH_INPUT"
 	
 	# Clone repo
+	echo "Listing current directory:"
+	ls -lsa
 	if [ ! -d "$root_prod" ]; then
 		cmd=$(generate_git_clone_cmd "$GIT_BASE_URL/$repo" "$root_prod")
+		echo "Cloning $prod repo in $root_prod with command: $cmd"
 		eval "$cmd"
 		if [ "$?" != "0" ]; then
 			return 1

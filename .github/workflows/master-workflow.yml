@@ -66,14 +66,15 @@ jobs:
           CLOUD__SIGN_BUILD_REPOS_CMD: ${{ secrets.DEV_SIGN_BUILD_REPOS_CMD }}
           CLOUD__GH_TOKEN: ${{ secrets.DEV_CHILD_GITHUB_TOKEN }}
         run: |-
+          build_args="--release"
           if [ "${{ inputs.is-release }}" = "false" ]; then
-            build_args=" --testing"
+            build_args="--testing"
           fi
-          bash bootstrap.bash
+          bash bootstrap.bash $build_args
           if [ "${{ inputs.build-type }}" = "package" ]; then
-            bash build-product-deb.bash ${{ inputs.project-name }}$build_args
-            bash build-product-rpm.bash ${{ inputs.project-name }}$build_args
+            bash build-product-deb.bash ${{ inputs.project-name }} $build_args
+            bash build-product-rpm.bash ${{ inputs.project-name }} $build_args
           else
-            bash build-module-deb.bash ${{ inputs.project-name }}$build_args
-            bash build-module-rpm.bash ${{ inputs.project-name }}$build_args
+            bash build-module-deb.bash ${{ inputs.project-name }} $build_args
+            bash build-module-rpm.bash ${{ inputs.project-name }} $build_args
           fi

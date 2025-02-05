@@ -43,8 +43,6 @@ jobs:
     env:
       TZ: Europe/Nicosia
     steps:
-      - uses: actions/checkout@v4
-      
       - uses: awalsh128/cache-apt-pkgs-action@latest
         with: 
           packages: git tar gzip openssl curl openssh-client rpm perl libjson-pp-perl libdigest-sha-perl liblist-moreutils-perl libencode-detect-perl zstd

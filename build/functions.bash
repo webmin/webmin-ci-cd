@@ -425,38 +425,54 @@ function get_last_commit_date {
 # Get required build scripts from Webmin repo
 function make_module_build_deps {
 	# Create directory for build dependencies if it doesn't exist
-	if [ ! -d "$ROOT_DIR/build-deps" ]; then
-		mkdir -p "$ROOT_DIR/build-deps"
+	local build_deps_dir="${1:-$ROOT_DIR/build-deps}"
+	if [ ! -d "$build_deps_dir" ]; then
+		mkdir -p "$build_deps_dir"
 	fi
 
-	# Download required scripts from Webmin repo if they don't exist
-	if [ ! -f "$ROOT_DIR/build-deps/makemoduledeb.pl" ] || \
-	   [ ! -f "$ROOT_DIR/build-deps/makemodulerpm.pl" ] || \
-	   [ ! -f "$ROOT_DIR/build-deps/create-module.pl" ]; then
+	local required_files=(
+		"create-module.pl"
+		"lang_list.txt"
+		"language-manager"
+		"makemoduledeb.pl"
+		"makemodulerpm.pl"
+		"web-lib-funcs.pl"
+	  )
+	
+	  local missing=false
+	  for file in "${required_files[@]}"; do
+		if [ ! -f "$build_deps_dir/$file" ]; then
+		  missing=true
+		  break
+		fi
+	  done
+	
+	  if $missing; then
 		echo "Downloading build dependencies .."
-		
-		# Create temporary directory
+	
 		local temp_dir
-		temp_dir=$(mktemp -d)
+		temp_dir="$(mktemp -d)"
 		cd "$temp_dir" || exit 1
-		
-		# Clone Webmin repository (minimal depth)
-		cmd="git clone --depth 1 --filter=blob:none --sparse \
+	
+		local cmd="git clone --depth 1 --filter=blob:none --sparse \
 			$WEBMIN_REPO.git $VERBOSITY_LEVEL"
 		eval "$cmd"
 		postcmd $?
 		echo
-		
+	
 		cd webmin || exit 1
-		
+	
 		# Copy required files to build-deps directory
-		cp makemoduledeb.pl makemodulerpm.pl create-module.pl \
-			"$ROOT_DIR/build-deps/"
-		
-		# Make scripts executable
-		chmod +x "$ROOT_DIR/build-deps/"*.pl
-		
-		# Clean up
+		cp -f makemoduledeb.pl makemodulerpm.pl create-module.pl web-lib-funcs.pl \
+			lang_list.txt "$build_deps_dir/"
+	
+		# Sparse checkout language-manager and copy it
+		cmd="git sparse-checkout set --no-cone / /bin/language-manager $VERBOSITY_LEVEL"
+		eval "$cmd"
+		postcmd $?
+	
+		cp -f bin/language-manager "$build_deps_dir/"
+	
 		cd "$ROOT_DIR" || exit 1
 		remove_dir "$temp_dir"
 	fi

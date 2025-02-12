@@ -112,19 +112,31 @@ function build {
 	make_module_build_deps
 	
 	# Build DEB package
-	echo "Building packages .."
 	(
 		cd "$ROOT_DIR" || exit 1
+
+		# Clean language files in the package if testing build
+		if [ "$devel" -eq 1 ]; then
+			echo "Cleaning language files .."
+			lcmd="$build_deps/language-manager --lib-path=$build_deps \
+				--mode=clean --yes $VERBOSITY_LEVEL_WITH_INPUT"
+			eval "$lcmd"
+			postcmd $?
+			echo
+		fi
+		
+		# Build DEB package
+		echo "Building packages .."
 		modules_exclude=$(get_modules_exclude)
-		cmd="$ROOT_DIR/build-deps/makemoduledeb.pl --release $rel$edition_id \
+		cmd="$build_deps/makemoduledeb.pl --release $rel$edition_id \
 			--deb-depends --deb-recommends --licence '$license' \
 			--email '$BUILDER_PACKAGE_NAME <$BUILDER_MODULE_EMAIL>' \
 			--allow-overwrite --target-dir $ROOT_REPOS $modules_exclude \
 			$module $ver $VERBOSITY_LEVEL"
 		eval "$cmd"
 		postcmd $?
+		echo
 	)
-	echo
 	
 	# Adjust module filename for edge cases
 	echo "Adjusting module filename .."

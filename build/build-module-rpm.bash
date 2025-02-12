@@ -36,7 +36,8 @@ function build {
 	local devel=0
 
 	# Print build actual date
-	local date=$(get_current_date)
+	local date
+	date=$(get_current_date)
 
 	# Define build dependencies directory
 	local build_deps="$ROOT_DIR/build-deps" 

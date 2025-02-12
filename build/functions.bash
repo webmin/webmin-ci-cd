@@ -343,7 +343,7 @@ function make_packages_repos {
 			return 1
 		fi
 		# Clean language files in the required product if testing build
-		if [ "$devel" == "1" ]; then
+		if [ "$devel" -eq 1 ]; then
 			(
 				cd "$ROOT_DIR/$reqrepo" || exit 1
 				eval "$lcmd"
@@ -352,7 +352,7 @@ function make_packages_repos {
 	fi
 
 	# Clean language files in the main product if testing build
-	if [ "$devel" == "1" ]; then
+	if [ "$devel" -eq 1 ]; then
 		(
 			cd "$ROOT_DIR/$prod" || exit 1
 			eval "$lcmd"

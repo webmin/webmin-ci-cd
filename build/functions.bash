@@ -457,8 +457,7 @@ function make_module_build_deps {
 		local cmd="git clone --depth 1 --filter=blob:none --sparse \
 			$WEBMIN_REPO.git $VERBOSITY_LEVEL"
 		eval "$cmd"
-		postcmd $?
-		echo
+		local rs1=$?
 	
 		cd webmin || exit 1
 	
@@ -469,7 +468,14 @@ function make_module_build_deps {
 		# Sparse checkout language-manager and copy it
 		cmd="git sparse-checkout set --no-cone / /bin/language-manager $VERBOSITY_LEVEL"
 		eval "$cmd"
-		postcmd $?
+		local rs2=$?
+
+		# Check if clone was successful
+		local final_rs=0
+		if [ $rs1 -ne 0 ] || [ $rs2 -ne 0 ]; then
+			final_rs=1
+		fi
+		postcmd $final_rs
 	
 		cp -f bin/language-manager "$build_deps_dir/"
 	

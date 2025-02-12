@@ -36,7 +36,10 @@ function build {
 	local devel=0
 
 	# Print build actual date
-	date=$(get_current_date)
+	local date=$(get_current_date)
+
+	# Define build dependencies directory
+	local build_deps="$ROOT_DIR/build-deps" 
 
 	# Create required symlinks
 	create_symlinks

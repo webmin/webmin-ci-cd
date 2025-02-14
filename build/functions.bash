@@ -288,17 +288,16 @@ function get_current_date {
 
 # Get latest commit date version
 function get_latest_commit_date_version {
+	local root_prod="$1"
+	local root_theme="$root_prod/authentic-theme"
+
 	local theme_version
 	local prod_version
 	local max_prod
 	local highest_version
-	local root_prod="$1"
-	local root_theme="$root_prod/authentic-theme"
 	(
-		cd "$root_theme" || exit 1
-		theme_version=$(get_commit_timestamp)
-		cd "$root_prod" || exit 1
-		prod_version=$(get_commit_timestamp)
+		theme_version=$(get_repo_commit_timestamp "$root_theme") || return 1
+		prod_version=$(get_repo_commit_timestamp "$root_prod") || return 1
 		max_prod=("$theme_version" "$prod_version")
 		highest_version=$(max "${max_prod[@]}")
 		echo "$highest_version"

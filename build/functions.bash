@@ -267,9 +267,18 @@ function get_modules_exclude {
 	echo "$exclude"
 }
 
-# Get latest commit time considering system TZ
+# Get latest commit time (with TZ)
 function get_commit_timestamp {
 	date -d "@$(git log -n1 --pretty='format:%ct')" +"%Y%m%d%H%M"
+}
+
+# Get latest commit time (with TZ) for the given repo
+function get_repo_commit_timestamp {
+	local repo_dir="$1"
+	(
+		cd "$repo_dir" || return 1
+		get_commit_timestamp
+	)
 }
 
 # Get latest commit date
@@ -419,15 +428,6 @@ function clone_module_repo {
 
 	# Return error code and new module directory name with version prefix
 	printf "%s,%s,%s,%s" "$err" "$dir_name" "$ver_pref" "$lic_id"
-}
-
-# Get last commit date from repo
-function get_last_commit_date {
-	local repo_dir="$1"
-	(
-		cd "$repo_dir" || return 1
-		get_commit_timestamp
-	)
 }
 
 # Get required build scripts from Webmin repo

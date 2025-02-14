@@ -70,7 +70,7 @@ function build {
 	fi
 
 	# Git last commit date
-	last_commit_date=$(get_last_commit_date "$root_module")
+	last_commit_date=$(get_repo_commit_timestamp "$root_module")
 
 	# Handle other params
 	cd "$root_module" || exit 1

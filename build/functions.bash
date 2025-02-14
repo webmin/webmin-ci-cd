@@ -264,6 +264,11 @@ function update_module_version {
 	fi
 }
 
+# Get latest commit time considering system TZ
+function get_commit_timestamp {
+	date -d "@$(git log -n1 --pretty='format:%ct')" +"%Y%m%d%H%M"
+}
+
 # Get latest commit date
 function get_current_date {
 	date +'%Y-%m-%d %H:%M:%S %z'
@@ -279,9 +284,9 @@ function get_latest_commit_date_version {
 	local root_theme="$root_prod/authentic-theme"
 	(
 		cd "$root_theme" || exit 1
-		theme_version=$(git log -n1 --pretty='format:%cd' --date=format:'%Y%m%d%H%M')
+		theme_version=$(get_commit_timestamp)
 		cd "$root_prod" || exit 1
-		prod_version=$(git log -n1 --pretty='format:%cd' --date=format:'%Y%m%d%H%M')
+		prod_version=$(get_commit_timestamp)
 		max_prod=("$theme_version" "$prod_version")
 		highest_version=$(max "${max_prod[@]}")
 		echo "$highest_version"
@@ -418,7 +423,7 @@ function get_last_commit_date {
 	local repo_dir="$1"
 	(
 		cd "$repo_dir" || return 1
-		git log -n1 --pretty='format:%cd' --date=format:'%Y%m%d%H%M'
+		get_commit_timestamp
 	)
 }
 

@@ -79,7 +79,7 @@ function build {
 	cd "$root_prod" || exit 1
 
 	# Get latest product version (theme vs product)
-	date_version=$(get_latest_commit_date_version "$root_prod")
+	date_version=$(get_product_latest_commit_timestamp "$root_prod")
 
 	# Handle other params
 	if [ -n "${2-}" ] && [[ "${2-}" != *"--"* ]]; then

@@ -287,7 +287,7 @@ function get_current_date {
 }
 
 # Get latest commit date version
-function get_latest_commit_date_version {
+function get_product_latest_commit_timestamp {
 	local root_prod="$1"
 	local root_theme="$root_prod/authentic-theme"
 

@@ -222,6 +222,7 @@ function get_current_repo_tag {
 	)
 }
 
+# Get module version from module.info or Git tag
 function get_module_version {
 	local module_root="$1"
 	local version=""
@@ -242,15 +243,7 @@ function get_module_version {
 	echo "$version"
 }
 
-function get_modules_exclude {
-	local exclude
-	exclude="--exclude .git --exclude .github --exclude .gitignore --exclude t"
-	exclude+=" --exclude newfeatures --exclude CHANGELOG* --exclude README*"
-	exclude+=" --exclude LICENSE* --exclude .travis.yml --exclude tmp"
-	exclude+=" --exclude procmail-wrapper --exclude procmail-wrapper.c"
-	echo "$exclude"
-}
-
+# Update version in module.info file
 function update_module_version {
 	local module_root="$1"
 	local version="$2"
@@ -262,6 +255,16 @@ function update_module_version {
 		echo "Error: module.info file is missing in $module_root" >&2
 		return 1
 	fi
+}
+
+# Get standard files excludes
+function get_modules_exclude {
+	local exclude
+	exclude="--exclude .git --exclude .github --exclude .gitignore --exclude t"
+	exclude+=" --exclude newfeatures --exclude CHANGELOG* --exclude README*"
+	exclude+=" --exclude LICENSE* --exclude .travis.yml --exclude tmp"
+	exclude+=" --exclude procmail-wrapper --exclude procmail-wrapper.c"
+	echo "$exclude"
 }
 
 # Get latest commit time considering system TZ

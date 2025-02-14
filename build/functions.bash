@@ -222,6 +222,18 @@ function get_current_repo_tag {
 	)
 }
 
+# Get product version based on version file
+function get_product_version {
+    local root_prod="$1"
+    local version_file="$root_prod/version"
+
+    if [[ -f "$version_file" ]]; then
+        awk 'NF {print; exit}' "$version_file"
+    else
+        get_current_repo_tag "$root_prod"
+    fi
+}
+
 # Get module version from module.info or Git tag
 function get_module_version {
 	local module_root="$1"

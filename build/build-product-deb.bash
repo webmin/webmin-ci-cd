@@ -90,7 +90,11 @@ function build {
 		relval="-$3"
 	fi
 	if [ -z "${ver-}" ]; then
-		ver=$(get_current_repo_tag "$root_prod")
+		if [ "$TESTING_BUILD" -eq 1 ]; then
+			ver=$(get_product_version "$root_prod")
+		else
+			ver=$(get_current_repo_tag "$root_prod")
+		fi
 	fi
 	if [ "$TESTING_BUILD" -eq 1 ]; then
 		ver="$ver.$date_version"

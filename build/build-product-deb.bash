@@ -97,6 +97,8 @@ function build {
 		fi
 	fi
 	if [ "$TESTING_BUILD" -eq 1 ]; then
+		# Testing version must always be x.x.<last_commit_date>
+		ver=$(echo "$ver" | cut -d. -f1,2)
 		ver="$ver.$date_version"
 		# Set actual product version
 		echo "${ver}" >"version"

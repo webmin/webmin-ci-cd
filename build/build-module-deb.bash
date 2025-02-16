@@ -98,7 +98,7 @@ function build {
 	echo "                 license: $license"
 	echo "************************************************************************"
 
-	echo "Pulling latest changes.."
+	echo "Pulling latest changes .."
 	postcmd "$rs"
 	echo
 

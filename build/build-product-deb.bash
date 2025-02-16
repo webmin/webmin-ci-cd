@@ -106,7 +106,7 @@ function build {
 	printf "%s-%s\n" "$ver" "$rel"
 	echo "************************************************************************"
 
-	echo "Pulling latest changes.."
+	echo "Pulling latest changes .."
 	# We need to pull first to get the latest tag,
 	# so here we only report an error if any
 	postcmd $rs

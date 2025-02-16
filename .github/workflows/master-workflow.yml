@@ -70,11 +70,11 @@ jobs:
           if [ "${{ inputs.is-release }}" = "false" ]; then
             build_args="--testing"
           fi
-          bash bootstrap.bash $build_args
+          bash bootstrap.bash $build_args  --verbose
           if [ "${{ inputs.build-type }}" = "package" ]; then
-            bash build-product-deb.bash ${{ inputs.project-name }} $build_args
-            bash build-product-rpm.bash ${{ inputs.project-name }} $build_args
+            bash build-product-deb.bash ${{ inputs.project-name }} $build_args --verbose
+            bash build-product-rpm.bash ${{ inputs.project-name }} $build_args --verbose
           else
-            bash build-module-deb.bash ${{ inputs.project-name }} $build_args
-            bash build-module-rpm.bash ${{ inputs.project-name }} $build_args
+            bash build-module-deb.bash ${{ inputs.project-name }} $build_args --verbose
+            bash build-module-rpm.bash ${{ inputs.project-name }} $build_args --verbose
           fi

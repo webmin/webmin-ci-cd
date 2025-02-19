@@ -40,6 +40,10 @@ virtualmin_repos=(
 	"virtualmin/virtualmin-yum-groups"
 )
 
+cloudmin_repos=(
+	"virtualmin/cloudmin-yum-groups cloudmin"
+)
+
 # Secret names
 secrets=(
 	"DEV_GPG_PH"
@@ -98,18 +102,23 @@ EOF
 	exit 1
 }
 
-# Function to check if a repository is valid
+# Check if a repository is valid
 function is_valid_repo {
-	local repo="$1"
-	for r in "${webmin_repos[@]}" "${virtualmin_repos[@]}"; do
-		if [ "$r" = "$repo" ]; then
+	local user_input="$1"
+	local user_base
+	user_base=$(echo "$user_input" | awk '{print $1}')
+	
+	for r in "${webmin_repos[@]}" "${virtualmin_repos[@]}" "${cloudmin_repos[@]}"; do
+		local arr_base
+		arr_base=$(echo "$r" | awk '{print $1}')
+		if [ "$arr_base" = "$user_base" ]; then
 			return 0
 		fi
 	done
 	return 1
 }
 
-# Function to check if a secret is valid
+# Check if a secret is valid
 function is_valid_secret {
 	local secret="$1"
 	for s in "${secrets[@]}"; do
@@ -120,19 +129,21 @@ function is_valid_secret {
 	return 1
 }
 
-# Function to list secrets for a repository
+# List secrets for a repository
 function list_repo_secrets {
 	local repo="$1"
+	local base_repo
+	base_repo=$(echo "$repo" | awk '{print $1}')
 	local org
-	org=$(echo "$repo" | awk -F/ '{print $1}')
+	org=$(echo "$base_repo" | awk -F/ '{print $1}')
 	
-	echo "Listing secrets for $repo .."
+	echo "Listing secrets for $base_repo .."
 	
 	# Get all secrets from the repository
 	local secrets_json
-	secrets_json=$(gh secret list --repo "$repo" --json name,updatedAt 2>/dev/null)
+	secrets_json=$(gh secret list --repo "$base_repo" --json name,updatedAt 2>/dev/null)
 	if [ $? -ne 0 ]; then
-		echo "  Error: Failed to list secrets for $repo"
+		echo "  Error: Failed to list secrets for $base_repo"
 		return 1
 	fi
 
@@ -144,10 +155,12 @@ function list_repo_secrets {
 	if command -v jq >/dev/null 2>&1; then
 		echo "$secrets_json" | jq -r '.[] | "  \(.name) (Last updated: \(.updatedAt))"'
 	else
-		# Fallback to simple output if jq is not available
-		echo "$secrets_json" | grep -o '"name":"[^"]*"' | cut -d'"' -f4 | while read -r secret; do
-			echo "  $secret"
-		done
+		echo "$secrets_json" \
+		  | grep -o '"name":"[^"]*"' \
+		  | cut -d'"' -f4 \
+		  | while read -r sec; do
+			  echo "  $sec"
+		    done
 	fi
 }
 
@@ -164,8 +177,9 @@ while [[ $# -gt 0 ]]; do
 				echo "Error: --repo requires a value"
 				exit 1
 			fi
+			base_repo=$(echo "$2" | awk '{print $1}')
 			if ! is_valid_repo "$2"; then
-				echo "Error: Invalid repository: $2"
+				echo "Error: Invalid repository: $base_repo"
 				exit 1
 			fi
 			selected_repos+=("$2")
@@ -208,7 +222,11 @@ if [ "$list" -eq 1 ]; then
 	if [ ${#selected_repos[@]} -gt 0 ]; then
 		repos_to_list=("${selected_repos[@]}")
 	else
-		repos_to_list=("${webmin_repos[@]}" "${virtualmin_repos[@]}")
+		repos_to_list=(
+			"${webmin_repos[@]}"
+			"${virtualmin_repos[@]}"
+			"${cloudmin_repos[@]}"
+		)
 	fi
 
 	# List secrets for each repository
@@ -225,7 +243,7 @@ if [ "$delete" -eq 0 ] && [ ! -f "$secrets_zip" ]; then
 	exit 1
 fi
 
-# Create a temporary directory
+# Create temp dir
 mkdir -p "$temp_dir"
 
 # Extract secrets if updating
@@ -236,17 +254,26 @@ if [ "$delete" -eq 0 ]; then
 
 	# Extract secrets to the temporary directory
 	if ! unzip -P "$zip_pass" -d "$temp_dir" "$secrets_zip" > /dev/null 2>&1; then
-		echo "Error: Failed to extract secrets—invalid passphrase or insufficient access to the documents"
+		echo "Error: Failed to extract secrets : Invalid passphrase or access to the file is insufficient"
 		exit 1
 	fi
 fi
 
-# Function to update secrets for a repository
+# Update secrets
 function update_repo_secrets {
 	local repo="$1"
+	local base_repo
+	base_repo=$(echo "$repo" | awk '{print $1}')
 	local org
-	org=$(echo "$repo" | awk -F/ '{print $1}')
-	
+	org=$(echo "$base_repo" | awk -F/ '{print $1}')
+	local prefix
+	prefix=$(echo "$repo" | awk '{print $2}')
+
+	# Use second token if present
+	if [ -n "$prefix" ]; then
+		org="$prefix"
+	fi
+
 	echo "Updating secrets for $repo .."
 	
 	# Determine which secrets to update
@@ -266,7 +293,7 @@ function update_repo_secrets {
 		echo "  Updating $s .."
 		if [ -f "$secret_file" ]; then
 			local err
-			err=$(gh secret set "$s" --repo "$repo" < "$secret_file" 2>&1)
+			err=$(gh secret set "$s" --repo "$base_repo" < "$secret_file" 2>&1)
 			if [ $? -ne 0 ]; then
 				echo "  .. failed : $err"
 			else
@@ -278,12 +305,21 @@ function update_repo_secrets {
 	done
 }
 
-# Function to delete secrets for a repository
+# Delete secrets
 function delete_repo_secrets {
 	local repo="$1"
+	local base_repo
+	base_repo=$(echo "$repo" | awk '{print $1}')
 	local org
-	org=$(echo "$repo" | awk -F/ '{print $1}')
-	
+	org=$(echo "$base_repo" | awk -F/ '{print $1}')
+	local prefix
+	prefix=$(echo "$repo" | awk '{print $2}')
+
+	# Use second token if present
+	if [ -n "$prefix" ]; then
+		org="$prefix"
+	fi
+
 	echo "Deleting secrets for $repo .."
 	
 	# Determine which secrets to delete
@@ -300,7 +336,7 @@ function delete_repo_secrets {
 	for s in "${secrets_to_delete[@]}"; do
 		echo "  Deleting $s .."
 		local err
-		err=$(gh secret remove "$s" --repo "$repo" 2>&1)
+		err=$(gh secret remove "$s" --repo "$base_repo" 2>&1)
 		if [ $? -ne 0 ]; then
 			echo "  .. failed : $err"
 		else
@@ -309,12 +345,16 @@ function delete_repo_secrets {
 	done
 }
 
-# Determine which repositories to update or delete
+# Determine which repositories to act on
 repos_to_update=()
 if [ ${#selected_repos[@]} -gt 0 ]; then
 	repos_to_update=("${selected_repos[@]}")
 else
-	repos_to_update=("${webmin_repos[@]}" "${virtualmin_repos[@]}")
+	repos_to_update=(
+		"${webmin_repos[@]}"
+		"${virtualmin_repos[@]}"
+		"${cloudmin_repos[@]}"
+	)
 fi
 
 # Perform the update or delete operation for each repository

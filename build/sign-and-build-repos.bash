@@ -49,15 +49,20 @@ setup_repo_variables() {
 	# Set default values for Webmin
 	out_origin="Webmin Developers"
 	out_desc="Automatically generated development builds of Webmin, Usermin and "
-	out_desc+="Authentic Theme, based on the latest code commits"
+	out_desc+="Authentic Theme"
 	out_codename="webmin"
 
 	# Override values for Virtualmin if needed
 	if [ "$repo_target" = "virtualmin.dev" ]; then
 		out_origin="Virtualmin Developers"
 		out_desc="Automatically generated development builds of Virtualmin, and "
-		out_desc+="its plugins, based on the latest code commits"
+		out_desc+="its plugins"
 		out_codename="virtualmin"
+	elif [ "$repo_target" = "cloudmin.dev" ]; then
+		out_origin="Cloudmin Developers"
+		out_desc="Automatically generated development builds of Cloudmin, and "
+		out_desc+="its dependencies"
+		out_codename="cloudmin"
 	fi
 }
 

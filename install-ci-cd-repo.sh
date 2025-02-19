@@ -10,6 +10,8 @@ url="https://raw.githubusercontent.com/webmin/webmin/master/webmin-setup-repo.sh
 virtualmin_license_file="/etc/virtualmin-license"
 virtualmin_unstable_host="software.virtualmin.dev"
 virtualmin_prerelease_host="rc.software.virtualmin.dev"
+cloudmin_unstable_host="software.cloudmin.dev"
+cloudmin_prerelease_host="rc.software.cloudmin.dev"
 
 download_script() {
 	tmp_file=$(mktemp)
@@ -156,6 +158,36 @@ setup_repo() {
 					;;
 			esac
 			;;
+		cloudmin)
+			case "$type" in
+				prerelease)
+					set -- \
+						--force \
+						--prerelease-host="$cloudmin_prerelease_host" \
+						--name=cloudmin \
+						--dist=cloudmin \
+						--description=Cloudmin \
+						--component=main \
+						--check-binary=0 \
+						--prerelease
+					
+					sh "$script" "$@"
+					;;
+				unstable)
+					set -- \
+						--force \
+						--unstable-host="$cloudmin_unstable_host" \
+						--name=cloudmin \
+						--dist=cloudmin \
+						--description=Cloudmin \
+						--component=main \
+						--check-binary=0 \
+						--unstable
+					
+					sh "$script" "$@"
+					;;
+			esac
+			;;
 	esac
 	
 	ret=$?
@@ -168,7 +200,7 @@ usage() {
 		echo "Error: $1"
 		echo
 	fi
-	echo "Usage: ${0##*/} <webmin|virtualmin> <prerelease|unstable>"
+	echo "Usage: ${0##*/} <webmin|virtualmin|cloudmin> <prerelease|unstable>"
 	exit "${2:-1}"
 }
 
@@ -190,7 +222,7 @@ main() {
 	
 	# Validate arguments
 	case "$product" in
-		webmin|virtualmin) ;;
+		webmin|virtualmin|cloudmin) ;;
 		*) usage "Invalid product name" ;;
 	esac
 	

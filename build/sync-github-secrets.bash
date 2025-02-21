@@ -44,6 +44,7 @@ cloudmin_repos=(
 	"virtualmin/cloudmin-yum-groups cloudmin"
 	"virtualmin/cloudmin-core-meta cloudmin"
 	"virtualmin/cloudmin-stack-meta cloudmin"
+	"virtualmin/Cloudmin-Config"
 )
 
 # Secret names

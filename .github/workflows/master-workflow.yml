@@ -16,6 +16,11 @@ on:
         type: boolean
         default: false
         description: 'Whether this is a release or just a testing build'
+      is-checkout:
+        description: 'Whether to checkout the code or not'
+        required: false
+        type: boolean
+        default: false
     secrets:
       DEV_GPG_PH:
         required: true
@@ -43,6 +48,10 @@ jobs:
     env:
       TZ: Europe/Nicosia
     steps:
+      - name: Checkout code
+        if: ${{ inputs.is-checkout }}
+        uses: actions/checkout@v4
+
       - uses: awalsh128/cache-apt-pkgs-action@latest
         with: 
           packages: git tar gzip openssl curl openssh-client rpm perl libjson-pp-perl libdigest-sha-perl liblist-moreutils-perl libencode-detect-perl zstd

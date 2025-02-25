@@ -411,6 +411,13 @@ function clone_module_repo {
 	names=$(resolve_module_info "$module")
 	read -r repo_name dir_name ver_pref deps_repo sub_dir lic_id <<< "$names"
 
+	# Check if module already exists via actions/checkout
+	if [[ -d "$HOME/work/$module" ]]; then
+		mv "$HOME/work/$module" "$dir_name"
+		printf "%s,%s,%s,%s" "$?" "$dir_name/$module" "$ver_pref" "$lic_id"
+		return
+	fi
+
 	# Clean up module directory
 	remove_dir "$dir_name"
 
@@ -421,14 +428,6 @@ function clone_module_repo {
 	# Move directory if set
 	if [[ -n "${sub_dir-}" ]]; then
 		target_dir="$sub_dir"
-	fi
-
-	# Check if module already exists via actions/checkout
-	if [[ -d "$HOME/work/$module" ]]; then
-		mv "$HOME/work/$module" "$target_dir"
-		ls -lsa "$target_dir/$module" >&2
-		printf "%s,%s,%s,%s" "$?" "$target_dir/$module" "$ver_pref" "$lic_id"
-		return
 	fi
 
 	# Clone dependency first if exists

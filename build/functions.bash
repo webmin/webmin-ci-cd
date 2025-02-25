@@ -414,7 +414,7 @@ function clone_module_repo {
 	# Check if module already exists via checkouts
 	if [[ -d "$HOME/work/$module" ]]; then
 		# Module already exists, return success with the same format
-		printf "0,%s,%s,%s" "$dir_name" "$ver_pref" "$lic_id"
+		printf "0,%s,%s,%s" "$HOME/work/$module" "$ver_pref" "$lic_id"
 		return 0
 	fi
 

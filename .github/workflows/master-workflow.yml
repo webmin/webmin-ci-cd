@@ -51,6 +51,8 @@ jobs:
       - name: Checkout code
         if: ${{ inputs.is-checkout }}
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - uses: awalsh128/cache-apt-pkgs-action@latest
         with: 

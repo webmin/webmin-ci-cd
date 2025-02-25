@@ -426,8 +426,8 @@ function clone_module_repo {
 	# Check if module already exists via actions/checkout
 	if [[ -d "$HOME/work/$module" ]]; then
 		mv "$HOME/work/$module" "$target_dir"
-		ls -lsa $target_dir >&2
-		printf "%s,%s,%s,%s" "$?" "$target_dir" "$ver_pref" "$lic_id"
+		ls -lsa "$target_dir/$module" >&2
+		printf "%s,%s,%s,%s" "$?" "$target_dir/$module" "$ver_pref" "$lic_id"
 		return
 	fi
 

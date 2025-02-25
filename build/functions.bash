@@ -411,15 +411,15 @@ function clone_module_repo {
 	names=$(resolve_module_info "$module")
 	read -r repo_name dir_name ver_pref deps_repo sub_dir lic_id <<< "$names"
 
+	# Clean up module directory
+	remove_dir "$dir_name"
+
 	# Check if module already exists via actions/checkout
 	if [[ -d "$HOME/work/$module" ]]; then
-		mv "$HOME/work/$module" "$dir_name"
+		cp -r "$HOME/work/$module" "$dir_name"
 		printf "%s,%s,%s,%s" "$?" "$dir_name/$module" "$ver_pref" "$lic_id"
 		return
 	fi
-
-	# Clean up module directory
-	remove_dir "$dir_name"
 
 	# Run cloning depending on the module type
 	declare -a rs=()

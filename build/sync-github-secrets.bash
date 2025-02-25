@@ -38,6 +38,7 @@ virtualmin_repos=(
 	"virtualmin/virtualmin-core-meta"
 	"virtualmin/virtualmin-stack-meta"
 	"virtualmin/virtualmin-yum-groups"
+	"virtualmin/virtualmin-wp-workbench"
 )
 
 cloudmin_repos=(

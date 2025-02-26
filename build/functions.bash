@@ -440,6 +440,12 @@ function clone_module_repo {
 	# Check if module already exists via actions/checkout@
 	if [[ -d "$HOME/work/$module" ]]; then
 		cp -r "$HOME/work/$module" "$dir_name"
+		echo "1 HOME: >&2"
+		ls -lsa "$HOME" >&2
+		echo "2: HOME/WORK >&2"
+		ls -lsa "$HOME/work" >&2
+		echo "3 MOD: >&2"
+		ls -lsa "$HOME/work/$module" >&2
 		clean_git_repo "$dir_name/$module"
 		printf "%s,%s,%s,%s" "$?" "$dir_name/$module" "$ver_pref" "$lic_id"
 		return

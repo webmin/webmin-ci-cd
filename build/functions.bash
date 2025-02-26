@@ -337,6 +337,26 @@ generate_git_clone_cmd() {
 	echo "git clone --depth 1 ${tag_cmd-} $repo_url $target_dir $VERBOSITY_LEVEL"
 }
 
+# Clean git repo
+function clean_git_repo {
+	local repo_dir="$1"
+	local oredir=">&2"
+	if [[ $VERBOSE_MODE -eq 0 ]]; then
+		oredir="$VERBOSITY_LEVEL"
+	fi
+	local cmd="git clean -fd $oredir && git reset --hard $oredir"
+	local current_dir
+	current_dir=$(pwd)
+	
+	# Change directory, run command, and return
+	cd "$repo_dir" || return 1
+	eval "$cmd"
+	local rs=$?
+	cd "$current_dir" || return 1
+	
+	return $rs
+}
+
 # Pull project repo and theme
 function make_packages_repos {
 	local root_prod="$1"
@@ -417,10 +437,7 @@ function clone_module_repo {
 	# Check if module already exists via actions/checkout@
 	if [[ -d "$HOME/work/$module" ]]; then
 		cp -r "$HOME/work/$module" "$dir_name"
-		(
-			cd "$dir_name/$module" || exit 1
-			git clean -fd
-		)
+		clean_git_repo "$dir_name"
 		printf "%s,%s,%s,%s" "$?" "$dir_name/$module" "$ver_pref" "$lic_id"
 		return
 	fi

@@ -444,7 +444,7 @@ function clone_module_repo {
 		#list $dir_name
 		echo "dir_name $dir_name" >&2
 		ls -lsa "$dir_name" >&2
-    	printf "%s,%s,%s,%s" "0" "$actions_checkout_path" "$ver_pref" "$lic_id"
+    	printf "%s,%s,%s,%s" "0" "$dir_name" "$ver_pref" "$lic_id"
     	return
 	fi
 

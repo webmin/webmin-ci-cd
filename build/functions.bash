@@ -546,6 +546,7 @@ function make_module_build_deps {
 			final_rs=1
 		fi
 		postcmd $final_rs
+		echo
 	
 		cp -f bin/language-manager "$build_deps_dir/"
 	

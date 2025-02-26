@@ -439,8 +439,8 @@ function clone_module_repo {
 	echo "Actions path $actions_checkout_path" >&2
 	ls -lsa "$actions_checkout_path" >&2
 	if [[ -d "$actions_checkout_path" ]]; then
-		mkdir -p "$dir_name"
-		cp -r "$actions_checkout_path"/. "$dir_name"
+		make_dir "$dir_name"
+		cp -r "$actions_checkout_path"/. "$dir_name" >&2
 		#list $dir_name
 		echo "dir_name $dir_name" >&2
 		ls -lsa "$dir_name" >&2

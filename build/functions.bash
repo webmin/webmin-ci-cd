@@ -435,9 +435,12 @@ function clone_module_repo {
 	remove_dir "$dir_name"
 
 	# Check if module already exists via GitHub actions/checkout@
-	if [[ -d "$GITHUB_WORKSPACE/actions-checkout" ]]; then
-		printf "%s,%s,%s,%s" "$?" "$GITHUB_WORKSPACE/actions-checkout" "$ver_pref" "$lic_id"
-		return
+	local actions_checkout_path="$HOME/work/$module/$module/actions-checkout"
+	echo "Actions path $actions_checkout_path" >&2
+	ls -lsa "$actions_checkout_path" >&2
+	if [[ -d "$actions_checkout_path" ]]; then
+    	printf "%s,%s,%s,%s" "0" "$actions_checkout_path" "$ver_pref" "$lic_id"
+    	return
 	fi
 
 	# Run cloning depending on the module type

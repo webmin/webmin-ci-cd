@@ -60,14 +60,6 @@ jobs:
           packages: git tar gzip openssl curl openssh-client rpm perl libjson-pp-perl libdigest-sha-perl liblist-moreutils-perl libencode-detect-perl zstd
           version: 1.0
 
-      - name: Debug paths
-        run: |
-          echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
-          echo "HOME: $HOME"
-          echo "Actions checkout path: $GITHUB_WORKSPACE/actions-checkout"
-          ls -la $GITHUB_WORKSPACE
-          ls -la $GITHUB_WORKSPACE/actions-checkout || echo "Directory not found"
-
       - name: Fetch dependencies
         run: |-
           curl -O https://raw.githubusercontent.com/webmin/webmin-ci-cd/main/build/bootstrap.bash

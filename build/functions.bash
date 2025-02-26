@@ -347,12 +347,15 @@ function clean_git_repo {
 	local cmd="git clean -fd $oredir && git reset --hard $oredir"
 	local current_dir
 	current_dir=$(pwd)
-	
+	echo "Current dir before: $current_dir >&2"
 	# Change directory, run command, and return
 	cd "$repo_dir" || return 1
+	echo "Cleaning Git repo in $repo_dir ..  >&2"
 	eval "$cmd"
 	local rs=$?
 	cd "$current_dir" || return 1
+	echo "Current dir before: $current_dir >&2"
+	echo "Result: $rs >&2"
 	
 	return $rs
 }

@@ -195,6 +195,29 @@ function remove_dir {
 	fi
 }
 
+# Copy all files from source to destination, including hidden files
+function copy_all_files {
+    local source_dir="$1"
+    local dest_dir="$2"
+    local oredir=">&2"
+    
+    if [[ $VERBOSE_MODE -eq 0 ]]; then
+        oredir="$VERBOSITY_LEVEL"
+    fi
+    
+    # Create destination directory if it doesn't exist
+	make_dir "$dest_dir"
+    
+    # Create command with proper redirection
+    local cmd="cp -r \"$source_dir\"/. \"$dest_dir\" $oredir"
+    
+    # Execute the command
+    eval "$cmd"
+    local rs=$?
+    
+    return $rs
+}
+
 function get_remote_repo_tag {
 	local repo_url="$1"
 
@@ -436,15 +459,9 @@ function clone_module_repo {
 
 	# Check if module already exists via GitHub actions/checkout@
 	local actions_checkout_path="$HOME/work/$module/$module/actions-checkout"
-	echo "Actions path $actions_checkout_path" >&2
-	ls -lsa "$actions_checkout_path" >&2
 	if [[ -d "$actions_checkout_path" ]]; then
-		make_dir "$dir_name"
-		cp -r "$actions_checkout_path"/. "$dir_name" >&2
-		#list $dir_name
-		echo "dir_name $dir_name" >&2
-		ls -lsa "$dir_name" >&2
-    	printf "%s,%s,%s,%s" "0" "$dir_name" "$ver_pref" "$lic_id"
+		copy_all_files "$actions_checkout_path" "$dir_name"
+    	printf "%s,%s,%s,%s" "$?" "$dir_name" "$ver_pref" "$lic_id"
     	return
 	fi
 

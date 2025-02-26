@@ -199,12 +199,17 @@ function remove_dir {
 function copy_all_files {
     local source_dir="$1"
     local dest_dir="$2"
+    local stdout=">&2"
+    
+    if [[ $VERBOSE_MODE -eq 0 ]]; then
+        stdout="$VERBOSITY_LEVEL"
+    fi
     
     # Create destination directory if it doesn't exist
 	make_dir "$dest_dir"
     
     # Create command with proper redirection
-    local cmd="cp -r \"$source_dir\"/. \"$dest_dir\" >&2"
+    local cmd="cp -r \"$source_dir\"/. \"$dest_dir\" $stdout"
     
     # Execute the command
     eval "$cmd"
@@ -358,7 +363,11 @@ generate_git_clone_cmd() {
 # Clean git repo
 function clean_git_repo {
 	local repo_dir="$1"
-	local cmd="git clean -fd >&2 && git reset --hard >&2"
+	local stdout=">&2"
+	if [[ $VERBOSE_MODE -eq 0 ]]; then
+		stdout="$VERBOSITY_LEVEL"
+	fi
+	local cmd="git clean -fd $stdout && git reset --hard $stdout"
 	local current_dir
 	current_dir=$(pwd)
 	

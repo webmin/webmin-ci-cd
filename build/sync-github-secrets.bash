@@ -39,6 +39,8 @@ virtualmin_repos=(
 	"virtualmin/virtualmin-stack-meta"
 	"virtualmin/virtualmin-yum-groups"
 	"virtualmin/virtualmin-wp-workbench"
+	"virtualmin/slib"
+	"virtualmin/virtualmin-install"
 )
 
 cloudmin_repos=(

@@ -8,6 +8,7 @@
 
 url="https://raw.githubusercontent.com/webmin/webmin/master/webmin-setup-repo.sh"
 virtualmin_license_file="/etc/virtualmin-license"
+cloudmin_license_file="/etc/server-manager-license"
 virtualmin_unstable_host="software.virtualmin.dev"
 virtualmin_prerelease_host="rc.software.virtualmin.dev"
 cloudmin_unstable_host="software.cloudmin.dev"
@@ -35,6 +36,17 @@ check_virtualmin_license() {
 	if [ -f "$virtualmin_license_file" ]; then
 		serial=$(grep "SerialNumber" "$virtualmin_license_file" | cut -d= -f2)
 		license=$(grep "LicenseKey" "$virtualmin_license_file" | cut -d= -f2)
+		if [ "$serial" != "GPL" ] && [ "$license" != "GPL" ]; then
+			echo "--auth-user=$serial --auth-pass=$license"
+		fi
+	fi
+	return 0
+}
+
+check_cloudmin_license() {
+	if [ -f "$cloudmin_license_file" ]; then
+		serial=$(grep "SerialNumber" "$cloudmin_license_file" | cut -d= -f2)
+		license=$(grep "LicenseKey" "$cloudmin_license_file" | cut -d= -f2)
 		if [ "$serial" != "GPL" ] && [ "$license" != "GPL" ]; then
 			echo "--auth-user=$serial --auth-pass=$license"
 		fi
@@ -82,6 +94,37 @@ set_virtualmin_repo_preferences() {
 	fi
 }
 
+set_cloudmin_repo_preferences() {
+	type="$1"
+	prefix="$2"
+	param="$3"
+	rpm_cloudmin_repo_preferences() {
+		type="$1"
+		param="$2"
+		
+		# Handle priority parameter
+		if [ "$param" = "priority" ]; then
+			case "$type" in
+				"unstable")
+					echo "rpm:priority=10"
+					;;
+				"prerelease")
+					echo "rpm:priority=20"
+					;;
+			esac
+		fi
+	}
+
+	# Construct the function name
+	func_name="${prefix}_cloudmin_repo_preferences"
+
+	# Check if the function exists using POSIX compatible method
+	if command -v "$func_name" >/dev/null 2>&1; then
+		# Call the function with type and param
+		"$func_name" "$type" "$param"
+	fi
+}
+
 setup_repo() {
 	product="$1"
 	type="$2"
@@ -93,6 +136,11 @@ setup_repo() {
 	auth_pass=""
 	[ "$product" = "virtualmin" ] && {
 		license_data=$(check_virtualmin_license)
+		auth_user=$(echo "$license_data" | awk '{print $1}')
+		auth_pass=$(echo "$license_data" | awk '{print $2}')
+	}
+	[ "$product" = "cloudmin" ] && {
+		license_data=$(check_cloudmin_license)
 		auth_user=$(echo "$license_data" | awk '{print $1}')
 		auth_pass=$(echo "$license_data" | awk '{print $2}')
 	}
@@ -171,6 +219,11 @@ setup_repo() {
 						--check-binary=0 \
 						--prerelease
 					
+					[ -n "$auth_user" ] && set -- "$@" "$auth_user"
+					[ -n "$auth_pass" ] && set -- "$@" "$auth_pass"
+					[ -n "$pkg_prefs" ] && set -- "$@" "--pkg-prefs=$pkg_prefs"
+					[ -n "$repo_prefs" ] && set -- "$@" "--repo-prefs=$repo_prefs"
+
 					sh "$script" "$@"
 					;;
 				unstable)
@@ -183,6 +236,11 @@ setup_repo() {
 						--component=main \
 						--check-binary=0 \
 						--unstable
+					
+					[ -n "$auth_user" ] && set -- "$@" "$auth_user"
+					[ -n "$auth_pass" ] && set -- "$@" "$auth_pass"
+					[ -n "$pkg_prefs" ] && set -- "$@" "--pkg-prefs=$pkg_prefs"
+					[ -n "$repo_prefs" ] && set -- "$@" "--repo-prefs=$repo_prefs"
 					
 					sh "$script" "$@"
 					;;

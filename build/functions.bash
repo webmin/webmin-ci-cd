@@ -302,6 +302,33 @@ function get_modules_exclude {
 	echo "$exclude"
 }
 
+# Get the version of a remote repo based on a tag
+function get_remote_git_tag_version {
+    local gh_repo="$1"
+    local gh_token="$2"
+    local is_release="${3:-false}"
+    local repo_tag_version testing_build_number
+
+    # Get package version from GitHub API
+    repo_tag_version=$(curl -s -H "Authorization: token $gh_token" \
+        "https://api.github.com/repos/$gh_repo/releases/latest" | jq -r .tag_name)
+
+    # Remove 'v' prefix if present
+    [[ "$repo_tag_version" =~ ^v ]] && repo_tag_version="${repo_tag_version:1}"
+
+    # Set testing flag and build number for non-release builds
+    if [[ "$is_release" == "false" ]]; then
+        testing_build_number=".$(date +%Y%m%d%H%M)"
+
+        # Modify version format if it's a major.minor.patch format
+		repo_tag_version=$(echo "$repo_tag_version" | cut -d. -f1,2)
+		repo_tag_version="$repo_tag_version$testing_build_number"
+    fi
+
+    # Return values using echo
+    echo "$repo_tag_version"
+}
+
 # Get latest commit time (with TZ)
 function get_commit_timestamp {
 	date -d "@$(git log -n1 --pretty='format:%ct')" +"%Y%m%d%H%M"

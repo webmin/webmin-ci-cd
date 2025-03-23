@@ -82,6 +82,10 @@ jobs:
           if [ "${{ inputs.is-release }}" = "false" ]; then
             build_args="--testing"
           fi
+          echo "$RUNNER_DEBUG ++++ $ACTIONS_RUNNER_DEBUG ++++ $ACTIONS_STEP_DEBUG"
+          if [[ "$ACTIONS_RUNNER_DEBUG" == "true" || "$ACTIONS_STEP_DEBUG" == "true" ]]; then
+            build_args="--verbose $build_args"
+          fi
           bash bootstrap.bash $build_args
           if [ "${{ inputs.build-type }}" = "package" ]; then
             bash build-product-deb.bash ${{ inputs.project-name }} $build_args

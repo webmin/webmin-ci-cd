@@ -85,7 +85,6 @@ jobs:
           if [[ "$RUNNER_DEBUG" == "1" ]]; then
             build_args="--verbose $build_args"
           fi
-          echo "Build arguments: $build_args"
           bash bootstrap.bash $build_args
           if [ "${{ inputs.build-type }}" = "package" ]; then
             bash build-product-deb.bash ${{ inputs.project-name }} $build_args

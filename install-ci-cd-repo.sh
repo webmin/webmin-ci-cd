@@ -58,7 +58,10 @@ set_virtualmin_package_preferences() {
 	fn_auth_user="$1"
 	fn_auth_pass="$2"
 	if [ -z "$fn_auth_user" ] || [ -z "$fn_auth_pass" ]; then
-		echo "deb:webmin-virtual-server=1001=gpl rpm:wbm-virtual-server*pro*"
+		echo \
+			"deb:webmin-virtual-server=1001=gpl" \
+			"deb:virtualmin-wp-workbench=-1" \
+			"rpm:wbm-virtual-server*pro* virtualmin-wp-workbench"
 	fi
 	return 0
 }

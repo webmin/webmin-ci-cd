@@ -534,6 +534,7 @@ function make_module_build_deps {
 		"makemoduledeb.pl"
 		"makemodulerpm.pl"
 		"web-lib-funcs.pl"
+		"mod_def_list.txt"
 	  )
 	
 	  local missing=false

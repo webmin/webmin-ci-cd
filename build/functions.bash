@@ -529,11 +529,11 @@ function make_module_build_deps {
 
 	local required_files=(
 		"create-module.pl"
-		"lang_list.txt"
 		"language-manager"
 		"makemoduledeb.pl"
 		"makemodulerpm.pl"
 		"web-lib-funcs.pl"
+		"lang_list.txt"
 		"mod_def_list.txt"
 	  )
 	
@@ -561,7 +561,7 @@ function make_module_build_deps {
 	
 		# Copy required files to build-deps directory
 		cp -f makemoduledeb.pl makemodulerpm.pl create-module.pl web-lib-funcs.pl \
-			lang_list.txt "$build_deps_dir/"
+			lang_list.txt mod_def_list.txt "$build_deps_dir/"
 	
 		# Sparse checkout language-manager and copy it
 		cmd="git sparse-checkout set --no-cone / /bin/language-manager $VERBOSITY_LEVEL"

@@ -144,9 +144,12 @@ function build {
 	postcmd $?
 	echo
 
-	echo "Post-clean up .."
-	remove_dir "$root_module"
-	postcmd $?
+	# Post-build clean up
+	if [[ ! -f "$root_module/.nodelete" ]]; then
+		echo "Post-clean up .."
+		remove_dir "$root_module"
+		postcmd $?
+	fi
 }
 
 # Main

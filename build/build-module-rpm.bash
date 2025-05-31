@@ -166,9 +166,16 @@ function build {
 	postcmd $?
 	echo
 
-	echo "Post-clean up .."
-	remove_dir "$root_module"
+	# Post-build clean up
+	if [[ ! -f "$root_module/.nodelete" ]]; then
+		echo "Post-clean up .."
+		remove_dir "$root_module"
+		postcmd $?
+		echo
+	fi
+
 	# Purge old files
+	echo "Purging build directories .."
 	purge_dir "$ROOT_BUILD/BUILD"
 	purge_dir "$ROOT_BUILD/BUILDROOT"
 	purge_dir "$ROOT_BUILD/RPMS"

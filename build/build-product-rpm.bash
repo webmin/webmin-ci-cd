@@ -154,7 +154,7 @@ function build {
 		args="$ver-$rel"
 	fi
 
-	cmd="./makedist.pl \"$args\" $VERBOSITY_LEVEL"
+	cmd="./makedist.pl \"--mod-list core $args\" $VERBOSITY_LEVEL"
 	eval "$cmd"
 	postcmd $?
 	echo

@@ -137,7 +137,8 @@ function build {
 	cd "$root_prod" || exit 1
 
 	echo "Pre-building package .."
-	cmd="./makedist.pl \"${ver}${relval-}\" $VERBOSITY_LEVEL"
+	cmd="./makedist.pl \"--mod-list core ${ver}${relval-}\" \
+		$VERBOSITY_LEVEL"
 	eval "$cmd"
 	postcmd $?
 	echo

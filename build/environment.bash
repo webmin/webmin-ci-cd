@@ -6,6 +6,35 @@
 #
 # Configures environment variables for the build process
 
+# Extract the value of a specific flag
+function get_flag {
+	local flag=$1
+	shift
+	
+	# If we got exactly one argument and it contains spaces, 
+    # it might be a quoted string of multiple args
+    if [ $# -eq 1 ] && [[ "$1" =~ \  ]]; then
+        # Split it into an array (doesn't handle quoted args within)
+        read -ra args <<< "$1"
+        set -- "${args[@]}"
+    fi
+
+	for arg in "$@"; do
+		case $arg in
+			"$flag")
+				echo ""  # boolean flag, no value
+				return 0
+				;;
+			"$flag"=*)
+				echo "${arg#*=}"  # return the value
+				return 0
+				;;
+		esac
+	done
+
+	return 1  # not found
+}
+
 # Builder email
 export BUILDER_PACKAGE_NAME="${ENV__BUILDER_NAME:-webmin/webmin-ci-cd}"
 export BUILDER_PACKAGE_EMAIL="${ENV__BUILDER_EMAIL:-ilia@webmin.dev}"
@@ -32,7 +61,7 @@ export VERBOSE_MODE=0
 export VERBOSITY_LEVEL=' >/dev/null 2>&1 </dev/null'
 export VERBOSITY_LEVEL_TO_FILE='2> /dev/null'
 export VERBOSITY_LEVEL_WITH_INPUT=' >/dev/null 2>&1'
-if [[ "'$*'" == *"--verbose"* ]]; then
+if get_flag --verbose "$@" >/dev/null; then
 	VERBOSE_MODE=1
 	VERBOSITY_LEVEL=''
 	VERBOSITY_LEVEL_TO_FILE=''
@@ -41,8 +70,8 @@ fi
 
 # Define testing build
 export TESTING_BUILD=0
-if [[ "'$*'" == *"--testing"* ]]; then
-	export TESTING_BUILD=1
+if get_flag --testing "$@" >/dev/null; then
+	TESTING_BUILD=1
 fi
 
 # Project links

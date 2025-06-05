@@ -44,6 +44,8 @@ function build {
 
 	# Define root
 	local prod=$1
+	# Define build type
+	build_type=$(get_flag --build-type "$@") || build_type='full'
 	local root_prod="$ROOT_DIR/$prod"
 	local ver
 	local rel=1
@@ -58,7 +60,7 @@ function build {
 	echo "************************************************************************"
 	echo "        build start date: $date                                         "
 	echo "          package format: RPM                                           "
-	echo "                 product: $prod                                         "
+	echo "                 product: $prod ($build_type)                           "
 	echo -n "    downloading packages: "
 	
 	# Download products from repos
@@ -154,7 +156,7 @@ function build {
 		args="$ver-$rel"
 	fi
 
-	cmd="./makedist.pl \"--mod-list core $args\" $VERBOSITY_LEVEL"
+	cmd="./makedist.pl \"--mod-list $build_type $args\" $VERBOSITY_LEVEL"
 	eval "$cmd"
 	postcmd $?
 	echo

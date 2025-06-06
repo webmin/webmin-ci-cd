@@ -128,7 +128,8 @@ function build {
 		# Build DEB package
 		echo "Building packages .."
 		modules_exclude=$(get_modules_exclude)
-		cmd="$build_deps/makemoduledeb.pl --release $rel$edition_id \
+		cmd="$build_deps/makemoduledeb.pl --mod-list core \
+			--release $rel$edition_id \
 			--deb-depends --deb-recommends --licence '$license' \
 			--email '$BUILDER_PACKAGE_NAME <$BUILDER_MODULE_EMAIL>' \
 			--allow-overwrite --target-dir $ROOT_REPOS $modules_exclude \

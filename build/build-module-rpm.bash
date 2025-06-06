@@ -150,7 +150,7 @@ function build {
 		# Build RPM package
 		echo "Building packages.."
 		modules_exclude=$(get_modules_exclude)
-		cmd="$build_deps/makemodulerpm.pl ${epoch-} --release \
+		cmd="$build_deps/makemodulerpm.pl --mod-list core ${epoch-} --release \
 			$rel$edition_id --rpm-depends --rpm-recommends --licence '$license' \
 			--allow-overwrite --rpm-dir $ROOT_BUILD \
 			--target-dir $ROOT_REPOS $modules_exclude \

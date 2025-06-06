@@ -18,9 +18,9 @@
 #   Pull and build testing versions of both Webmin and Usermin
 #     ./build-product-deb.bash --testing
 #
-#   Pull and build production Webmin version 2.101, forcing
-#   release version 3, displaying verbose output
-#     ./build-product-deb.bash webmin 2.101 3 --testing
+#   Pull and build production Webmin version 2.101, forcing release
+#   version 3, with core modules only and displaying verbose output
+#     ./build-product-deb.bash webmin 2.101 3 --build-type=core --testing
 #
 #   Pull and build production Usermin version 2.000,
 #   automatically setting release version

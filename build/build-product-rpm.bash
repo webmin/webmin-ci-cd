@@ -45,7 +45,7 @@ function build {
 	# Define root
 	local prod=$1
 	# Define build type
-	build_type=$(get_flag --build-type "$@") || build_type='full'
+	build_type=$(get_flag --build-type) || build_type='full'
 	local root_prod="$ROOT_DIR/$prod"
 	local ver
 	local rel=1
@@ -189,17 +189,38 @@ function build {
 		eval "$cmd"
 	done
 	postcmd $?
+
+	# If the build type isn't full, build other modules separately for each product
+	if [ "$build_type" != 'full' ]; then
+		echo
+		local product_upper="${prod^}"
+		echo "Building $product_upper modules not included in the $build_type build .."
+		old_e=${-//[^e]/}; set +e
+		output=$(build_core_modules "$prod" "rpm" "$build_type" 2>&1)
+		exit_code=$?
+		[ "$old_e" ] && set -e
+		if [ $exit_code -eq 0 ]; then
+			echo ".. done"
+		elif [ $exit_code -eq 2 ]; then
+			echo ".. skipped : $output"
+		else
+			echo ".. failed : $output"
+		fi
+		cd "$ROOT_DIR" || exit 1
+	fi
 }
 
 # Main
 if [ -n "${1-}" ] && [[ "${1-}" != --* ]]; then
 	build "$@"
-	upload_list=("$ROOT_REPOS/$1"*)
 else
-	build webmin "$@"
-	build usermin "$@"
-	upload_list=("$ROOT_REPOS/"*)
+	product_list=("webmin" "usermin")
+	for product in "${product_list[@]}"; do
+		build "$product" "$@"
+	done
 fi
 
+# Upload built packages to the cloud
+upload_list=("$ROOT_REPOS/"*)
 cloud_upload upload_list
 cloud_sign_and_build_repos webmin.dev

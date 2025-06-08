@@ -29,9 +29,14 @@ function build {
 	cd "$ROOT_DIR" || exit 1
 
 	# Define variables
-	local module_dir edition_id license last_commit_date ver rel epoch epoch_str
-	license="GPLv3"
+	local module_dir edition_id license build_type last_commit_date ver rel epoch epoch_str
 	local module=$1
+	license=$(get_flag --build-license) || license='GPLv3'
+	build_type=$(get_flag --build-type) || build_type='full'
+	local core_module=0
+	if get_flag --core-module >/dev/null; then
+		core_module=1
+	fi
 	local root_module
 	local devel=0
 
@@ -54,7 +59,7 @@ function build {
 
 	# Clone module repository and dependencies if any
 	IFS=$',' read -r rs module_dir edition_id lic_id <<< "$(clone_module_repo \
-		"$module" "$MODULES_REPO_URL")"
+		"$module" "$MODULES_REPO_URL" "$core_module")"
 	module="$module_dir"
 	root_module="$ROOT_DIR/$module"
 	if [ -n "${edition_id-}" ]; then
@@ -65,47 +70,46 @@ function build {
 	fi
 	if [ "$rs" -eq 0 ]; then
 		echo -e "✔"
+		# Git last commit date
+		last_commit_date=$(get_repo_commit_timestamp "$root_module")
+
+		# Handle other params
+		cd "$root_module" || exit 1
+		if [ -n "${2-}" ] && [[ "${2-}" != *"--"* ]]; then
+			ver=$2
+		fi
+		if [[ -n "${3-}" ]] && [[ "${3-}" != *"--"* ]]; then
+			rel=$3
+		else
+			rel=1
+		fi
+		if [[ -n "${4-}" ]] && [[ "${4-}" != *"--"* ]]; then
+			epoch_str="$4:"
+			epoch="--epoch $4"
+		else
+			# Check if module has epoch
+			epoch=$(get_rpm_module_epoch "$module")
+			if [ -n "${epoch-}" ]; then
+				epoch_str="$epoch:"
+				epoch="--epoch $epoch"
+			fi
+		fi
+		if [ -z "${ver-}" ]; then
+			ver=$(get_module_version "$root_module")
+		fi
+		if [ "$TESTING_BUILD" -eq 1 ]; then
+			devel=1
+			# Testing version must always be x.x.<last_commit_date>, this will
+			# effectively remove the patch version from any module for testing
+			# builds
+			ver=$(echo "$ver" | cut -d. -f1,2)
+			ver="$ver.$last_commit_date"
+		fi
+		echo "                 version: ${epoch_str-}$ver-$rel$edition_id ($build_type)"
 	else
 		echo -e "✘"
 	fi
 
-	# Git last commit date
-	last_commit_date=$(get_repo_commit_timestamp "$root_module")
-
-	# Handle other params
-	cd "$root_module" || exit 1
-	if [ -n "${2-}" ] && [[ "${2-}" != *"--"* ]]; then
-		ver=$2
-	fi
-	if [[ -n "${3-}" ]] && [[ "${3-}" != *"--"* ]]; then
-		rel=$3
-	else
-		rel=1
-	fi
-	if [[ -n "${4-}" ]] && [[ "${4-}" != *"--"* ]]; then
-		epoch_str="$4:"
-		epoch="--epoch $4"
-	else
-		# Check if module has epoch
-		epoch=$(get_rpm_module_epoch "$module")
-		if [ -n "${epoch-}" ]; then
-			epoch_str="$epoch:"
-			epoch="--epoch $epoch"
-		fi
-	fi
-	if [ -z "${ver-}" ]; then
-		ver=$(get_module_version "$root_module")
-	fi
-	if [ "$TESTING_BUILD" -eq 1 ]; then
-		devel=1
-		# Testing version must always be x.x.<last_commit_date>, this will
-		# effectively remove the patch version from any module for testing
-		# builds
-		ver=$(echo "$ver" | cut -d. -f1,2)
-		ver="$ver.$last_commit_date"
-	fi
-
-	echo "                 version: ${epoch_str-}$ver-$rel$edition_id"
 	echo "                 license: $license"
 	echo "************************************************************************"
 
@@ -137,8 +141,9 @@ function build {
 	(
 		cd "$ROOT_DIR" || exit 1
 		
-		# Clean language files in the package if testing build
-		if [ "$devel" -eq 1 ]; then
+		# Clean language files in the package if testing build and no --no-clean
+		# flag given
+		if [ "$devel" -eq 1 ] && ! get_flag --no-clean; then
 			echo "Cleaning language files .."
 			lcmd="$build_deps/language-manager --lib-path=$build_deps \
 				--mode=clean --yes $VERBOSITY_LEVEL_WITH_INPUT"
@@ -150,7 +155,8 @@ function build {
 		# Build RPM package
 		echo "Building packages.."
 		modules_exclude=$(get_modules_exclude)
-		cmd="$build_deps/makemodulerpm.pl --mod-list core ${epoch-} --release \
+		cmd="$build_deps/makemodulerpm.pl --mod-list $build_type \
+			${epoch-} --release \
 			$rel$edition_id --rpm-depends --rpm-recommends --licence '$license' \
 			--allow-overwrite --rpm-dir $ROOT_BUILD \
 			--target-dir $ROOT_REPOS $modules_exclude \
@@ -161,10 +167,12 @@ function build {
 	)
 
 	# Adjust module filename for edge cases
-	echo "Adjusting module filename .."
-	adjust_module_filename "$ROOT_REPOS" "rpm"
-	postcmd $?
-	echo
+	if ! get_flag --core-module >/dev/null; then
+		echo "Adjusting module filename .."
+		adjust_module_filename "$ROOT_REPOS" "rpm"
+		postcmd $?
+		echo
+	fi
 
 	# Post-build clean up
 	if [[ ! -f "$root_module/.nodelete" ]]; then
@@ -193,9 +201,11 @@ if [ -n "${1-}" ] && [[ "'${1-}'" != *"--"* ]]; then
 	for mod in $related_modules; do
 		build "$mod" "${@:2}"
 	done
-	upload_list=("$ROOT_REPOS/"*)
-	cloud_upload upload_list
-	cloud_sign_and_build_repos virtualmin.dev
+	if ! get_flag --no-upload >/dev/null; then
+		upload_list=("$ROOT_REPOS/"*)
+		cloud_upload upload_list
+		cloud_sign_and_build_repos virtualmin.dev
+	fi
 else
 	# Error otherwise
 	echo "Error: No module specified"

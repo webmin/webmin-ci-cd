@@ -226,6 +226,51 @@ function copy_all_files {
     return $rs
 }
 
+# For every symlink inside directory, replace the link with a copy of its target,
+# preserving the original name and permissions
+function resolve_symlinks {
+	local base=$1
+	if [ ! -d "$base" ]; then
+		[ "${VERBOSE_MODE:-0}" -eq 1 ] && \
+			echo "cannot resolve symlinks as base '$base' not a dir" >&2
+		return 1
+	fi
+
+	local stdout=">&2"
+	if [ "${VERBOSE_MODE:-0}" -eq 0 ]; then
+		stdout="$VERBOSITY_LEVEL"
+	fi
+
+	verbose_echo() { [ "${VERBOSE_MODE:-0}" -eq 1 ] && echo "$@" >&2; }
+
+	# Find all symlinks in the directory and process them
+	find "$base" -type l -print0 | while IFS= read -r -d '' link; do
+		local target abs_target
+
+		target=$(readlink "$link") || continue
+		case $target in
+			/*) abs_target=$target ;;
+			 *) abs_target=$(realpath -m -- "$(dirname "$link")/$target") ;;
+		esac
+
+		if [ ! -e "$abs_target" ]; then
+			verbose_echo "symlink from '${link#$base/}' to '$target' is missing"
+			continue
+		fi
+
+		verbose_echo "resolving symlink '${link#$base/}'"
+
+		eval "rm -f -- \"\$link\" $stdout"
+
+		if [ -d "$abs_target" ]; then
+			eval "mkdir -p -- \"\$link\" $stdout"
+			eval "cp -a -- \"\$abs_target\"/. \"\$link\"/ $stdout"
+		else
+			eval "cp -a -- \"\$abs_target\" \"\$link\" $stdout"
+		fi
+	done
+}
+
 function get_remote_repo_tag {
 	local repo_url="$1"
 

@@ -195,10 +195,12 @@ function remove_dir {
 	fi
 }
 
-# Copy all files from source to destination, including hidden files
+# Copy all files from source to destination, including hidden files and
+# optionally resolve symlinks
 function copy_all_files {
     local source_dir="$1"
     local dest_dir="$2"
+	local resolve_symlinks="${3:-0}"
     local stdout=">&2"
     
     if [[ $VERBOSE_MODE -eq 0 ]]; then
@@ -208,8 +210,14 @@ function copy_all_files {
     # Create destination directory if it doesn't exist
 	make_dir "$dest_dir"
     
+    # Build cp options
+    local cp_opts="-r"
+    if [[ "$resolve_symlinks" -eq 1 ]]; then
+        cp_opts="-rL"
+    fi
+    
     # Create command with proper redirection
-    local cmd="cp -r \"$source_dir\"/. \"$dest_dir\" $stdout"
+    local cmd="cp $cp_opts \"$source_dir\"/. \"$dest_dir\" $stdout"
     
     # Execute the command
     eval "$cmd"

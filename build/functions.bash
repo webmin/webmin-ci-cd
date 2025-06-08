@@ -527,6 +527,7 @@ function make_packages_repos {
 function clone_module_repo {
 	local module="$1"
 	local target="$2"
+	local core_module="$3"
 
 	# Resolve module info mapping
 	local names repo_name dir_name ver_pref deps_repo sub_dir 
@@ -534,9 +535,17 @@ function clone_module_repo {
 	names=$(resolve_module_info "$module")
 	read -r repo_name dir_name ver_pref deps_repo sub_dir lic_id <<< "$names"
 
-	# Check if running locally modified version for debugging
-	if [[ -f "$dir_name/.nodelete" ]]; then
+	# Use the module if it's a core module with a valid directory or
+	# if it's marked as non-deletable (e.g. for local debugging)
+	if [[ ( "$core_module" -eq 1 && -d "$dir_name" ) ||
+	       -f "$dir_name/.nodelete" ]]; then
 		printf "0,%s,%s,%s" "$dir_name" "$ver_pref" "$lic_id"
+		return
+	fi
+
+	# If core module built was requested but it doesn't exist, return error
+	if [[ "$core_module" -eq 1 && ! -d "$dir_name" ]]; then
+		printf "1,%s,%s,%s" "$dir_name" "$ver_pref" "$lic_id"
 		return
 	fi
 
@@ -1556,4 +1565,165 @@ function parse_debian_control() {
 # Function to create needed symlinks for the build
 function create_symlinks {
 	ln -fs "/usr/bin/perl" "/usr/local/bin/perl"
+}
+
+# Function to build extra modules that are not part of the core product
+function build_core_modules {
+	local product="$1"
+	local build_script_type="$2"
+	local build_type="$3"
+	
+	# Set build mode
+	local build_mode="--release"
+	if [ "$TESTING_BUILD" -eq 1 ]; then
+		build_mode="--testing"
+	fi
+
+	# Set verbose mode
+	local verbose_mode=""
+	if [ "$VERBOSE_MODE" -eq 1 ]; then
+		verbose_mode="--verbose"
+	fi
+
+	# Build all modules and don't check for the last Git commit
+	local git_check=1
+	if get_flag --no-commit-check >/dev/null; then
+		git_check=0
+	fi
+
+	# Skip modules
+	local skip_modules=("format" "bsdexports" "hpuxexports" "sgiexports" "zones" "rbac" "bsdfdisk")
+
+	# Function to check if module should be skipped
+	should_skip() {
+		local module="$1"
+		for skip in "${skip_modules[@]}"; do
+			if [[ "$module" == "$skip" ]]; then
+				return 0
+			fi
+		done
+		return 1
+	}
+
+	# Cleanup function to restore original state
+	cleanup_build() {
+		local failed_module=${1-}
+		
+		# Remove the failed module directory if provided
+		if [[ -n $failed_module && -d "$ROOT_DIR/$failed_module" ]]; then
+			eval "remove_dir \"$ROOT_DIR/$failed_module\" $VERBOSITY_LEVEL"
+		fi
+		
+		# Restore the original directory structure (move hidden back to visible)
+		if [[ -d $hidden_dir && ! -d $visible_dir ]]; then
+			eval "mv \"$hidden_dir\" \"$visible_dir\" $VERBOSITY_LEVEL"
+		fi
+	}
+
+	# Function to process modules for a specific product
+	local hidden_dir="$ROOT_DIR/.$product"
+	local visible_dir="$ROOT_DIR/$product"
+
+	# Check if the project has module list files
+	if [[ ! -f "$visible_dir/mod_full_list.txt" ]]; then
+		echo "product does not have module list files" >&2
+		return 2
+	fi
+	
+	if [[ ! -f "$visible_dir/mod_${build_type}_list.txt" ]]; then
+		cleanup_build
+		echo "'mod_${build_type}_list.txt' not found in '$visible_dir'" >&2
+		return 1
+	fi
+
+	# Resolve all symlinks in the original directory
+	resolve_symlinks "$visible_dir"
+	
+	# Temporarily rename visible directory to hidden to avoid potential
+	# conflict of the module with the product name
+	if [[ -d "$visible_dir" ]]; then
+		remove_dir "$hidden_dir"
+		local cmd="mv \"$visible_dir\" \"$hidden_dir\" $VERBOSITY_LEVEL"
+		if ! eval "$cmd"; then
+			echo "failed to rename '$visible_dir' to '$hidden_dir'" >&2
+			return 1
+		fi
+	fi
+	
+	# Get modules that are not in the given list compared to the full list
+	mapfile -t non_core_modules < <(comm -23 \
+		<(tr ' ' '\n' < "$hidden_dir/mod_full_list.txt" | sort -u) \
+		<(tr ' ' '\n' < "$hidden_dir/mod_${build_type}_list.txt" | sort -u))
+	
+	# Prepare each non-core module
+	local non_core_modules_processed=()
+	for module in "${non_core_modules[@]}"; do
+		# Skip if module is in skip list
+		if should_skip "$module"; then
+			continue
+		fi
+
+		# Skip if in nightly mode and last Git commit doesn't include changes to
+		# this module directory to avoid rebuilding unchanged modules (eco)
+		if [ "$git_check" -eq 1 ] && [ "$TESTING_BUILD" -eq 1 ] &&
+		   [ -d "$hidden_dir/.git" ]; then
+			# Skip as nothing in HEAD modifies this module directory
+			if git -C "$hidden_dir" diff-tree --quiet HEAD -- "$module/"; then
+				continue
+			fi
+		fi
+		
+		# Push to processed modules list
+		non_core_modules_processed+=("$module")
+
+		# Define source and target paths
+		source="$hidden_dir/$module"
+		target="$ROOT_DIR/$module"
+		
+		# Check if source directory exists
+		if [[ ! -d "$source" ]]; then
+			cleanup_build
+			echo "module '$module' not found in '$hidden_dir'" >&2
+			return 1
+		fi
+		
+		# Copy all files from source to target
+		if ! copy_all_files "$source" "$target"; then
+			cleanup_build "$module"
+			echo "failed to copy files from '$source' to '$target'" >&2
+			return 1
+		fi
+		
+		# Create symlink for Git to the new module directory
+		if [[ -d "$hidden_dir/.git" ]]; then
+			# Remove existing symlink/file if it exists
+			local cmd="rm -f \"$target/.git\" $VERBOSITY_LEVEL"
+			eval "$cmd"
+			
+			cmd="ln -s \"$hidden_dir/.git\" \"$target/\" $VERBOSITY_LEVEL"
+			if ! eval "$cmd"; then
+				cleanup_build "$module"
+				echo "failed to create symlink from '$hidden_dir/.git' to '$target/'" >&2
+				return 1
+			fi
+		fi
+	done
+	
+	# Build each non-included modules
+	for module in "${non_core_modules_processed[@]}"; do
+		local cmd
+		script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+		cd "$script_dir" || { echo "failed to change directory to '$script_dir'" >&2; return 1; }
+		cmd="./build-module-${build_script_type}.bash \"$module\" --build-license=BSD-3-Clause --build-type=\"$build_type\" $build_mode $verbose_mode --core-module --no-upload --no-clean"
+		build_output=$(eval "$cmd" 2>&1)
+		if [ $? -ne 0 ]; then
+			cleanup_build "$module"
+			echo "failed to build ${build_script_type^^} package for module '$module' : $build_output" >&2
+			return 1
+		fi
+	done
+	
+	# Clean up and done
+	cleanup_build
+	return 0
 }

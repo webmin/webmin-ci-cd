@@ -10,15 +10,12 @@
 function get_flag {
 	local flag=$1
 	shift
-	
-	# If we got exactly one argument and it contains spaces, 
-    # it might be a quoted string of multiple args
-    if [ $# -eq 1 ] && [[ "$1" =~ \  ]]; then
-        # Split it into an array (doesn't handle quoted args within)
-        read -ra args <<< "$1"
-        set -- "${args[@]}"
-    fi
 
+	# If no arguments provided, use original global ARGV variable
+	if [ $# -eq 0 ] && [ -n "$ARGV" ]; then
+		local IFS=' '
+		set -- $ARGV
+	fi
 	for arg in "$@"; do
 		case $arg in
 			"$flag")
@@ -34,6 +31,9 @@ function get_flag {
 
 	return 1  # not found
 }
+
+# Save global argvs
+export ARGV="$*"
 
 # Builder email
 export BUILDER_PACKAGE_NAME="${ENV__BUILDER_NAME:-webmin/webmin-ci-cd}"
@@ -61,7 +61,7 @@ export VERBOSE_MODE=0
 export VERBOSITY_LEVEL=' >/dev/null 2>&1 </dev/null'
 export VERBOSITY_LEVEL_TO_FILE='2> /dev/null'
 export VERBOSITY_LEVEL_WITH_INPUT=' >/dev/null 2>&1'
-if get_flag --verbose "$@" >/dev/null; then
+if get_flag --verbose >/dev/null; then
 	VERBOSE_MODE=1
 	VERBOSITY_LEVEL=''
 	VERBOSITY_LEVEL_TO_FILE=''
@@ -70,7 +70,7 @@ fi
 
 # Define testing build
 export TESTING_BUILD=0
-if get_flag --testing "$@" >/dev/null; then
+if get_flag --testing >/dev/null; then
 	TESTING_BUILD=1
 fi
 

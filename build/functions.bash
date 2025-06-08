@@ -254,11 +254,11 @@ function resolve_symlinks {
 		esac
 
 		if [ ! -e "$abs_target" ]; then
-			verbose_echo "symlink from '${link#$base/}' to '$target' is missing"
+			verbose_echo "symlink from '${link#"$base/"}' to '$target' is missing"
 			continue
 		fi
 
-		verbose_echo "resolving symlink '${link#$base/}'"
+		verbose_echo "resolving symlink '${link#"$base/"}'"
 
 		eval "rm -f -- \"\$link\" $stdout"
 

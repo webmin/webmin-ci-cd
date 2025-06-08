@@ -33,12 +33,6 @@ source ./bootstrap.bash || exit 1
 
 # Build product func
 function build {
-
-	local devel=0
-	if [ "$TESTING_BUILD" -eq 1 ]; then
-		devel=1
-	fi
-
 	# Always return back to root directory
 	cd "$ROOT_DIR" || exit 1
 
@@ -61,10 +55,11 @@ function build {
 	echo "        build start date: $date                                         "
 	echo "          package format: RPM                                           "
 	echo "                 product: $prod ($build_type)                           "
-	echo -n "    downloading packages: "
-	
+	printf "    downloading packages: "
+	flush_output
+
 	# Download products from repos
-	make_packages_repos "$root_prod" "$prod" "$devel"
+	make_packages_repos "$root_prod" "$prod"
 	local rs=$? # Store to print success or failure nicely later
 	if [ $rs -eq 0 ]; then
 		echo -e "✔"
@@ -89,13 +84,13 @@ function build {
 		rel=$3
 	fi
 	if [ -z "${ver-}" ]; then
-		if [ "$TESTING_BUILD" -eq 1 ]; then
+		if get_flag --testing; then
 			ver=$(get_product_version "$root_prod")
 		else
 			ver=$(get_current_repo_tag "$root_prod")
 		fi
 	fi
-	if [ "$TESTING_BUILD" -eq 1 ]; then
+	if get_flag --testing; then
 		# Testing version must always be x.x.<last_commit_date>
 		ver=$(echo "$ver" | cut -d. -f1,2)
 		ver="$ver.$date_version"

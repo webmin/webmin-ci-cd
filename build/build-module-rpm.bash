@@ -38,7 +38,6 @@ function build {
 		core_module=1
 	fi
 	local root_module
-	local devel=0
 
 	# Print build actual date
 	local date
@@ -55,7 +54,8 @@ function build {
 	echo "        build start date: $date                                         "
 	echo "          package format: RPM                                           "
 	echo "                  module: $module                                       "
-	echo -n "     downloading package: "
+	printf "     downloading package: "
+	flush_output
 
 	# Clone module repository and dependencies if any
 	IFS=$',' read -r rs module_dir edition_id lic_id <<< "$(clone_module_repo \
@@ -97,8 +97,7 @@ function build {
 		if [ -z "${ver-}" ]; then
 			ver=$(get_module_version "$root_module")
 		fi
-		if [ "$TESTING_BUILD" -eq 1 ]; then
-			devel=1
+		if get_flag --testing; then
 			# Testing version must always be x.x.<last_commit_date>, this will
 			# effectively remove the patch version from any module for testing
 			# builds
@@ -143,7 +142,7 @@ function build {
 		
 		# Clean language files in the package if testing build and no --no-clean
 		# flag given
-		if [ "$devel" -eq 1 ] && ! get_flag --no-clean; then
+		if get_flag --testing && ! get_flag --no-clean; then
 			echo "Cleaning language files .."
 			lcmd="$build_deps/language-manager --lib-path=$build_deps \
 				--mode=clean --yes $VERBOSITY_LEVEL_WITH_INPUT"

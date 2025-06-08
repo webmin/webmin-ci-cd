@@ -19,7 +19,6 @@ function get_flag {
 	for arg in "$@"; do
 		case $arg in
 			"$flag")
-				echo ""  # boolean flag, no value
 				return 0
 				;;
 			"$flag"=*)
@@ -57,29 +56,24 @@ export CLOUD_SIGN_BUILD_REPOS_CMD="${CLOUD__SIGN_BUILD_REPOS_CMD-}"
 export CLOUD_GH_TOKEN="${CLOUD__GH_TOKEN-}"
 
 # Define verbosity level
-export VERBOSE_MODE=0
-export VERBOSITY_LEVEL=' >/dev/null 2>&1 </dev/null'
-export VERBOSITY_LEVEL_TO_FILE='2> /dev/null'
-export VERBOSITY_LEVEL_WITH_INPUT=' >/dev/null 2>&1'
-if get_flag --verbose >/dev/null; then
-	VERBOSE_MODE=1
+if get_flag --verbose; then
 	VERBOSITY_LEVEL=''
 	VERBOSITY_LEVEL_TO_FILE=''
 	VERBOSITY_LEVEL_WITH_INPUT=''
+else
+	VERBOSITY_LEVEL=' >/dev/null 2>&1 </dev/null'
+	VERBOSITY_LEVEL_TO_FILE='2> /dev/null'
+	VERBOSITY_LEVEL_WITH_INPUT=' >/dev/null 2>&1'
 fi
-
-# Define testing build
-export TESTING_BUILD=0
-if get_flag --testing >/dev/null; then
-	TESTING_BUILD=1
-fi
+export VERBOSITY_LEVEL VERBOSITY_LEVEL_TO_FILE VERBOSITY_LEVEL_WITH_INPUT
 
 # Project links
 export GIT_BASE_URL="https://github.com"
-export GIT_AUTH_URL="$GIT_BASE_URL"
+GIT_AUTH_URL="$GIT_BASE_URL"
 if [ -n "$CLOUD_GH_TOKEN" ]; then
-	export GIT_AUTH_URL="https://oauth2:${CLOUD_GH_TOKEN}@github.com"
+	GIT_AUTH_URL="https://oauth2:${CLOUD_GH_TOKEN}@github.com"
 fi
+export GIT_AUTH_URL
 export WEBMIN_ORG_URL="$GIT_BASE_URL/webmin"
 export WEBMIN_REPO="$WEBMIN_ORG_URL/webmin"
 export VIRTUALMIN_ORG_AUTH_URL="$GIT_AUTH_URL/virtualmin"

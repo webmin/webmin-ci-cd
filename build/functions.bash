@@ -203,7 +203,7 @@ function copy_all_files {
 	local resolve_symlinks="${3:-0}"
     local stdout=">&2"
     
-    if [[ $VERBOSE_MODE -eq 0 ]]; then
+    if ! get_flag --verbose; then
         stdout="$VERBOSITY_LEVEL"
     fi
     
@@ -231,17 +231,17 @@ function copy_all_files {
 function resolve_symlinks {
 	local base=$1
 	if [ ! -d "$base" ]; then
-		[ "${VERBOSE_MODE:-0}" -eq 1 ] && \
+		get_flag --verbose && \
 			echo "cannot resolve symlinks as base '$base' not a dir" >&2
 		return 1
 	fi
 
 	local stdout=">&2"
-	if [ "${VERBOSE_MODE:-0}" -eq 0 ]; then
+	if ! get_flag --verbose; then
 		stdout="$VERBOSITY_LEVEL"
 	fi
 
-	verbose_echo() { [ "${VERBOSE_MODE:-0}" -eq 1 ] && echo "$@" >&2; }
+	verbose_echo() { get_flag --verbose && echo "$@" >&2; }
 
 	# Find all symlinks in the directory and process them
 	find "$base" -type l -print0 | while IFS= read -r -d '' link; do
@@ -426,7 +426,7 @@ generate_git_clone_cmd() {
 	local tag_cmd
 
 	# Check if building from tagged release
-	if [ "$TESTING_BUILD" -eq 0 ]; then
+	if ! get_flag --testing; then
 		# Get the tag for this repo
 		local tag
 		tag=$(get_remote_repo_tag "$repo_url")
@@ -444,7 +444,7 @@ generate_git_clone_cmd() {
 function clean_git_repo {
 	local repo_dir="$1"
 	local stdout=">&2"
-	if [[ $VERBOSE_MODE -eq 0 ]]; then
+	if ! get_flag --verbose; then
 		stdout="$VERBOSITY_LEVEL"
 	fi
 	local cmd="git clean -fd $stdout && git reset --hard $stdout"
@@ -464,7 +464,7 @@ function clean_git_repo {
 function make_packages_repos {
 	local root_prod="$1"
 	local prod="$2"
-	local devel="$3"
+	local devel=0; get_flag --testing && devel=1
 	local cmd
 	local reqrepo="webmin"
 	local legacyrepo="webadmin"
@@ -1577,13 +1577,13 @@ function build_core_modules {
 	
 	# Set build mode
 	local build_mode="--release"
-	if [ "$TESTING_BUILD" -eq 1 ]; then
+	if get_flag --testing; then
 		build_mode="--testing"
 	fi
 
 	# Set verbose mode
 	local verbose_mode=""
-	if [ "$VERBOSE_MODE" -eq 1 ]; then
+	if get_flag --verbose; then
 		verbose_mode="--verbose"
 	fi
 
@@ -1677,7 +1677,7 @@ function build_core_modules {
 
 		# Skip if in nightly mode and last Git commit doesn't include changes to
 		# this module directory to avoid rebuilding unchanged modules (eco)
-		if [ "$git_check" -eq 1 ] && [ "$TESTING_BUILD" -eq 1 ] &&
+		if get_flag --testing && [ "$git_check" -eq 1 ] &&
 		   [ -d "$hidden_dir/.git" ]; then
 			# Skip as nothing in HEAD modifies this module directory
 			if git -C "$hidden_dir" diff-tree --quiet HEAD -- "$module/"; then
@@ -1739,3 +1739,6 @@ function build_core_modules {
 	cleanup_build
 	return 0
 }
+
+# Flushes stdout early if not writing to a terminal (non-interactive)
+function flush_output { [[ -t 1 ]] || { read -r -t 0.01 -n 0; }; }

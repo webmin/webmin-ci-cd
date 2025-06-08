@@ -31,6 +31,11 @@ on:
         type: boolean
         default: true
         description: 'Skip internal check during build to force rebuilding all excluded modules'
+      legacy-rpm-names:
+        required: false
+        type: boolean
+        default: false
+        description: 'Whether to use old RPM prefixes like wbm-, wbt-, etc., in module package names'
     secrets:
       DEV_GPG_PH:
         required: true
@@ -97,14 +102,18 @@ jobs:
           # Set output mode
           [[ "$RUNNER_DEBUG" == "1" ]] && build_args+=(--verbose)
 
-          # Add no commit check if enabled
-          [ "${{ inputs.no-commit-check }}" = "true" ] && \
-            build_args+=(--no-commit-check)
-
           # Build excluded modules if it is not a full build
           if [ "${{ inputs.module-build-type }}" != "full" ]; then
               build_args+=(--build-type="${{ inputs.module-build-type }}")
           fi
+
+          # Add no commit check if enabled
+          [ "${{ inputs.no-commit-check }}" = "true" ] && \
+            build_args+=(--no-commit-check)
+
+          # Use legacy RPM names if enabled, otherwise use new
+          [ "${{ inputs.legacy-rpm-names }}" = "false" ] && \
+            build_args+=(--no-wbm-prefix)
 
           # Bootstrap to prepare the environment
           bash bootstrap.bash "${build_args[@]}"

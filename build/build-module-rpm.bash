@@ -155,11 +155,14 @@ function build {
 		# Build RPM package
 		echo "Building packages.."
 		modules_exclude=$(get_modules_exclude)
+		local prefix_params=''
+		if get_flag --no-wbm-prefix "$@">/dev/null; then
+			prefix_params='--prefix webmin- --obsolete-wbm'
+		fi
 		cmd="$build_deps/makemodulerpm.pl --mod-list $build_type \
-			${epoch-} --release \
-			$rel$edition_id --rpm-depends --rpm-recommends --licence '$license' \
-			--allow-overwrite --rpm-dir $ROOT_BUILD \
-			--target-dir $ROOT_REPOS $modules_exclude \
+			${epoch-} --release $rel$edition_id --rpm-depends --rpm-recommends \
+			$prefix_params --licence '$license' --allow-overwrite \
+			--rpm-dir $ROOT_BUILD --target-dir $ROOT_REPOS $modules_exclude \
 			--vendor '$BUILDER_PACKAGE_NAME' $module $ver $VERBOSITY_LEVEL"
 		eval "$cmd"
 		postcmd $?

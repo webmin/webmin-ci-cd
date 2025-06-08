@@ -656,8 +656,14 @@ function make_module_build_deps {
 function adjust_module_filename {
 	local repo_dir="$1"
 	local package_type="$2"
+
 	local failed=0
 	local temp_file
+
+	local wbm_prefix=0
+	if get_flag --no-wbm-prefix >/dev/null; then
+		wbm_prefix=1
+	fi
 
 	# Create a secure temporary file
 	temp_file=$(mktemp) || { echo "Failed to create temporary file"; return 1; }
@@ -677,9 +683,15 @@ function adjust_module_filename {
 		dir_name=$(dirname "$file")
 		local new_name
 
-		case "$package_type" in
-		rpm)
-			# Handle RPM logic
+		# Determine naming logic based on package type and flags
+		if [[ "$package_type" == "deb" ||
+		      ($package_type == "rpm" && $wbm_prefix -eq 1) ]]; then
+			if [[ "$base_name" != webmin-* ]]; then
+				new_name="webmin-$base_name"
+			else
+				continue
+			fi
+		elif [[ "$package_type" == "rpm" ]]; then
 			if [[ "$base_name" == webmin-* ]]; then
 				new_name="${base_name/webmin-/wbm-}"
 			elif [[ "$base_name" != wbm-* ]]; then
@@ -687,16 +699,7 @@ function adjust_module_filename {
 			else
 				continue
 			fi
-			;;
-		deb)
-			# Handle DEB logic
-			if [[ "$base_name" != webmin-* ]]; then
-				new_name="webmin-$base_name"
-			else
-				continue
-			fi
-			;;
-		esac
+		fi
 
 		# Perform rename and check for failure
 		if ! eval "mv \"$file\" \"$dir_name/$new_name\" \
@@ -1571,7 +1574,6 @@ function create_symlinks {
 function build_core_modules {
 	local product="$1"
 	local build_script_type="$2"
-	local build_type="$3"
 	
 	# Set build mode
 	local build_mode="--release"
@@ -1583,6 +1585,16 @@ function build_core_modules {
 	local verbose_mode=""
 	if [ "$VERBOSE_MODE" -eq 1 ]; then
 		verbose_mode="--verbose"
+	fi
+
+	# Set build type
+	local build_type
+	build_type=$(get_flag --build-type) || build_type='full'
+
+	# Set build prefix params
+	local prefix_params=''
+	if get_flag --no-wbm-prefix >/dev/null; then
+		prefix_params='--no-wbm-prefix'
 	fi
 
 	# Build all modules and don't check for the last Git commit
@@ -1632,7 +1644,7 @@ function build_core_modules {
 	
 	if [[ ! -f "$visible_dir/mod_${build_type}_list.txt" ]]; then
 		cleanup_build
-		echo "'mod_${build_type}_list.txt' not found in '$visible_dir'" >&2
+		echo "file 'mod_${build_type}_list.txt' not found in '$visible_dir'" >&2
 		return 1
 	fi
 
@@ -1714,7 +1726,7 @@ function build_core_modules {
 		local cmd
 		script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 		cd "$script_dir" || { echo "failed to change directory to '$script_dir'" >&2; return 1; }
-		cmd="./build-module-${build_script_type}.bash \"$module\" --build-license=BSD-3-Clause --build-type=\"$build_type\" $build_mode $verbose_mode --core-module --no-upload --no-clean"
+		cmd="./build-module-${build_script_type}.bash \"$module\" --build-license=BSD-3-Clause --build-type=\"$build_type\" $build_mode $verbose_mode $prefix_params --core-module --no-upload --no-clean"
 		build_output=$(eval "$cmd" 2>&1)
 		if [ $? -ne 0 ]; then
 			cleanup_build "$module"

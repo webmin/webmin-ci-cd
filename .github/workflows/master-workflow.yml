@@ -29,7 +29,7 @@ on:
       no-commit-check:
         required: false
         type: boolean
-        default: true
+        default: false
         description: 'Skip internal check during build to force rebuilding all excluded modules'
       legacy-rpm-names:
         required: false

@@ -29,7 +29,7 @@ on:
       no-commit-check:
         required: false
         type: boolean
-        default: false
+        default: true
         description: 'Skip internal check during build to force rebuilding all excluded modules'
     secrets:
       DEV_GPG_PH:

@@ -10,7 +10,7 @@ on:
       project-name:
         required: false
         type: string
-        description: 'Name of the project to build (e.g. webmin, usermin, virtualmin-gpl)'
+        description: 'Name of the project to build (e.g. webmin, usermin, virtualmin-gpl; if not specified, the default is always webmin and usermin)'
       is-release:
         required: false
         type: boolean
@@ -21,6 +21,16 @@ on:
         required: false
         type: boolean
         default: false
+      module-build-type:
+        required: false
+        type: string
+        default: 'core'
+        description: 'Build type for packages (e.g. full, core, minimal)'
+      no-commit-check:
+        required: false
+        type: boolean
+        default: false
+        description: 'Skip internal check during build to force rebuilding all excluded modules'
     secrets:
       DEV_GPG_PH:
         required: true
@@ -78,18 +88,33 @@ jobs:
           CLOUD__SIGN_BUILD_REPOS_CMD: ${{ secrets.DEV_SIGN_BUILD_REPOS_CMD }}
           CLOUD__GH_TOKEN: ${{ secrets.DEV_CHILD_GITHUB_TOKEN }}
         run: |-
-          build_args="--release"
+          # Set build mode
+          build_args=(--release)
           if [ "${{ inputs.is-release }}" = "false" ]; then
-            build_args="--testing"
+              build_args=(--testing)
           fi
-          if [[ "$RUNNER_DEBUG" == "1" ]]; then
-            build_args="--verbose $build_args"
+
+          # Set output mode
+          [[ "$RUNNER_DEBUG" == "1" ]] && build_args+=(--verbose)
+
+          # Add no commit check if enabled
+          [ "${{ inputs.no-commit-check }}" = "true" ] && \
+            build_args+=(--no-commit-check)
+
+          # Build excluded modules if it is not a full build
+          if [ "${{ inputs.module-build-type }}" != "full" ]; then
+              build_args+=(--build-type="${{ inputs.module-build-type }}")
           fi
-          bash bootstrap.bash $build_args
+
+          # Bootstrap to prepare the environment
+          bash bootstrap.bash "${build_args[@]}"
+
+          # Build the product
           if [ "${{ inputs.build-type }}" = "package" ]; then
-            bash build-product-deb.bash ${{ inputs.project-name }} $build_args --build-type=core
-            bash build-product-rpm.bash ${{ inputs.project-name }} $build_args --build-type=core
+            bash build-product-deb.bash ${{ inputs.project-name }} "${build_args[@]}"
+            bash build-product-rpm.bash ${{ inputs.project-name }} "${build_args[@]}"
+          # Build the module
           else
-            bash build-module-deb.bash ${{ inputs.project-name }} $build_args
-            bash build-module-rpm.bash ${{ inputs.project-name }} $build_args
+            bash build-module-deb.bash ${{ inputs.project-name }} "${build_args[@]}"
+            bash build-module-rpm.bash ${{ inputs.project-name }} "${build_args[@]}"
           fi

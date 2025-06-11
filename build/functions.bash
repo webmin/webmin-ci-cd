@@ -1523,45 +1523,83 @@ function build_native_package {
 #   directory:  Path containing .ctl files
 #   testing: If set, appends timestamp to version for testing builds
 #
-# Returns: Package metadata in the order of:
-#   package, version, depends, recommends, suggests, replaces
-function parse_debian_control() {
-	local ctl_dir="${1:?'Directory path required'}"
-	local testing="${2:-}"
+# Returns: Structured output with package metadata
+function parse_debian_control {
+	local dir=${1?Directory path required} testing=${2:-}
 
 	# Validate directory and check for .ctl files
-	[[ -d "$ctl_dir" ]] || { echo "Directory not found: $ctl_dir" >&2; return 1; }
+	[[ -d $dir ]] || { echo "Directory not found: $dir" >&2; return 1; }
+
 	shopt -s nullglob
-	local ctl_files=("$ctl_dir"/*.ctl)
-	[[ ${#ctl_files[@]} -gt 0 ]] || { echo "No .ctl files found" >&2; return 1; }
+	local files=("$dir"/*.ctl)
+	shopt -u nullglob
+	(( ${#files[@]} )) || { echo "No .ctl files found" >&2; return 1; }
 
-	for ctl_file in "${ctl_files[@]}"; do
-		# Initialize package metadata fields
-		local package version depends recommends suggests replaces
-		
-		while IFS= read -r line; do
-			case "${line,,}" in  # Case-insensitive matching
-				package:*)    package=${line#*: }    ;;
-				version:*)    
-					version=${line#*: }
-					version=${version%-*}            # Strip revision
+	for f in "${files[@]}"; do
+		local pkg_name="" pkg_version="" pkg_release="" pkg_summary=""
+		local desc="" in_desc=0
+		local dep_line="" rec_line="" sug_line="" rep_line="" homepage="" arch=""
+
+		while IFS= read -r line || [[ -n $line ]]; do
+			# Continue of multi-line description
+			if (( in_desc )); then
+				if [[ $line == [[:space:]]* ]]; then # keep leading space
+					desc+="$line"$'\n'
+					continue
+				else
+					in_desc=0
+				fi
+			fi
+			# Field value
+			[[ $line =~ ^([^[:space:]]+):[[:space:]]*(.*) ]] || continue
+			fld=${BASH_REMATCH[1],,}
+			val=${BASH_REMATCH[2]}
+			case $fld in
+				package)      pkg_name=$val ;;
+				version)
+					val=${val//[[:space:]]/}
+					if [[ $val == *-* ]]; then
+						pkg_version=${val%-*}
+						pkg_release=${val##*-}
+					else
+						pkg_version=$val
+						pkg_release=""
+					fi
 					;;
-				depends:*)    depends=${line#*: }    ;;
-				recommends:*) recommends=${line#*: } ;;
-				suggests:*)   suggests=${line#*: }   ;;
-				replaces:*)   replaces=${line#*: }   ;;
+				depends)      dep_line=$val ;;
+				recommends)   rec_line=$val ;;
+				suggests)     sug_line=$val ;;
+				replaces)     rep_line=$val ;;
+				homepage)     homepage=$val ;;
+				architecture) arch=$val ;;
+				description)
+					pkg_summary=$val
+					in_desc=1
+					desc=$val$'\n'
+					;;
 			esac
-		done < "$ctl_file"
+		done < "$f"
 
-		# Skip if required fields are missing
-		[[ -n "${package:-}" && -n "${version:-}" ]] || continue
+		# Need at least package and version
+		[[ $pkg_name && $pkg_version ]] || continue
 
-		# Append timestamp for testing builds
-		if [[ -n "$testing" && "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-			version="${version%.*}.$(date +%Y%m%d%H%M)"
+		# Optional timestamp for testing builds
+		if [[ $testing ]]; then
+			ts=$(date +%Y%m%d%H%M)
+			pkg_release=${pkg_release:+$pkg_release.}$ts
 		fi
 
-		printf '%s\n' "${package:-}" "${version:-}" "${depends:-}" "${recommends:-}" "${suggests:-}" "${replaces:-}"
+		# Return block
+		printf '%s\n' "PACKAGE_START"
+		printf 'name=%s\nversion=%s\nrelease=%s\n' \
+			"$pkg_name" "$pkg_version" "$pkg_release"
+		printf 'depends=%s\nrecommends=%s\nsuggests=%s\n' \
+			"$dep_line" "$rec_line"    "$sug_line"
+		printf 'replaces=%s\nhomepage=%s\narchitecture=%s\n'\
+			"$rep_line" "$homepage" "$arch"
+		printf 'summary=%s\n' "$pkg_summary"
+		printf 'description=%s\n' "$(printf %s "$desc" | base64 -w0)"
+		printf '%s\n' "PACKAGE_END"
 	done
 }
 

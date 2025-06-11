@@ -1583,19 +1583,24 @@ function parse_debian_control {
 		# Need at least package and version
 		[[ $pkg_name && $pkg_version ]] || continue
 
-		# Optional timestamp for testing builds
+		# Timestamp goes on version* only
 		if [[ $testing ]]; then
 			ts=$(date +%Y%m%d%H%M)
-			pkg_release=${pkg_release:+$pkg_release.}$ts
+			# Keep first two numeric components, add timestamp
+			if [[ $pkg_version =~ ^([0-9]+)\.([0-9]+) ]]; then
+				pkg_version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$ts"
+			else
+				pkg_version="${pkg_version}.$ts"
+			fi
 		fi
 
-		# Return block
+		# Output block
 		printf '%s\n' "PACKAGE_START"
 		printf 'name=%s\nversion=%s\nrelease=%s\n' \
 			"$pkg_name" "$pkg_version" "$pkg_release"
 		printf 'depends=%s\nrecommends=%s\nsuggests=%s\n' \
 			"$dep_line" "$rec_line"    "$sug_line"
-		printf 'replaces=%s\nhomepage=%s\narchitecture=%s\n'\
+		printf 'replaces=%s\nhomepage=%s\narchitecture=%s\n' \
 			"$rep_line" "$homepage" "$arch"
 		printf 'summary=%s\n' "$pkg_summary"
 		printf 'description=%s\n' "$(printf %s "$desc" | base64 -w0)"

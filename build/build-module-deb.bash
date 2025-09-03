@@ -61,8 +61,8 @@ function build {
 	flags=$(resolve_module_flags "$module")
 
 	# Clone module repository and dependencies if any
-	IFS=$',' read -r rs module_dir edition_id lic_id <<< "$(clone_module_repo \
-		"$module" "$MODULES_REPO_URL" "$core_module")"
+	IFS=, read -r rs module_dir edition_id lic_id last_commit_date <<< \
+		"$(clone_module_repo "$module" "$MODULES_REPO_URL" "$core_module")"
 	module="$module_dir"
 	root_module="$ROOT_DIR/$module"
 	if [ -n "${edition_id-}" ]; then
@@ -73,8 +73,8 @@ function build {
 	fi
 	if [ "$rs" -eq 0 ]; then
 		echo -e "✔"
-		# Git last commit date
-		last_commit_date=$(get_repo_commit_timestamp "$root_module")
+		# Git last commit date unless already set by dependent repo
+		last_commit_date=${last_commit_date:-"$(get_repo_commit_timestamp "$root_module")"}
 
 		# Handle other params
 		cd "$root_module" || exit 1

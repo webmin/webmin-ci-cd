@@ -539,13 +539,13 @@ function clone_module_repo {
 	# if it's marked as non-deletable (e.g. for local debugging)
 	if [[ ( "$core_module" -eq 1 && -d "$dir_name" ) ||
 	       -f "$dir_name/.nodelete" ]]; then
-		printf "0,%s,%s,%s" "$dir_name" "$ver_pref" "$lic_id"
+		printf "0,%s,%s,%s,%s" "$dir_name" "$ver_pref" "$lic_id" ""
 		return
 	fi
 
 	# If core module built was requested but it doesn't exist, return error
 	if [[ "$core_module" -eq 1 && ! -d "$dir_name" ]]; then
-		printf "1,%s,%s,%s" "$dir_name" "$ver_pref" "$lic_id"
+		printf "1,%s,%s,%s,%s" "$dir_name" "$ver_pref" "$lic_id" ""
 		return
 	fi
 
@@ -556,7 +556,7 @@ function clone_module_repo {
 	local actions_checkout_path="$HOME/work/$module/$module/actions-checkout"
 	if [[ -d "$actions_checkout_path" ]]; then
 		copy_all_files "$actions_checkout_path" "$dir_name"
-    	printf "%s,%s,%s,%s" "$?" "$dir_name" "$ver_pref" "$lic_id"
+    	printf "%s,%s,%s,%s,%s" "$?" "$dir_name" "$ver_pref" "$lic_id" ""
     	return
 	fi
 
@@ -565,8 +565,10 @@ function clone_module_repo {
 	local target_dir="$dir_name"
 
 	# Move directory if set
+	local sub_commit=0
 	if [[ -n "${sub_dir-}" ]]; then
 		target_dir="$sub_dir"
+		sub_commit=1
 	fi
 
 	# Clone dependency first if exists
@@ -579,12 +581,20 @@ function clone_module_repo {
 	cmd_clone_main=$(generate_git_clone_cmd "$target/$repo_name.git" "$target_dir")
 	eval "$cmd_clone_main" || rs+=($?)
 
+	# Get latest commit time in case of sub repo
+	local deps_time=''
+	if [[ "$sub_commit" -eq 1 ]]; then
+		deps_time=$(max \
+			"$(get_repo_commit_timestamp "$ROOT_DIR/$dir_name")" \
+			"$(get_repo_commit_timestamp "$ROOT_DIR/$sub_dir")")
+	fi
+
 	# Check for errors
 	err=0
 	[ -n "${rs[*]}" ] && for r in "${rs[@]}"; do [ "$r" -gt 0 ] && { err=1; break; }; done
 
 	# Return error code and new module directory name with version prefix
-	printf "%s,%s,%s,%s" "$err" "$dir_name" "$ver_pref" "$lic_id"
+	printf "%s,%s,%s,%s,%s" "$err" "$dir_name" "$ver_pref" "$lic_id" "$deps_time"
 }
 
 # Get required build scripts from Webmin repo

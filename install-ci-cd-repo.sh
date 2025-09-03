@@ -1,5 +1,5 @@
 #!/bin/sh
-# shellcheck disable=SC2317
+# shellcheck disable=SC2317 disable=SC2329
 # install-ci-cd-repo.sh (https://github.com/webmin/webmin-ci-cd)
 # Copyright Ilia Ross <ilia@webmin.dev>
 # Licensed under the MIT License
@@ -60,9 +60,7 @@ set_virtualmin_package_preferences() {
 	if [ -z "$fn_auth_user" ] || [ -z "$fn_auth_pass" ]; then
 		printf '%s\n' \
 			"deb:pin:webmin-virtual-server=1001=gpl" \
-			"deb:pin:webmin-virtualmin-wp-workbench=-32768" \
-			"rpm:exclude:*virtual-server*pro*" \
-			"rpm:exclude:*virtualmin-wp-workbench"
+			"rpm:exclude:*virtual-server*pro*"
 	fi
 	return 0
 }

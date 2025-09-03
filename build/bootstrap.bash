@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC1091
 # bootstrap.bash (https://github.com/webmin/webmin-ci-cd)
-# Version 1.4.0
+# Version 1.5.0
 # Copyright Ilia Ross <ilia@webmin.dev>
 # Licensed under the MIT License
 #

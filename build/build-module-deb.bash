@@ -57,6 +57,9 @@ function build {
 	printf "     downloading package: "
 	flush_output
 
+	# Get module build flags
+	flags=$(resolve_module_flags "$module")
+
 	# Clone module repository and dependencies if any
 	IFS=$',' read -r rs module_dir edition_id lic_id <<< "$(clone_module_repo \
 		"$module" "$MODULES_REPO_URL" "$core_module")"
@@ -134,7 +137,7 @@ function build {
 		modules_exclude=$(get_modules_exclude)
 		cmd="$build_deps/makemoduledeb.pl --mod-list $build_type \
 			--release $rel$edition_id \
-			--deb-depends --deb-recommends --licence '$license' \
+			--mod-depends --mod-recommends $flags --licence '$license' \
 			--email '$BUILDER_PACKAGE_NAME <$BUILDER_MODULE_EMAIL>' \
 			--allow-overwrite --target-dir $ROOT_REPOS $modules_exclude \
 			$module $ver $VERBOSITY_LEVEL"

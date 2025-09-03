@@ -23,6 +23,7 @@ bootstrap_scripts=(
 	"build-product-rpm.bash"
 	"rpm-modules-epoch.txt"
 	"modules-mapping.txt"
+	"modules-build-flags.txt"
 	"module-groups.txt"
 )
 

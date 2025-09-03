@@ -72,6 +72,8 @@ This is a quick overview of the key files involved in the build process, highlig
 
 - **modules-mapping.txt** — this text file provides a mapping between repository names and package names, addressing cases where the package name differs from the repository name. It also allows configuration of the package edition, license type, and other options, such as the package target directory.
 
+- **modules-build-flags.txt** — this text file contains build flags for each module, allowing customization of the build process on a per-module basis.
+
 - **rpm-modules-epoch.txt** — this text file lists the epoch values for each RPM package that needs one.
 
 - **install-ci-cd-repo.sh** — this script installs the unstable or prerelease repository on the system, making it simple for developers and users to access the latest packages.

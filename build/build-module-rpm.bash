@@ -57,6 +57,9 @@ function build {
 	printf "     downloading package: "
 	flush_output
 
+	# Get module build flags
+	flags=$(resolve_module_flags "$module")
+
 	# Clone module repository and dependencies if any
 	IFS=$',' read -r rs module_dir edition_id lic_id <<< "$(clone_module_repo \
 		"$module" "$MODULES_REPO_URL" "$core_module")"
@@ -159,8 +162,8 @@ function build {
 			prefix_params='--prefix webmin- --obsolete-wbm'
 		fi
 		cmd="$build_deps/makemodulerpm.pl --mod-list $build_type \
-			${epoch-} --release $rel$edition_id --rpm-depends --rpm-recommends \
-			$prefix_params --licence '$license' --allow-overwrite \
+			${epoch-} --release $rel$edition_id --mod-depends --mod-recommends \
+			$prefix_params $flags --licence '$license' --allow-overwrite \
 			--rpm-dir $ROOT_BUILD --target-dir $ROOT_REPOS $modules_exclude \
 			--vendor '$BUILDER_PACKAGE_NAME' $module $ver $VERBOSITY_LEVEL"
 		eval "$cmd"

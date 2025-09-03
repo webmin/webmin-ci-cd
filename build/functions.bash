@@ -730,8 +730,8 @@ function get_rpm_module_epoch {
 }
 
 # Gets module mappings and dependencies from file
-#  Format in file:
-#    module=dir_name,[ver_pref],[deps_repo],[sub_dir],[license]
+# Format in file:
+#   module=dir_name,[ver_pref],[deps_repo],[sub_dir],[license]
 function resolve_module_info {
 	local module_name="$1"
 	local mapping_file="${BASH_SOURCE[0]%/*}/modules-mapping.txt"
@@ -758,6 +758,36 @@ function resolve_module_info {
 
 	# Return original name with empty optional values
 	echo "$module_name $module_name"
+}
+
+# Gets module build flags from file
+# Format in file:
+#   module=--flag1 --flag2 ...
+function resolve_module_flags {
+	local module_name="$1"
+	local mapping_file="${BASH_SOURCE[0]%/*}/modules-build-flags.txt"
+	
+	# Check if mapping file exists
+	if [[ ! -f "$mapping_file" ]]; then
+		echo ""
+		return 0
+	fi
+	
+	# Read entire file content
+	local content
+	content=$(<"$mapping_file")
+	
+	# Process the mapping content
+	while IFS='=' read -r source_name target_info; do
+		if [[ "$source_name" == "$module_name" ]]; then
+			IFS=',' read -r flags <<< "$target_info"
+			echo "$flags"
+			return 0
+		fi
+	done <<< "$content"
+
+	# Return empty if no flags found
+	echo ""
 }
 
 # Function to get related modules

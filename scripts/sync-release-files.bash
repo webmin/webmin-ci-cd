@@ -7,6 +7,13 @@
 # Strict mode
 set -u -o pipefail
 
+# Check if github-release is installed
+if ! command -v github-release >/dev/null 2>&1; then
+	echo "Error: github-release CLI is not installed"
+	echo "You can install it from https://github.com/github-release/github-release"
+	exit 1
+fi
+
 # Project detection
 project="${1:-}"
 if [[ -z "${project}" ]]; then

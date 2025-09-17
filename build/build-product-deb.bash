@@ -176,9 +176,11 @@ function build {
 		exit_code=$?
 		[ "$old_e" ] && set -e
 		if [ $exit_code -eq 0 ]; then
-			echo ".. done"
+			echo ".. no modules changed"
 		elif [ $exit_code -eq 2 ]; then
 			echo ".. skipped : $output"
+		elif [ $exit_code -eq 3 ]; then
+			echo ".. done for : $output"
 		else
 			echo ".. failed : $output"
 		fi

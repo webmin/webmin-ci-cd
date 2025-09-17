@@ -437,7 +437,7 @@ generate_git_clone_cmd() {
 		fi
 	fi
 
-	echo "git clone --depth 1 ${tag_cmd-} $repo_url $target_dir $VERBOSITY_LEVEL"
+	echo "git clone --depth 2 ${tag_cmd-} $repo_url $target_dir $VERBOSITY_LEVEL"
 }
 
 # Clean git repo
@@ -1763,7 +1763,7 @@ function build_core_modules {
 		if get_flag --testing && [ "$git_check" -eq 1 ] &&
 		   [ -d "$hidden_dir/.git" ]; then
 			# Skip as nothing in HEAD modifies this module directory
-			if git -C "$hidden_dir" diff-tree --quiet HEAD -- "$module/"; then
+			if git -C "$hidden_dir" diff-tree --quiet HEAD -- "$module/" >/dev/null 2>&1; then
 				continue
 			fi
 		fi
@@ -1805,6 +1805,11 @@ function build_core_modules {
 	done
 	
 	# Build each non-included modules
+	local mods_updated=0
+	if [[ ${#non_core_modules_processed[@]} -gt 0 ]]; then
+		(IFS=' '; printf "%s\n" "${non_core_modules_processed[*]}")
+		mods_updated=3
+	fi
 	for module in "${non_core_modules_processed[@]}"; do
 		local cmd
 		script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -1820,7 +1825,7 @@ function build_core_modules {
 	
 	# Clean up and done
 	cleanup_build
-	return 0
+	return $mods_updated
 }
 
 # Flushes stdout early if not writing to a terminal (non-interactive)

@@ -165,6 +165,7 @@ function build {
 			${epoch-} --release $rel$edition_id --mod-depends --mod-recommends \
 			$prefix_params $flags --licence '$license' --allow-overwrite \
 			--rpm-dir $ROOT_BUILD --target-dir $ROOT_REPOS $modules_exclude \
+			--copy-tar \
 			--vendor '$BUILDER_PACKAGE_NAME' $module $ver $VERBOSITY_LEVEL"
 		eval "$cmd"
 		postcmd $?

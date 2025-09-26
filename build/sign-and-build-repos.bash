@@ -379,6 +379,49 @@ process_rpm_file() {
 	echo "${rpm_file}:${current_sum}" >> "$checksum_cache.$$"
 }
 
+function make_latest_links {
+	local root="$1"
+	cd "$root" || return 1
+	shopt -s nullglob
+
+	# The main script creates new -latest links for each package name. It
+	# already created the repo metadata, so the links we make now won't be in
+	# the APT/RPM metadata.
+
+	# List regular files matching pattern
+	list_sorted() {
+		local base="$1" pat="$2"
+		# outputs NUL-separated file names (relative)
+		find "$base" -maxdepth 1 -type f -name "$pat" -printf '%T@ %P\0' | sort -z -nr | cut -z -d' ' -f2-
+	}
+
+	# Use DEB name to latest linking
+	# name_version[_release]_arch.deb -> name-latest.deb
+	list_sorted "$root" '*.deb' | {
+		local -A seen_deb=()
+		local f name
+		while IFS= read -r -d '' f; do
+			name="${f%%_*}"                        # before first "_"
+			[[ -z $name || ${seen_deb[$name]+x} ]] && continue
+			ln -sfn "$f" "${name}-latest.deb"
+			seen_deb[$name]=1
+		done
+	}
+
+	# Use RPM name to latest linking
+	# name-version-release.arch.rpm -> name-latest.rpm
+	list_sorted "$root" '*.rpm' | {
+		local -A seen_rpm=()
+		local f pname
+		while IFS= read -r -d '' f; do
+			pname=$(rpm -qp --qf '%{NAME}\n' "$f" 2>/dev/null) || continue
+			[[ -z $pname || ${seen_rpm[$pname]+x} ]] && continue
+			ln -sfn "$f" "${pname}-latest.rpm"
+			seen_rpm[$pname]=1
+		done
+	}
+}
+
 main() {
 	cd "$home_dir" || exit 1
 

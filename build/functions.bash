@@ -873,6 +873,7 @@ function cleanup_packages {
 		filename=${filename%.*}  # Remove any extension
 		filename=${filename%_all}
 		filename=${filename%.noarch}
+		filename=${filename%.tar}
 		
 		# Extract edition if present
 		local edition

@@ -869,25 +869,26 @@ function cleanup_packages {
 
 	get_base_package() {
 		local filename="$1"
-		# Remove extension and release number
-		filename=${filename%.*}  # Remove any extension
-		filename=${filename%_all}
-		filename=${filename%.noarch}
-		filename=${filename%.tar}
-		
-		# Extract edition if present
-		local edition
-		if [[ $filename =~ [._-]([a-zA-Z0-9_]+)$ ]]; then
+		# Strip extension(s) and common suffixes
+		filename=${filename%.*}             # .deb / .rpm / .gz
+		filename=${filename%.tar}           # handle .tar.gz after the .gz strip
+		filename=${filename%_all}           # clear debian archs suffix
+		filename=${filename%_arm64}
+		filename=${filename%_amd64}
+		filename=${filename%_i386}
+		filename=${filename%.noarch}        # clear rpm archs suffix
+		filename=${filename%.aarch64}
+		filename=${filename%.x86_64}
+	
+		# Detect optional edition only if it starts with a letter (e.g., beta)
+		local edition=""
+		if [[ $filename =~ [._-]([A-Za-z][A-Za-z0-9_]*)$ ]]; then
 			edition="${BASH_REMATCH[1]}"
-			# Remove the detected edition from filename
-			filename=${filename%.*"${edition}"}
-			filename=${filename%-"${edition}"}
+			# Remove the matched separator and edition
+			filename=${filename%[._-]$edition}
 		fi
-		
-		filename=${filename%-[0-9]}
-		filename=${filename%-[0-9][0-9]}
-		
-		# Extract base package name
+	
+		# Base name before version or "latest"
 		local base
 		if [[ $filename =~ ^(.*)-[0-9]+(\.[0-9]+)* ]] || 
 		   [[ $filename =~ ^(.*)_[0-9]+(\.[0-9]+)* ]] || 

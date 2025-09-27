@@ -66,7 +66,7 @@ function cloud_upload {
 	fi
 
 	# Print list of files base names to upload
-	echo "Listing files for upload .."
+	echo "Listing built files for upload .."
 	local nofiles=0
 	if [[ -n ${1-} ]] && declare -p "$1" &>/dev/null; then
 	  local -n upl="$1"

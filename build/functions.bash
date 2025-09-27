@@ -888,42 +888,51 @@ function cleanup_packages {
 
 	get_base_package() {
 		local filename="$1"
-		# Strip extension(s) and common suffixes
-		filename=${filename%.*}             # .deb / .rpm / .gz
-		filename=${filename%.tar}           # handle .tar.gz after the .gz strip
-		filename=${filename%_all}           # clear debian archs suffix
-		filename=${filename%_arm64}
-		filename=${filename%_amd64}
-		filename=${filename%_i386}
-		filename=${filename%.noarch}        # clear rpm archs suffix
-		filename=${filename%.aarch64}
-		filename=${filename%.x86_64}
 	
-		# Detect optional edition only if it starts with a letter (e.g., beta)
+		# Strip extensions (.deb/.rpm and .tar.gz)
+		filename=${filename%.*}
+		filename=${filename%.tar}
+	
+		# Capture arch, remove from filename, but remember it to
+		# make sure we group by it
+		local arch=""
+		if [[ $filename =~ _(amd64|arm64|i386|armhf)$ ]]; then
+			arch="${BASH_REMATCH[1]}"
+			filename="${filename%_*}"
+		elif [[ $filename =~ \.(x86_64|aarch64|i386|noarch)$ ]]; then
+			arch="${BASH_REMATCH[1]}"
+			filename="${filename%.*}"
+		fi
+		
+		# Treat neutral as no arch bucket
+		[[ $arch == "all" || $arch == "noarch" ]] && arch=""
+	
+		# Optional edition at end (e.g., gpl/pro/beta)
 		local edition=""
 		if [[ $filename =~ [._-]([A-Za-z][A-Za-z0-9_]*)$ ]]; then
 			edition="${BASH_REMATCH[1]}"
-			# Remove the matched separator and edition
 			filename=${filename%[._-]$edition}
 		fi
 	
-		# Base name before version or "latest"
+		# Drop trailing release like -2
+		if [[ $filename =~ ^(.*)-([0-9]+)$ ]]; then
+			filename="${BASH_REMATCH[1]}"
+		fi
+	
+		# Base before version (has at least one dot)
 		local base
-		if [[ $filename =~ ^(.*)-[0-9]+(\.[0-9]+)* ]] || 
-		   [[ $filename =~ ^(.*)_[0-9]+(\.[0-9]+)* ]] || 
-		   [[ $filename =~ ^(.*)-latest ]] || 
-		   [[ $filename =~ ^(.*)_latest ]]; then
+		if [[ $filename =~ ^(.*)[-_][0-9]+\.[0-9]+ ]]; then
+			base="${BASH_REMATCH[1]}"
+		elif [[ $filename =~ ^(.*)[-_]latest ]]; then
 			base="${BASH_REMATCH[1]}"
 		else
 			base="$filename"
 		fi
-		
-		# Append edition to base name if present
-		if [ -n "${edition-}" ]; then
-			echo "${base}-${edition}"
-		else
-			echo "$base"
-		fi
+	
+		# build key: per edition, per arch
+		[[ -n "$edition" ]] && base="$base-$edition"
+		[[ -n "$arch" ]] && base="$base-$arch"
+		echo "$base"
 	}
 
 	get_version() {

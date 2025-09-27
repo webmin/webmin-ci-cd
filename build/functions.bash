@@ -65,6 +65,25 @@ function cloud_upload {
 		echo
 	fi
 
+	# Print list of files base names to upload
+	echo "Listing files for upload .."
+	local nofiles=0
+	if [[ -n ${1-} ]] && declare -p "$1" &>/dev/null; then
+	  local -n upl="$1"
+	  if ((${#upl[@]})); then
+		local u
+		for u in "${upl[@]}"; do
+		  [[ -n $u ]] && printf '   - %s\n' "$(basename -- "$u")"
+		done
+	  else
+		nofiles=1
+	  fi
+	else
+	  nofiles=1
+	fi
+	postcmd $nofiles
+	echo
+
 	# Setup SSH keys on the build machine and configure known hosts if any
 	local ssh_options ssh_warning_text
 	ssh_options=$(setup_ssh_known_hosts)

@@ -84,7 +84,7 @@ function build {
 		if [[ -n "${3-}" ]] && [[ "${3-}" != *"--"* ]]; then
 			rel=$3
 		else
-			rel=1
+			rel=${CLOUD_BUILD_RUN_ATTEMPT:-1}
 		fi
 		if [ -z "${ver-}" ]; then
 			ver=$(get_module_version "$root_module")

@@ -42,7 +42,7 @@ function build {
 	build_type=$(get_flag --build-type) || build_type='full'
 	local root_prod="$ROOT_DIR/$prod"
 	local ver
-	local rel=1
+	local rel
 
 	# Print build actual date
 	date=$(get_current_date)
@@ -82,6 +82,8 @@ function build {
 	fi
 	if [[ -n "${3-}" ]] && [[ "${3-}" != *"--"* ]]; then
 		rel=$3
+	else
+		rel=${CLOUD_BUILD_RUN_ATTEMPT:-1}
 	fi
 	if [ -z "${ver-}" ]; then
 		if get_flag --testing; then

@@ -43,7 +43,7 @@ function build {
 	local root_prod="$ROOT_DIR/$prod"
 	local root_apt="$root_prod/deb"
 	local ver
-	local rel=1
+	local rel
 	local relval
 
 	# Print build actual date
@@ -85,6 +85,11 @@ function build {
 	if [[ -n "${3-}" ]] && [[ "${3-}" != *"--"* ]]; then
 		rel=$3
 		relval="-$3"
+	else
+		rel=${CLOUD_BUILD_RUN_ATTEMPT:-1}
+		if [ "$rel" -gt 1 ]; then
+			relval="-$rel"
+		fi
 	fi
 	if [ -z "${ver-}" ]; then
 		if get_flag --testing; then

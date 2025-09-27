@@ -84,6 +84,7 @@ jobs:
 
       - name: Build and upload
         env:
+          CLOUD__BUILD_RUN_ATTEMPT: ${{ github.run_attempt }}
           CLOUD__GPG_PH: ${{ secrets.DEV_GPG_PH }}
           CLOUD__IP_ADDR: ${{ secrets.DEV_IP_ADDR }}
           CLOUD__IP_KNOWN_HOSTS: ${{ secrets.DEV_IP_KNOWN_HOSTS }}

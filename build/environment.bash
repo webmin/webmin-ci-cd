@@ -36,8 +36,8 @@ export ARGV="$*"
 
 # Builder email
 export BUILDER_PACKAGE_NAME="${ENV__BUILDER_NAME:-webmin/webmin-ci-cd}"
-export BUILDER_PACKAGE_EMAIL="${ENV__BUILDER_EMAIL:-ilia@webmin.dev}"
-export BUILDER_MODULE_EMAIL="${ENV__BUILDER_EMAIL:-ilia@virtualmin.dev}"
+export BUILDER_PACKAGE_EMAIL="${ENV__BUILDER_EMAIL:-developers@virtualmin.com}"
+export BUILDER_MODULE_EMAIL="${ENV__BUILDER_EMAIL:-developers@virtualmin.com}"
 
 # Set defaults
 export ROOT_DIR="${ENV__ROOT:-$HOME}"

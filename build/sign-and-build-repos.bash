@@ -384,7 +384,7 @@ function make_latest_links {
 	cd "$root" || return 1
 	shopt -s nullglob
 
-	# The main script creates new -latest links for each package name. It
+	# The main script creates new "*-latest" symlinks for each package name. It
 	# already created the repo metadata, so the links we make now won't be in
 	# the APT/RPM metadata.
 

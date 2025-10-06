@@ -19,6 +19,15 @@ readonly rundir="$(dirname "$(readlink -f "$0")")"
 readonly home_dir=$(printf '%q' "$1")
 readonly repo_target=$(printf '%q' "$2")
 
+# Acquire an exclusive flock keyed to signed repo to serialize concurrent runs
+# per target repo
+readonly lockfile="$home_dir/.lock"
+exec 200>"$lockfile"
+if ! flock -w 60 200; then
+  echo "Timed out as another signing process is still running in $home_dir" >&2
+  exit 1
+fi
+
 # Directory structure
 readonly rpm_repo="$home_dir/repodata"
 readonly apt_pool_dir_name="pool"

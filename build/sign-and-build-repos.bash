@@ -16,24 +16,24 @@ readonly apt_component="main"
 readonly rundir="$(dirname "$(readlink -f "$0")")"
 
 # Input parameters
-readonly home_dir=$(printf '%q' "$1")
+readonly repo_dir=$(printf '%q' "$1")
 readonly repo_target=$(printf '%q' "$2")
 
 # Acquire an exclusive flock keyed to signed repo to serialize concurrent runs
-# per target repo
-readonly lockfile="$home_dir/.lock"
+# per target directory
+readonly lockfile="$repo_dir/.lock"
 exec 200>"$lockfile"
-if ! flock -w 60 200; then
-  echo "Timed out as another signing process is still running in $home_dir" >&2
+if ! flock -w 120 200; then
+  echo "Error: Timed out as another signing process is still running in $repo_dir" >&2
   exit 1
 fi
 
 # Directory structure
-readonly rpm_repo="$home_dir/repodata"
+readonly rpm_repo="$repo_dir/repodata"
 readonly apt_pool_dir_name="pool"
 readonly apt_pool_component_dir="$apt_pool_dir_name/$apt_component"
-readonly apt_pool_dir="$home_dir/$apt_pool_component_dir"
-readonly apt_repo_dists="$home_dir/dists"
+readonly apt_pool_dir="$repo_dir/$apt_pool_component_dir"
+readonly apt_repo_dists="$repo_dir/dists"
 
 # Temp directory
 readonly temp_dir=$(mktemp -d)
@@ -102,7 +102,7 @@ generate_structured_apt_repo() {
 
 cleanup_old_builds() {
     # Skip cleanup if path contains "/rc." (like production has all releases)
-    if [[ "$home_dir" =~ /rc\. ]]; then
+    if [[ "$repo_dir" =~ /rc\. ]]; then
         return 0
     fi
 
@@ -115,13 +115,13 @@ cleanup_old_builds() {
         echo "Warning: cleanup_packages function not available" >&2
 		return 1
     else
-        cleanup_packages "$home_dir" 1 "rpm deb tar.gz"
+        cleanup_packages "$repo_dir" 1 "rpm deb tar.gz"
     fi
 }
 
 update_pool_symlinks() {
 	find "$apt_pool_dir" -type l -exec rm -f {} +
-	find "$home_dir" -type f -name "*.deb" -exec ln -s {} "$apt_pool_dir/" \;
+	find "$repo_dir" -type f -name "*.deb" -exec ln -s {} "$apt_pool_dir/" \;
 }
 
 filter_arch_metadata() {
@@ -202,7 +202,7 @@ create_release_files() {
 
 	# Detect build type based on package names
 	local build_type
-	build_type=$(detect_build_type "$home_dir")
+	build_type=$(detect_build_type "$repo_dir")
 	echo "Detected build type: $build_type"
 	local label suite
 	if [ "$build_type" = "testing" ]; then
@@ -353,9 +353,9 @@ handle_rpm_packages() {
 	# Create and sign repository
 	local -a groups
 	IFS=' ' read -r -a groups <<< "$(make_dnf_groups_param)"
-	createrepo_c "${groups[@]}" "$home_dir"
+	createrepo_c "${groups[@]}" "$repo_dir"
 	gpg --batch --yes --default-key "$gpg_key" --digest-algo SHA512 -abs -o \
-		"$home_dir/repodata/repomd.xml.asc" "$home_dir/repodata/repomd.xml"
+		"$repo_dir/repodata/repomd.xml.asc" "$repo_dir/repodata/repomd.xml"
 }
 
 process_rpm_file() {
@@ -424,14 +424,14 @@ function make_latest_links {
 }
 
 main() {
-	cd "$home_dir" || exit 1
+	cd "$repo_dir" || exit 1
 
 	# Load functions
 	load_helper_functions
 
 	# Call pre build tasks if available
 	if command -v pre_build >/dev/null 2>&1; then
-		pre_build "$home_dir" "$repo_target"
+		pre_build "$repo_dir" "$repo_target"
 	fi
 
 	# Generate structured APT repository
@@ -442,7 +442,7 @@ main() {
 
 	# Call post build tasks if available
 	if command -v post_build >/dev/null 2>&1; then
-		post_build "$home_dir" "$repo_target"
+		post_build "$repo_dir" "$repo_target"
 	fi
 }
 

@@ -68,6 +68,8 @@ This is a quick overview of the key files involved in the build process, highlig
 
 - **sign-repo.bash** — this script signs and builds repositories on a remote system. It's called at the final stage of the workflow, after all packages have been uploaded to the remote server. It's versatile and can be reused independently.
 
+- **sign-all-repos.bash** - this script allows for manually signing and building all repositories or a specific repository. It's useful for situations where you need to re-sign packages or update repository metadata without going through the entire build process again.
+
 - **module-groups.txt** — this text file defines groups of modules that need to be rebuilt if certain modules are changed. For instance, changes in the Virtualmin GPL module will trigger a rebuild of the Virtualmin Pro package.
 
 - **modules-mapping.txt** — this text file provides a mapping between repository names and package names, addressing cases where the package name differs from the repository name. It also allows configuration of the package edition, license type, and other options, such as the package target directory.

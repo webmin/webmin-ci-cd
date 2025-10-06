@@ -53,7 +53,6 @@ cloudmin_repos=(
 
 # Secret names
 secrets=(
-	"DEV_GPG_PH"
 	"DEV_IP_ADDR"
 	"DEV_IP_KNOWN_HOSTS"
 	"DEV_UPLOAD_SSH_USER"
@@ -92,10 +91,10 @@ Examples:
 		$0 -r webmin/webmin -r webmin/usermin
 
 	Update specific secrets for all repositories
-		$0 -s DEV_GPG_PH -s DEV_IP_ADDR
+		$0 -s DEV_IP_ADDR -s DEV_SSH_PRV_KEY
 
 	Update specific secrets for specific repositories
-		$0 -r webmin/webmin -r webmin/usermin -s DEV_GPG_PH -s DEV_IP_ADDR
+		$0 -r webmin/webmin -r webmin/usermin -s DEV_IP_ADDR -s DEV_SSH_PRV_KEY
 
 	Delete secrets for virtualmin/virtualmin-awstats
 		$0 -r virtualmin/virtualmin-awstats -d

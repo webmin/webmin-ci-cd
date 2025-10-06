@@ -13,11 +13,11 @@ set -euo pipefail
 readonly gpg_key="developers@webmin.com"
 readonly apt_architectures=("all" "arm64" "amd64" "i386")
 readonly apt_component="main"
+readonly rundir="$(dirname "$(readlink -f "$0")")"
 
 # Input parameters
-readonly gpg_ph=$(printf '%q' "$1")
-readonly home_dir=$(printf '%q' "$2")
-readonly repo_target=$(printf '%q' "$3")
+readonly home_dir=$(printf '%q' "$1")
+readonly repo_target=$(printf '%q' "$2")
 
 # Directory structure
 readonly rpm_repo="$home_dir/repodata"
@@ -31,7 +31,7 @@ readonly temp_dir=$(mktemp -d)
 trap 'rm -rf -- "$temp_dir"' EXIT INT TERM
 
 load_helper_functions() {
-	local functions_file="${BASH_SOURCE[0]%/*}/functions.bash"
+	local functions_file="$rundir/functions.bash"
 	if [ -f "$functions_file" ]; then
 		# shellcheck disable=SC1090
 		source "$functions_file"
@@ -230,14 +230,12 @@ sign_release_files() {
 
 	# Sign InRelease
 	rm -f "$dists_dir/InRelease"
-	echo "$gpg_ph" | gpg --batch --yes --passphrase-fd 0 --pinentry-mode loopback \
-		--default-key "$gpg_key" --digest-algo SHA512 \
+	gpg --batch --yes --default-key "$gpg_key" --digest-algo SHA512 \
 		--clearsign -o "$dists_dir/InRelease" "$release_file"
 }
 
 make_dnf_groups_param() {
-	local home="${HOME_BASE:-$HOME}"
-	local config_file="${home}/.config/dnf-groups/${repo_target}"
+	local config_file="${HOME}/.config/dnf-groups/${repo_target}"
 	local param=""
 
 	# Check if the config file exists
@@ -335,7 +333,7 @@ handle_rpm_packages() {
 	# Process RPM files
 	local rpm_repo_cache_update
 	for rpm_file in *.rpm; do
-		[ -f "$rpm_file" ] || continue
+		[ -f "$rpm_file" ] && [ ! -L "$rpm_file" ] || continue
 		process_rpm_file "$rpm_file" "$checksum_cache" rpm_repo_cache_update
 	done
 
@@ -347,8 +345,7 @@ handle_rpm_packages() {
 	local -a groups
 	IFS=' ' read -r -a groups <<< "$(make_dnf_groups_param)"
 	createrepo_c "${groups[@]}" "$home_dir"
-	echo "$gpg_ph" | gpg --batch --yes --passphrase-fd 0 --pinentry-mode loopback \
-		--default-key "$gpg_key" --digest-algo SHA512 -abs -o \
+	gpg --batch --yes --default-key "$gpg_key" --digest-algo SHA512 -abs -o \
 		"$home_dir/repodata/repomd.xml.asc" "$home_dir/repodata/repomd.xml"
 }
 
@@ -425,7 +422,7 @@ main() {
 
 	# Call pre build tasks if available
 	if command -v pre_build >/dev/null 2>&1; then
-		pre_build "$gpg_ph" "$home_dir" "$repo_target"
+		pre_build "$home_dir" "$repo_target"
 	fi
 
 	# Generate structured APT repository
@@ -436,7 +433,7 @@ main() {
 
 	# Call post build tasks if available
 	if command -v post_build >/dev/null 2>&1; then
-		post_build "$gpg_ph" "$home_dir" "$repo_target"
+		post_build "$home_dir" "$repo_target"
 	fi
 }
 

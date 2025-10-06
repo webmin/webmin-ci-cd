@@ -233,11 +233,6 @@ sign_release_files() {
 	echo "$gpg_ph" | gpg --batch --yes --passphrase-fd 0 --pinentry-mode loopback \
 		--default-key "$gpg_key" --digest-algo SHA512 \
 		--clearsign -o "$dists_dir/InRelease" "$release_file"
-
-	# Sign Release
-	rm -f "$dists_dir/Release.gpg"
-	echo "$gpg_ph" | gpg --batch --yes --passphrase-fd 0 --pinentry-mode loopback \
-		--default-key "$gpg_key" --digest-algo SHA512 -abs -o "$dists_dir/Release.gpg" "$release_file"
 }
 
 make_dnf_groups_param() {

@@ -94,6 +94,13 @@ function cloud_upload {
 	# Setup SSH keys on the build machine
 	setup_ssh
 
+	# If host is an IPv6 literal, bracket it and prefer IPv6
+	local host="$CLOUD_UPLOAD_SSH_HOST"
+	if [[ "$host" == *:*:* && "$host" != \[*\] ]]; then
+	  host="[$host]"
+	  ssh_options="${ssh_options:+$ssh_options }-6"
+	fi
+
 	# Delete files on remote if needed
 	if [ -n "${2-}" ]; then
 		echo "Deleting given files in $CLOUD_UPLOAD_SSH_HOST${ssh_warning_text-} .."
@@ -107,8 +114,8 @@ function cloud_upload {
 				local patterns="${remaining#* }"
 				local pre_pattern="${patterns%% *}"
 				local post_pattern="${patterns#* }"
-				local cmd1="ssh $ssh_options $CLOUD_UPLOAD_SSH_USER@"
-				cmd1+="$CLOUD_UPLOAD_SSH_HOST \"cd '$remote_dir' && find . -maxdepth 1 "
+				local cmd1="ssh $ssh_options $CLOUD_UPLOAD_SSH_USER@$host "
+				cmd1+="\"cd '$remote_dir' && find . -maxdepth 1 "
 				cmd1+="-name '${pre_pattern}${filename}${post_pattern}' -delete $VERBOSITY_LEVEL\""
 				eval "$cmd1"
 				if [ "$?" != "0" ]; then
@@ -128,7 +135,7 @@ function cloud_upload {
 		for u in "${arr_upl[@]}"; do
 			if [ -n "$u" ]; then
 				local cmd2="scp $ssh_options -r $u $CLOUD_UPLOAD_SSH_USER@"
-				cmd2+="$CLOUD_UPLOAD_SSH_HOST:$CLOUD_UPLOAD_SSH_DIR/ $VERBOSITY_LEVEL"
+				cmd2+="$host:$CLOUD_UPLOAD_SSH_DIR/ $VERBOSITY_LEVEL"
 				eval "$cmd2"
 				if [ "$?" != "0" ]; then
 					err=1
@@ -152,11 +159,19 @@ function cloud_sign_and_build_repos {
 	fi
 	# Setup SSH keys on the build machine
 	setup_ssh
+
+	# If host is an IPv6 literal, bracket it and prefer IPv6
+	local host="$CLOUD_UPLOAD_SSH_HOST"
+	if [[ "$host" == *:*:* && "$host" != \[*\] ]]; then
+		host="[$host]"
+		ssh_options="${ssh_options:+$ssh_options }-6"
+	fi
+
 	# Sign and update repos metadata directly on the remote server using the
 	# sign-repo.bash script (command set in CLOUD_SIGN_BUILD_REPOS_CMD)
 	echo "Signing and updating repos metadata in $CLOUD_UPLOAD_SSH_HOST${ssh_warning_text-} .."
 	local cmd1="ssh $ssh_options $CLOUD_UPLOAD_SSH_USER@"
-	cmd1+="$CLOUD_UPLOAD_SSH_HOST \"$CLOUD_SIGN_BUILD_REPOS_CMD \
+	cmd1+="$host \"$CLOUD_SIGN_BUILD_REPOS_CMD \
 	      '$CLOUD_UPLOAD_SSH_DIR' '$repo_type'\" \
 		$VERBOSITY_LEVEL"
 	eval "$cmd1"

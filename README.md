@@ -66,7 +66,7 @@ This is a quick overview of the key files involved in the build process, highlig
   - `webmin__UPLOAD_SSH_DIR`: Sets `UPLOAD_SSH_DIR` secret for `webmin` organization for all repositories listed in the `webmin_repos` variable
   - `virtualmin__IP_KNOWN_HOSTS`: Sets `IP_KNOWN_HOSTS` secret for `virtualmin` organization for all repositories listed in the `virtualmin_repos` variable
 
-- **sign-and-build-repos.bash** — this script signs and builds repositories on a remote system. It's called at the final stage of the workflow, after all packages have been uploaded to the remote server. It's versatile and can be reused independently.
+- **sign-repo.bash** — this script signs and builds repositories on a remote system. It's called at the final stage of the workflow, after all packages have been uploaded to the remote server. It's versatile and can be reused independently.
 
 - **module-groups.txt** — this text file defines groups of modules that need to be rebuilt if certain modules are changed. For instance, changes in the Virtualmin GPL module will trigger a rebuild of the Virtualmin Pro package.
 

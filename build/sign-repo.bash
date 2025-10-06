@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2155 disable=SC2034
-# sign-and-build-repos.bash (https://github.com/webmin/webmin-ci-cd)
+# sign-repo.bash (https://github.com/webmin/webmin-ci-cd)
 # Copyright Ilia Ross <ilia@webmin.dev>
 # Licensed under the MIT License
 #

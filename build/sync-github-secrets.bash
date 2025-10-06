@@ -148,7 +148,7 @@ function list_repo_secrets {
 	
 	# Get all secrets from the repository
 	local secrets_json
-	secrets_json=$(gh secret list --repo "$base_repo" --json name,updatedAt 2>/dev/null)
+	secrets_json=$(gh secret list --repo "$base_repo" --json name,updatedAt)
 	if [ $? -ne 0 ]; then
 		echo "  Error: Failed to list secrets for $base_repo"
 		return 1

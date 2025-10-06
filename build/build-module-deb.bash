@@ -164,15 +164,23 @@ function build {
 
 # Main
 if [ -n "${1-}" ] && [[ "'${1-}'" != *"--"* ]]; then
+	# Build specified module and any related modules
 	MODULES_REPO_URL="$VIRTUALMIN_ORG_AUTH_URL"
 	related_modules=$(get_related_modules "$1")
 	for mod in $related_modules; do
 		build "$mod" "${@:2}"
 	done
+
+	# Upload built packages to the cloud
 	if ! get_flag --no-upload >/dev/null; then
 		upload_list=("$ROOT_REPOS/"*)
 		cloud_upload upload_list
 		cloud_sign_and_build_repos virtualmin.dev
+		
+		# Purge uploaded packages to avoid re-uploading
+		echo "Purging uploaded packages .."
+		purge_dir "$ROOT_REPOS/"
+		postcmd $?
 	fi
 else
 	# Error otherwise

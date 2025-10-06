@@ -204,6 +204,13 @@ else
 fi
 
 # Upload built packages to the cloud
-upload_list=("$ROOT_REPOS/"*)
-cloud_upload upload_list
-cloud_sign_and_build_repos webmin.dev
+if ! get_flag --no-upload >/dev/null; then
+	upload_list=("$ROOT_REPOS/"*)
+	cloud_upload upload_list
+	cloud_sign_and_build_repos webmin.dev
+
+	# Purge uploaded packages to avoid re-uploading
+	echo "Purging uploaded packages .."
+	purge_dir "$ROOT_REPOS/"
+	postcmd $?
+fi

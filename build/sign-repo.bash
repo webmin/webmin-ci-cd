@@ -380,10 +380,17 @@ process_rpm_file() {
 	echo "${rpm_file}:${current_sum}" >> "$checksum_cache.$$"
 }
 
-function make_latest_links {
+function regenerate_package_symlinks() {
 	local root="$1"
 	cd "$root" || return 1
 	shopt -s nullglob
+
+	# Remove existing latest symlinks
+	find "$root" -maxdepth 1 -type l \( \
+			-name '*-latest*.deb' -o \
+			-name '*-latest*.rpm' -o \
+			-name '*-latest*.tar.gz' \
+		\) -delete 2>/dev/null || true
 
 	# The main script creates new "*-latest" symlinks for each package name. It
 	# already created the repo metadata, so the links we make now won't be in
@@ -393,34 +400,194 @@ function make_latest_links {
 	list_sorted() {
 		local base="$1" pat="$2"
 		# outputs NUL-separated file names (relative)
-		find "$base" -maxdepth 1 -type f -name "$pat" -printf '%T@ %P\0' | sort -z -nr | cut -z -d' ' -f2-
+		find "$base" -maxdepth 1 -type f -name "$pat" -printf '%T@ %P\0' | \
+			sort -z -nr | cut -z -d' ' -f2-
 	}
 
-	# Use DEB name to latest linking
-	# name_version[_release]_arch.deb -> name-latest.deb
-	list_sorted "$root" '*.deb' | {
-		local -A seen_deb=()
-		local f name
-		while IFS= read -r -d '' f; do
-			name="${f%%_*}"                        # before first "_"
-			[[ -z $name || ${seen_deb[$name]+x} ]] && continue
+	# Create name-latest[-gpl|-pro][-<arch>].deb  (skips -<arch> when arch=all)
+	# First, collect all deb packages and detect which have editions or
+	# multiple architectures
+	local -A deb_has_edition=()
+	local -A deb_first_arch=()
+	local -A deb_has_variants=()
+	
+	while IFS= read -r -d '' f; do
+		mapfile -t fields < <(dpkg-deb -f "$f" Package Architecture Version 2>/dev/null \
+							| sed -E 's/^[A-Za-z-]+:[[:space:]]*//') || continue
+		local name="${fields[0]}" arch="${fields[1]}" ver="${fields[2]}"
+		[[ -z $name ]] && continue
+		
+		# Check for editions
+		if [[ $ver =~ (^|[.+~-])(gpl|pro)($|[.+~-]) ]]; then
+			deb_has_edition["$name"]=1
+		fi
+		
+		# Track first non-"all" arch seen; flag if we see a different one
+		if [[ $arch != "all" ]]; then
+			if [[ -z ${deb_first_arch["$name"]+x} ]]; then
+				deb_first_arch["$name"]="$arch"
+			elif [[ ${deb_first_arch["$name"]} != "$arch" ]]; then
+				deb_has_variants["$name"]=1
+			fi
+		fi
+	done < <(list_sorted "." '*.deb')
+
+	# Now create links for deb packages
+	local -A seen_deb=()
+	local -A seen_generic=()
+	local f name arch ver edition key link_name
+	
+	while IFS= read -r -d '' f; do
+		mapfile -t fields < <(dpkg-deb -f "$f" Package Architecture Version 2>/dev/null \
+							| sed -E 's/^[A-Za-z-]+:[[:space:]]*//') || continue
+		name="${fields[0]}"; arch="${fields[1]}"; ver="${fields[2]}"
+		[[ -z $name ]] && continue
+
+		edition=""
+		if [[ $ver =~ (^|[.+~-])(gpl|pro)($|[.+~-]) ]]; then
+			edition="${BASH_REMATCH[2]}"
+		fi
+
+		# Only create generic link if package has no editions and no multiple
+		# architectures
+		if [[ -z ${seen_generic["$name"]+x} && \
+			  -z ${deb_has_edition["$name"]+x} && \
+			  -z ${deb_has_variants["$name"]+x} ]]; then
 			ln -sfn "$f" "${name}-latest.deb"
-			seen_deb[$name]=1
-		done
-	}
+			seen_generic["$name"]=1
+		fi
 
-	# Use RPM name to latest linking
-	# name-version-release.arch.rpm -> name-latest.rpm
-	list_sorted "$root" '*.rpm' | {
-		local -A seen_rpm=()
-		local f pname
-		while IFS= read -r -d '' f; do
-			pname=$(rpm -qp --qf '%{NAME}\n' "$f" 2>/dev/null) || continue
-			[[ -z $pname || ${seen_rpm[$pname]+x} ]] && continue
+		# Variant latest per (edition, arch)
+		key="${name}|${edition}|${arch}"
+		[[ ${seen_deb[$key]+x} ]] && continue
+
+		link_name="${name}-latest"
+		[[ -n $edition ]] && link_name+="-$edition"
+		[[ $arch != "all" ]] && link_name+="-$arch"
+		link_name+=".deb"
+
+		ln -sfn "$f" "$link_name"
+		seen_deb["$key"]=1
+	done < <(list_sorted "." '*.deb')
+
+	# Create name-latest[-gpl|-pro][-<arch>].rpm  (skips -<arch> when arch=noarch)
+	# First, collect all rpm packages and detect which have editions or multiple
+	# architectures
+	local -A rpm_has_edition=()
+	local -A rpm_first_arch=()
+	local -A rpm_has_variants=()
+	
+	while IFS= read -r -d '' f; do
+		local meta pname arch rel
+		meta=$(rpm -qp --qf '%{NAME}|%{ARCH}|%{RELEASE}\n' "$f" 2>/dev/null) || continue
+		IFS='|' read -r pname arch rel <<< "$meta"
+		[[ -z $pname ]] && continue
+		
+		# Check for editions
+		if [[ $rel =~ (^|[.])(gpl|pro)($|[.]) ]]; then
+			rpm_has_edition["$pname"]=1
+		fi
+		
+		# Track first non-"noarch" arch seen; flag if we see a different one
+		if [[ $arch != "noarch" ]]; then
+			if [[ -z ${rpm_first_arch["$pname"]+x} ]]; then
+				rpm_first_arch["$pname"]="$arch"
+			elif [[ ${rpm_first_arch["$pname"]} != "$arch" ]]; then
+				rpm_has_variants["$pname"]=1
+			fi
+		fi
+	done < <(list_sorted "." '*.rpm')
+
+	# Now create rpm links
+	local -A seen_rpm=()
+	local -A seen_generic=()
+	local f meta pname arch rel edition key link_name
+	
+	while IFS= read -r -d '' f; do
+		meta=$(rpm -qp --qf '%{NAME}|%{ARCH}|%{RELEASE}\n' "$f" 2>/dev/null) || continue
+		IFS='|' read -r pname arch rel <<< "$meta"
+		[[ -z $pname ]] && continue
+
+		edition=""
+		[[ $rel =~ (^|[.])(gpl|pro)($|[.]) ]] && edition="${BASH_REMATCH[2]}"
+
+		# Only create generic link if package has no editions and no multiple
+		# architectures
+		if [[ -z ${seen_generic["$pname"]+x} && \
+			  -z ${rpm_has_edition["$pname"]+x} && \
+			  -z ${rpm_has_variants["$pname"]+x} ]]; then
 			ln -sfn "$f" "${pname}-latest.rpm"
-			seen_rpm[$pname]=1
-		done
-	}
+			seen_generic["$pname"]=1
+		fi
+
+		# Variant latest per (edition,arch)
+		key="${pname}|${edition}|${arch}"
+		[[ ${seen_rpm[$key]+x} ]] && continue
+
+		link_name="${pname}-latest"
+		[[ -n $edition ]] && link_name+="-$edition"
+		[[ $arch != "noarch" ]] && link_name+="-$arch"
+		link_name+=".rpm"
+
+		ln -sfn "$f" "$link_name"
+		seen_rpm[$key]=1
+	done < <(list_sorted "." '*.rpm')
+
+	# Create name-latest[-gpl|-pro].tar.gz
+	# First, collect all tar.gz packages and detect which have editions
+	local -A tar_has_edition=()
+	
+	while IFS= read -r -d '' f; do
+		local base="${f%.tar.gz}"
+		if [[ $base =~ ^([a-zA-Z0-9_-]+)-[0-9] ]]; then
+			local name="${BASH_REMATCH[1]}"
+			if [[ $f =~ \.(gpl|pro)\. ]]; then
+				tar_has_edition["$name"]=1
+			fi
+		fi
+	done < <(list_sorted "." '*.tar.gz')
+
+	# Now create tar.gz links
+	local -A seen_tar=()
+	local -A seen_generic=()
+	local f name edition key link_name
+	
+	while IFS= read -r -d '' f; do
+		local base="${f%.tar.gz}"
+		
+		# Extract name (everything before first dash followed by a digit)
+		if [[ $base =~ ^([a-zA-Z0-9_-]+)-[0-9] ]]; then
+			name="${BASH_REMATCH[1]}"
+		else
+			continue
+		fi
+		
+		# Extract edition from filename (look for .gpl. or .pro. in filename)
+		edition=""
+		if [[ $f =~ \.gpl\. ]]; then
+			edition="gpl"
+		elif [[ $f =~ \.pro\. ]]; then
+			edition="pro"
+		fi
+
+		# Only create generic link if package has no editions
+		if [[ -z ${seen_generic["$name"]+x} && -z ${tar_has_edition["$name"]+x} ]]; then
+			ln -sfn "$f" "${name}-latest.tar.gz"
+			seen_generic["$name"]=1
+		fi
+		
+		# Variant latest per edition
+		key="${name}|${edition}"
+		[[ -z $name || ${seen_tar[$key]+x} ]] && continue
+		
+		# Build link name: name-latest[-edition].tar.gz
+		link_name="${name}-latest"
+		[[ -n $edition ]] && link_name+="-$edition"
+		link_name+=".tar.gz"
+		
+		ln -sfn "$f" "$link_name"
+		seen_tar[$key]=1
+	done < <(list_sorted "." '*.tar.gz')
 }
 
 main() {

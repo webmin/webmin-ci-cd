@@ -177,6 +177,7 @@ setup_repo() {
 					set -- \
 						--force \
 						--prerelease-host="$virtualmin_prerelease_host" \
+						--repo-path=/ \
 						--name=virtualmin \
 						--dist=virtualmin \
 						--description=Virtualmin \
@@ -195,6 +196,7 @@ setup_repo() {
 					set -- \
 						--force \
 						--unstable-host="$virtualmin_unstable_host" \
+						--repo-path=/ \
 						--name=virtualmin \
 						--dist=virtualmin \
 						--description=Virtualmin \
@@ -213,6 +215,7 @@ setup_repo() {
 					set -- \
 						--force \
 						--host="$virtualmin_stable_host" \
+						--repo-path=/ \
 						--key=virtualmin-8-key.pub.asc \
 						--key-name=Virtualmin 8 \
 						--key-suffix=virtualmin-8 \

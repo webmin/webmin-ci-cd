@@ -216,7 +216,7 @@ setup_repo() {
 						--repo-rpm-path=/ \
 						--repo-deb-path=/ \
 						--key=virtualmin-8-key.pub.asc \
-						--key-name=Virtualmin 8 \
+						--key-name="Virtualmin 8" \
 						--key-suffix=virtualmin-8 \
 						--name=virtualmin \
 						--dist=virtualmin \

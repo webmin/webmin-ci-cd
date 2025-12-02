@@ -214,6 +214,8 @@ setup_repo() {
 						--force \
 						--host="$virtualmin_stable_host" \
 						--key=virtualmin-8-key.pub.asc \
+						--key-name=Virtualmin 8 \
+						--key-suffix=virtualmin-8 \
 						--name=virtualmin \
 						--dist=virtualmin \
 						--description=Virtualmin \

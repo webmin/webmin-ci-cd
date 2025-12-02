@@ -177,8 +177,6 @@ setup_repo() {
 					set -- \
 						--force \
 						--prerelease-host="$virtualmin_prerelease_host" \
-						--repo-rpm-path=/ \
-						--repo-deb-path=/ \
 						--name=virtualmin \
 						--dist=virtualmin \
 						--description=Virtualmin \
@@ -197,8 +195,6 @@ setup_repo() {
 					set -- \
 						--force \
 						--unstable-host="$virtualmin_unstable_host" \
-						--repo-rpm-path=/ \
-						--repo-deb-path=/ \
 						--name=virtualmin \
 						--dist=virtualmin \
 						--description=Virtualmin \

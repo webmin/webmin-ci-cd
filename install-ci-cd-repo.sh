@@ -9,6 +9,8 @@
 url="https://raw.githubusercontent.com/webmin/webmin/master/webmin-setup-repo.sh"
 virtualmin_license_file="/etc/virtualmin-license"
 cloudmin_license_file="/etc/server-manager-license"
+# virtualmin_stable_host="download.virtualmin.com"
+virtualmin_stable_host="rc.software.virtualmin.dev" # tmp for testing
 virtualmin_unstable_host="software.virtualmin.dev"
 virtualmin_prerelease_host="rc.software.virtualmin.dev"
 cloudmin_unstable_host="software.cloudmin.dev"
@@ -164,6 +166,7 @@ setup_repo() {
 	case "$product" in
 		webmin)
 			case "$type" in
+			    stable)     sh "$script" "--stable" "--force" ;;
 				prerelease) sh "$script" "--prerelease" "--force" ;;
 				unstable)   sh "$script" "--unstable" "--force" ;;
 			esac
@@ -198,6 +201,25 @@ setup_repo() {
 						--component=main \
 						--check-binary=0 \
 						--unstable
+					
+					[ -n "$auth_user" ] && set -- "$@" "$auth_user"
+					[ -n "$auth_pass" ] && set -- "$@" "$auth_pass"
+					[ -n "$pkg_prefs" ] && set -- "$@" "--pkg-prefs=$pkg_prefs"
+					[ -n "$repo_prefs" ] && set -- "$@" "--repo-prefs=$repo_prefs"
+					
+					sh "$script" "$@"
+					;;
+				stable)
+					set -- \
+						--force \
+						--host="$virtualmin_stable_host" \
+						--key=virtualmin-8-key.pub.asc \
+						--name=virtualmin \
+						--dist=virtualmin \
+						--description=Virtualmin \
+						--component=main \
+						--check-binary=0 \
+						--stable
 					
 					[ -n "$auth_user" ] && set -- "$@" "$auth_user"
 					[ -n "$auth_pass" ] && set -- "$@" "$auth_pass"
@@ -260,7 +282,7 @@ usage() {
 		echo "Error: $1"
 		echo
 	fi
-	echo "Usage: ${0##*/} <webmin|virtualmin|cloudmin> <prerelease|unstable>"
+	echo "Usage: ${0##*/} <webmin|virtualmin|cloudmin> <stable|prerelease|unstable>"
 	exit "${2:-1}"
 }
 
@@ -287,7 +309,7 @@ main() {
 	esac
 	
 	case "$repo_type" in
-		prerelease|unstable) ;;
+		stable|prerelease|unstable) ;;
 		*) usage "Invalid repository type" ;;
 	esac
 	

@@ -218,7 +218,7 @@ setup_repo() {
 						--key="virtualmin-developers-2025-rsa.pub.asc virtualmin-developers-2026-rsa.pub.asc" \
 						--key-server=https://keyserve.virtualmin.com \
 						--key-name="Virtualmin 8" \
-						--key-suffix=virtualmin-8 \
+						--key-suffix=virtualmin-developers \
 						--name=virtualmin \
 						--dist=virtualmin \
 						--description=Virtualmin \

@@ -9,7 +9,8 @@
 url="https://raw.githubusercontent.com/webmin/webmin/master/webmin-setup-repo.sh"
 virtualmin_license_file="/etc/virtualmin-license"
 cloudmin_license_file="/etc/server-manager-license"
-virtualmin_stable_host="download.virtualmin.com"
+# virtualmin_stable_host="download.virtualmin.com"
+virtualmin_stable_host="rc.software.virtualmin.dev" # tmp for testing
 virtualmin_unstable_host="software.virtualmin.dev"
 virtualmin_prerelease_host="rc.software.virtualmin.dev"
 cloudmin_unstable_host="software.cloudmin.dev"

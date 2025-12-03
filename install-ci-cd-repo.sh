@@ -215,7 +215,7 @@ setup_repo() {
 						--host="$virtualmin_stable_host" \
 						--repo-rpm-path=/ \
 						--repo-deb-path=/ \
-						--key=virtualmin-8-key.pub.asc \
+						--key=virtualmin-developers-2025-rsa.pub.asc virtualmin-developers-2026-rsa.pub.asc \
 						--key-server=https://keyserve.virtualmin.com \
 						--key-name="Virtualmin 8" \
 						--key-suffix=virtualmin-8 \

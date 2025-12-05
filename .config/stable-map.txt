@@ -1,0 +1,1 @@
+# Format: /rc/path=/stable/path:repo_label:gpg_email

@@ -10,7 +10,7 @@
 set -euo pipefail
 
 # Constants
-readonly gpg_key="developers@webmin.com"
+readonly gpg_key=${GPG_KEY:-developers@webmin.com}
 readonly apt_architectures=("all" "arm64" "amd64" "i386")
 readonly apt_component="main"
 readonly rundir="$(dirname "$(readlink -f "$0")")"
@@ -18,6 +18,7 @@ readonly rundir="$(dirname "$(readlink -f "$0")")"
 # Input parameters
 readonly repo_dir=$(printf '%q' "$1")
 readonly repo_target=$(printf '%q' "$2")
+readonly promote_stable="${3-}"
 
 # Acquire an exclusive flock keyed to signed repo to serialize concurrent runs
 # per target directory
@@ -39,16 +40,16 @@ readonly apt_repo_dists="$repo_dir/dists"
 readonly temp_dir=$(mktemp -d)
 trap 'rm -rf -- "$temp_dir"' EXIT INT TERM
 
-load_helper_functions() {
-	local functions_file="$rundir/functions.bash"
-	if [ -f "$functions_file" ]; then
-		# shellcheck disable=SC1090
-		source "$functions_file"
-		echo "Sourced functions file from $functions_file"
-	else
-		echo "Warning: The additional functions.bash file was not found" >&2
-	fi
-}
+# Load functions file for additional helper functions (cleanup_packages)
+readonly functions_file="$rundir/functions.bash"
+if [ -f "$functions_file" ]; then
+	# shellcheck disable=SC1090
+	source "$functions_file"
+	echo "Sourced functions file from $functions_file"
+else
+	echo "Error: The additional functions.bash file was not found" >&2
+	exit 1
+fi
 
 setup_repo_variables() {
 	local -n out_origin=$1
@@ -61,8 +62,13 @@ setup_repo_variables() {
 	out_desc+="Authentic Theme"
 	out_codename="webmin"
 
-	# Override values for Virtualmin if needed
-	if [ "$repo_target" = "virtualmin.dev" ]; then
+	# Override values for other repositories
+	if [ "$repo_target" = "download.virtualmin.com" ]; then
+		out_origin="Virtualmin Releases"
+		out_desc="Stable builds of Virtualmin and its plugins, Webmin, Usermin, "
+		out_desc+="and related installation scripts"
+		out_codename="virtualmin"
+	elif [ "$repo_target" = "virtualmin.dev" ]; then
 		out_origin="Virtualmin Developers"
 		out_desc="Automatically generated development builds of Virtualmin, and "
 		out_desc+="its plugins"
@@ -590,16 +596,101 @@ function regenerate_package_symlinks() {
 	done < <(list_sorted "." '*.tar.gz')
 }
 
+# Promote RC repository to one or more stable repositories based on mapping file
+function promote_to_stable {
+	local rc_home=$1
+	local map_file="${HOME}/.config/stable-map.txt"
+
+	# Only promote rc.* dirs
+	if [[ "$rc_home" != *"/rc."* ]]; then
+		return 0
+	fi
+
+	if [[ ! -r "$map_file" ]]; then
+		echo "Cannot promote to stable because mapping file $map_file not found or not readable" >&2
+		return 0
+	fi
+
+	while IFS= read -r line; do
+		# Skip empty or comment lines
+		[[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+
+		# Format: /rc/path=/stable/path:repo_label:gpg_email
+		local src_path rhs
+		src_path=${line%%=*}
+		rhs=${line#*=}
+
+		# Only process entries whose source path matches the current rc_home
+		[[ "$src_path" != "$rc_home" ]] && continue
+
+		local home_stable repo_stable gpg_key_stable
+		IFS=':' read -r home_stable repo_stable gpg_key_stable <<< "$rhs"
+
+		if [[ -z "$home_stable" || -z "$repo_stable" ]]; then
+			echo "Warning: malformed stable mapping line in $map_file: $line" >&2
+			continue
+		fi
+
+		echo "Promoting pre-release repo:"
+		echo "  from: $rc_home"
+		echo "    to: $home_stable ($repo_stable)"
+		echo "   key: ${gpg_key_stable:-$gpg_key}"
+
+		# Symlink packages and scripts from current RC to stable
+		promote_files_to_stable "$rc_home" "$home_stable"
+
+		# Re-run signing repo on the stable repo using specified GPG key if any
+		if [[ -n "$gpg_key_stable" ]]; then
+			GPG_KEY="$gpg_key_stable" \
+				"$rundir/sign-repo.bash" "$home_stable" "$repo_stable"
+		else
+			"$rundir/sign-repo.bash" "$home_stable" "$repo_stable"
+		fi
+
+	done < "$map_file"
+}
+
+function promote_files_to_stable {
+	local src_home=$1
+	local dst_home=$2
+
+	mkdir -p "$dst_home"
+
+	shopt -s nullglob
+	local f base target
+	for f in "$src_home"/*.rpm \
+	         "$src_home"/*.deb \
+	         "$src_home"/*.tar.gz \
+	         "$src_home"/*.sh; do
+		[[ -e "$f" ]] || continue
+		# Only promote real files from RC, not symlinks
+		[[ -L "$f" ]] && continue
+
+		base=$(basename -- "$f")
+		target="$dst_home/$base"
+
+		# If target is a symlink, overwrite it, if it's a regular file, keep it
+		if [[ -L "$target" ]]; then
+			ln -sfn "$f" "$target"
+		elif [[ -e "$target" ]]; then
+			echo "Warning: $target exists and is not a symlink; leaving as-is" >&2
+		else
+			ln -s "$f" "$target"
+		fi
+	done
+	shopt -u nullglob
+}
+
+# Main script routine
 main() {
 	cd "$repo_dir" || exit 1
 
-	# Load functions
-	load_helper_functions
-
-	# Call pre build tasks if available
-	if command -v pre_build >/dev/null 2>&1; then
-		pre_build "$repo_dir" "$repo_target"
-	fi
+	# Remove .deb/.rpm/.tar.gz symlinks at repo root before signing
+	find "$repo_dir" -maxdepth 1 -type l \( \
+			-name '*-latest*.deb' -o \
+			-name '*-latest*.rpm' -o \
+			-name '*-latest*.tar.gz' \
+	\) -delete 2>/dev/null || true
 
 	# Generate structured APT repository
 	generate_structured_apt_repo
@@ -607,9 +698,12 @@ main() {
 	# Handle RPM packages
 	handle_rpm_packages
 
-	# Call post build tasks if available
-	if command -v post_build >/dev/null 2>&1; then
-		post_build "$repo_dir" "$repo_target"
+	# Re-create latest symlinks at repo root after signing
+	regenerate_package_symlinks "$repo_dir"
+
+	# Promote from RC repo to one or more stable repos if requested
+	if [[ -n "$promote_stable" ]]; then
+		promote_to_stable "$repo_dir"
 	fi
 }
 

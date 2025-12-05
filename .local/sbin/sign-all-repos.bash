@@ -1,0 +1,1 @@
+../../build/sign-all-repos.bash

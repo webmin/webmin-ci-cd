@@ -111,7 +111,7 @@ function build {
 			ver=$(echo "$ver" | cut -d. -f1,2)
 			ver="$ver.$last_commit_date"
 		fi
-		echo "                 version: ${epoch_str-}$ver-$rel$edition_id ($build_type) [$release_type]"
+		echo "                 version: ${epoch_str-}$ver-$rel$edition_id [$release_type]"
 	else
 		echo -e "✘"
 	fi

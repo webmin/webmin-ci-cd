@@ -614,6 +614,27 @@ function regenerate_package_symlinks() {
 	done < <(list_sorted "." '*.tar.gz')
 }
 
+# Copy RPM mtimes from RC to stable so HTML listing order matches RC
+function copy_rpm_mtime_from_rc {
+	local src_home=$1
+	local dst_home=$2
+
+	shopt -s nullglob
+	local f base src dst
+	for f in "$src_home"/*.rpm; do
+		[[ -f "$f" ]] || continue
+		base=${f##*/}
+		src="$f"
+		dst="$dst_home/$base"
+
+		# Only touch real files in stable and skip missing or symlinks
+		[[ -f "$dst" && ! -L "$dst" ]] || continue
+
+		touch -r "$src" "$dst"
+	done
+	shopt -u nullglob
+}
+
 # Promote RC repository to one or more stable repositories based on mapping file
 function promote_to_stable {
 	local rc_home=$1
@@ -664,6 +685,9 @@ function promote_to_stable {
 		else
 			"$rundir/sign-repo.bash" "$home_stable" "$repo_stable"
 		fi
+
+		# Now copy time stamps of RPMs from RC to stable
+		copy_rpm_mtime_from_rc "$rc_home" "$home_stable"
 
 	done < "$map_file"
 }

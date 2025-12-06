@@ -40,6 +40,10 @@ function build {
 	local prod=$1
 	# Define build type
 	build_type=$(get_flag --build-type) || build_type='full'
+	local release_type='stable'
+	if get_flag --prerelease; then
+		release_type='pre-release'
+	fi
 	local root_prod="$ROOT_DIR/$prod"
 	local ver
 	local rel
@@ -54,7 +58,7 @@ function build {
 	echo "************************************************************************"
 	echo "        build start date: $date                                         "
 	echo "          package format: RPM                                           "
-	echo "                 product: $prod ($build_type)                           "
+	echo "                 product: $prod ($build_type) [$release_type]           "
 	printf "    downloading packages: "
 	flush_output
 

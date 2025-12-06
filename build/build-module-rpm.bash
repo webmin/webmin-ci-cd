@@ -33,6 +33,10 @@ function build {
 	local module=$1
 	license=$(get_flag --build-license) || license='GPLv3'
 	build_type=$(get_flag --build-type) || build_type='full'
+	local release_type='stable'
+	if get_flag --prerelease; then
+		release_type='pre-release'
+	fi
 	local core_module=0
 	if get_flag --core-module >/dev/null; then
 		core_module=1
@@ -107,7 +111,7 @@ function build {
 			ver=$(echo "$ver" | cut -d. -f1,2)
 			ver="$ver.$last_commit_date"
 		fi
-		echo "                 version: ${epoch_str-}$ver-$rel$edition_id ($build_type)"
+		echo "                 version: ${epoch_str-}$ver-$rel$edition_id ($build_type) [$release_type]"
 	else
 		echo -e "✘"
 	fi

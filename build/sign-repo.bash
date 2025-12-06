@@ -127,7 +127,13 @@ cleanup_old_builds() {
 
 update_pool_symlinks() {
 	find "$apt_pool_dir" -type l -exec rm -f {} +
-	find "$repo_dir" -type f -name "*.deb" -exec ln -s {} "$apt_pool_dir/" \;
+	# Re-create symlinks for all .deb files and .deb symlinks under repo_dir
+    # but not from the pool itself, since we just cleared it
+    find "$repo_dir" \
+        \( -type f -o -type l \) \
+        -name "*.deb" \
+        ! -path "$apt_pool_dir/*" \
+        -exec ln -s {} "$apt_pool_dir/" \;
 }
 
 filter_arch_metadata() {

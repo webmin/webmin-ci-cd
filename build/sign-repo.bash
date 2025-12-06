@@ -373,16 +373,28 @@ process_rpm_file() {
 	cached_sum=$(grep "^${rpm_file}:" "$checksum_cache" | cut -d: -f2 || true)
 
 	if [ "$current_sum" != "$cached_sum" ]; then
-		if ! rpm --delsign "$rpm_file"; then
+		local rpm_gpg_name="$gpg_key"
+
+		# Use explicit RPM macros right here to avoid issues with different keys
+		local rpm_opts=(
+			--define "_signature gpg"
+			--define "__gpg /usr/bin/gpg"
+			--define "_gpg_name ${rpm_gpg_name}"
+		)
+
+		if ! rpm "${rpm_opts[@]}" --delsign "$rpm_file"; then
 			echo "Warning: Failed to delete signature from $rpm_file" >&2
 		fi
-		if ! rpm --addsign "$rpm_file"; then
-			echo "Error: Failed to sign $rpm_file" >&2
+
+		if ! rpm "${rpm_opts[@]}" --addsign "$rpm_file"; then
+			echo "Error: Failed to sign $rpm_file with key ${rpm_gpg_name}" >&2
 			exit 1
 		fi
+
 		current_sum=$(sha256sum "$rpm_file" | cut -d' ' -f1)
 		update_ref=1
 	fi
+
 	echo "${rpm_file}:${current_sum}" >> "$checksum_cache.$$"
 }
 
@@ -659,9 +671,9 @@ function promote_files_to_stable {
 	shopt -s nullglob
 	local f base target
 	for f in "$src_home"/*.rpm \
-	         "$src_home"/*.deb \
-	         "$src_home"/*.tar.gz \
-	         "$src_home"/*.sh; do
+			 "$src_home"/*.deb \
+			 "$src_home"/*.tar.gz \
+			 "$src_home"/*.sh; do
 		[[ -e "$f" ]] || continue
 		# Only promote real files from RC, not symlinks
 		[[ -L "$f" ]] && continue
@@ -669,13 +681,22 @@ function promote_files_to_stable {
 		base=$(basename -- "$f")
 		target="$dst_home/$base"
 
-		# If target is a symlink, overwrite it, if it's a regular file, keep it
-		if [[ -L "$target" ]]; then
-			ln -sfn "$f" "$target"
-		elif [[ -e "$target" ]]; then
-			echo "Warning: $target exists and is not a symlink; leaving as-is" >&2
+		if [[ $f == *.rpm ]]; then
+			# Copy RPMs, so stable can have its own signature
+			if [[ -e "$target" || -L "$target" ]]; then
+				cp -pf -- "$f" "$target"
+			else
+				cp -p -- "$f" "$target"
+			fi
 		else
-			ln -s "$f" "$target"
+			# Non-RPMs, keep symlink behavior
+			if [[ -L "$target" ]]; then
+				ln -sfn "$f" "$target"
+			elif [[ -e "$target" ]]; then
+				echo "Warning: $target exists and is not a symlink; leaving as-is" >&2
+			else
+				ln -s "$f" "$target"
+			fi
 		fi
 	done
 	shopt -u nullglob

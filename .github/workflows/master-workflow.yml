@@ -16,6 +16,11 @@ on:
         type: boolean
         default: false
         description: 'Whether this is a release or just a testing build'
+      is-prerelease:
+        required: false
+        type: boolean
+        default: false
+        description: 'Whether this is a final release or a pre-release build'
       is-checkout:
         description: 'Whether to checkout the code or not'
         required: false
@@ -95,6 +100,9 @@ jobs:
           build_args=(--release)
           if [ "${{ inputs.is-release }}" = "false" ]; then
               build_args=(--testing)
+          fi
+          if [ "${{ inputs.is-prerelease }}" = "true" ]; then
+              build_args+=(--prerelease)
           fi
 
           # Set output mode

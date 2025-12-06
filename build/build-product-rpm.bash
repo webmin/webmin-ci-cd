@@ -223,7 +223,7 @@ fi
 if ! get_flag --no-upload >/dev/null; then
 	upload_list=("$ROOT_REPOS/"*)
 	cloud_upload upload_list
-	cloud_sign_and_build_repos webmin.dev
+	cloud_sign_and_build_repos_auto webmin.dev
 
 	# Purge uploaded packages to avoid re-uploading
 	echo "Purging uploaded packages .."

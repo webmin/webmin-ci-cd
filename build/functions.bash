@@ -151,6 +151,8 @@ function cloud_upload {
 function cloud_sign_and_build_repos {
 	# shellcheck disable=SC2034
 	local repo_type="$1"
+	local promote_stable="${2-}"
+
 	# Setup SSH keys on the build machine and configure known hosts if any
 	local ssh_options ssh_warning_text
 	ssh_options=$(setup_ssh_known_hosts)
@@ -167,16 +169,32 @@ function cloud_sign_and_build_repos {
 		ssh_options="${ssh_options:+$ssh_options }-6"
 	fi
 
-	# Sign and update repos metadata directly on the remote server using the
-	# sign-repo.bash script (command set in CLOUD_SIGN_BUILD_REPOS_CMD)
+	# Sign and update repo metadata directly on the remote server using the
+	# sign-repo.bash script (command set in CLOUD_SIGN_BUILD_REPOS_CMD). Expect
+	# the upload directory and repo type as arguments, and optionally the
+	# promote argument.
 	echo "Signing and updating repos metadata in $CLOUD_UPLOAD_SSH_HOST${ssh_warning_text-} .."
 	local cmd1="ssh $ssh_options $CLOUD_UPLOAD_SSH_USER@"
 	cmd1+="$host \"$CLOUD_SIGN_BUILD_REPOS_CMD \
-	      '$CLOUD_UPLOAD_SSH_DIR' '$repo_type'\" \
+	      '$CLOUD_UPLOAD_SSH_DIR' '$repo_type' '$promote_stable'\" \
 		$VERBOSITY_LEVEL"
 	eval "$cmd1"
 	postcmd $?
 	echo
+}
+
+# Sign and update repos metadata in remote, promoting RC to stable for final
+# releases
+cloud_sign_and_build_repos_auto() {
+	local repo_type="$1"
+	local promote_arg=""
+
+	# Always sign RC; promote to stable only for final releases
+	if get_flag --release && ! get_flag --prerelease; then
+		promote_arg="promote"
+	fi
+
+	cloud_sign_and_build_repos "$repo_type" "$promote_arg"
 }
 
 # Post command func

@@ -929,7 +929,7 @@ function cleanup_packages {
 		# Capture arch, remove from filename, but remember it to
 		# make sure we group by it
 		local arch=""
-		if [[ $filename =~ _(amd64|arm64|i386|armhf)$ ]]; then
+		if [[ $filename =~ _(amd64|arm64|i386|)$ ]]; then
 			arch="${BASH_REMATCH[1]}"
 			filename="${filename%_*}"
 		elif [[ $filename =~ \.(x86_64|aarch64|i386|noarch)$ ]]; then

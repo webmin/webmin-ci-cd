@@ -635,6 +635,81 @@ function copy_rpm_mtime_from_rc {
 	shopt -u nullglob
 }
 
+# Remove stable RPMs that no longer exist in any mapped RC repo
+function prune_orphan_rpms_from_stable {
+	local stable_home=$1
+	local map_file=$2
+
+	[[ -r "$map_file" ]] || {
+		echo "Warning: cannot prune orphans; missing map file $map_file" >&2
+		return 0
+	}
+
+	# Collect all RC roots that map to this stable_home
+	local src_path rhs home_stable repo_stable gpg_key_stable
+	local -a rc_roots=()
+
+	while IFS= read -r line; do
+		# Skip empty or comment lines
+		[[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+
+		# Format: /rc/path=/stable/path:repo_label:gpg_email
+		src_path=${line%%=*}
+		rhs=${line#*=}
+		IFS=':' read -r home_stable repo_stable gpg_key_stable <<< "$rhs"
+
+		# Only care about entries pointing to this stable_home
+		[[ "$home_stable" != "$stable_home" ]] && continue
+
+		rc_roots+=("$src_path")
+	done < "$map_file"
+
+	# Nothing mapped? Then nothing to prune by this rule.
+	[[ ${#rc_roots[@]} -gt 0 ]] || return 0
+
+	# Build set of RPM basenames that still exist in ANY of the mapped RC roots
+	declare -A allowed_rpms=()
+	shopt -s nullglob
+	local root f base
+	for root in "${rc_roots[@]}"; do
+		[[ -d "$root" ]] || continue
+		for f in "$root"/*.rpm; do
+			[[ -e "$f" ]] || continue
+			base=$(basename -- "$f")
+			allowed_rpms["$base"]=1
+		done
+	done
+
+	# Now walk RPMs in stable_home and remove those not present in any RC root
+	for f in "$stable_home"/*.rpm; do
+		[[ -e "$f" ]] || continue
+		# Skip symlinks here, as those are handled by the broken-symlink cleaner
+		[[ -L "$f" ]] && continue
+
+		base=$(basename -- "$f")
+
+		if [[ -z ${allowed_rpms["$base"]+x} ]]; then
+			echo "Removing orphaned stable RPM (not present in any mapped RC): $f" >&2
+			rm -f -- "$f"
+		fi
+	done
+	shopt -u nullglob
+}
+
+# Remove broken symlinks to packages and scripts at stable repo root
+function cleanup_broken_root_symlinks {
+	local root=$1
+
+	# Remove only broken symlinks to packages and scripts at repo root, with
+	# -xtype l, i.e. symlink whose target cannot be resolved
+	find "$root" -maxdepth 1 -xtype l \( \
+		-name '*.rpm'    -o \
+		-name '*.deb'    -o \
+		-name '*.tar.gz' -o \
+		-name '*.sh' \
+	\) -print -delete 2>/dev/null || true
+}
+
 # Promote RC repository to one or more stable repositories based on mapping file
 function promote_to_stable {
 	local rc_home=$1
@@ -677,6 +752,12 @@ function promote_to_stable {
 
 		# Symlink packages and scripts from current RC to stable
 		promote_files_to_stable "$rc_home" "$home_stable"
+
+		# Remove stable RPMs that no longer exist in any mapped RC repo
+		prune_orphan_rpms_from_stable "$home_stable" "$map_file"
+
+		# Clean up broken symlinks at stable repo root
+		cleanup_broken_root_symlinks "$home_stable"
 
 		# Re-run signing repo on the stable repo using specified GPG key if any
 		if [[ -n "$gpg_key_stable" ]]; then

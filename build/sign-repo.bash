@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2155 disable=SC2034
+# shellcheck disable=SC2155 disable=SC2034 disable=SC2094
 # sign-repo.bash (https://github.com/webmin/webmin-ci-cd)
 # Copyright Ilia Ross <ilia@webmin.dev>
 # Licensed under the MIT License
@@ -635,6 +635,98 @@ function copy_rpm_mtime_from_rc {
 	shopt -u nullglob
 }
 
+# Adjust the core product package times so they sort just above their own
+# modules, but ignore other separate dedicated products
+function prioritize_core_packages {
+	local root="$1"
+
+	[ -d "$root" ] || return 0
+
+	(
+		cd "$root" || exit 0
+
+		# So unmatched globs just disappear
+		shopt -s nullglob
+
+		bump_family() {
+			local family="$1"
+			local core base version latest mtime file
+
+			# Core patterns for this family
+			for core in \
+				"${family}"-[0-9.]*.tar.gz \
+				"${family}"-[0-9.]*-[0-9]*.noarch.rpm \
+				"${family}"_[0-9.]*-[0-9]*_all.deb
+			do
+				[ -e "$core" ] || continue
+
+				base="${core##*/}"
+				version=""
+
+				# Extract version string (can be 2.610 or 2.610.202512051200)
+				case "$base" in
+					${family}-*.tar.gz)
+						# family-<version>.tar.gz
+						version="${base#"${family}"-}"
+						version="${version%.tar.gz}"
+						;;
+					${family}-*-*.noarch.rpm)
+						# family-<version>-<rel>.noarch.rpm
+						version="${base#"${family}"-}"
+						version="${version%%-*}"
+						;;
+					${family}_*-*_all.deb)
+						# family_<version>-<rel>_all.deb
+						version="${base#"${family}"_}"
+						version="${version%%-*}"
+						;;
+					*)
+						continue
+						;;
+				esac
+
+				[ -n "$version" ] || continue
+
+				latest=0
+
+				# Look only at modules of the same family+version, i.e.:
+				#   family-<module>-<version>-*.rpm
+				#   family-<module>-<version>.tar.gz
+				#   family-<module>_<version>-*_all.deb
+				for file in \
+					"${family}"-[a-z]*-"${version}"-*.rpm \
+					"${family}"-[a-z]*-"${version}".tar.gz \
+					"${family}"-[a-z]*_"${version}"-*_all.deb
+				do
+					[ -e "$file" ] || continue
+
+					# Skip separate packages for dedicated products like
+					# Virtualmin or Cloudmin
+					case "$file" in
+						${family}-virtualmin-*|${family}-virtual-server-*|${family}-cloudmin-*|${family}-server-manager-*)
+							# These should not be used to push the core time higher
+							continue
+							;;
+					esac
+
+					mtime=$(stat -L -c %Y -- "$file") || continue
+					(( mtime > latest )) && latest=$mtime
+				done
+
+				# No regular modules of this version, then nothing to do
+				(( latest == 0 )) && continue
+
+				# Make the core just one second newer than its latest module to
+				# put it right above its own modules
+				touch -d "@$((latest + 1))" -- "$core"
+			done
+		}
+
+		bump_family "webmin"
+		bump_family "usermin"
+	)
+}
+
 # Remove stable RPMs that no longer exist in any mapped RC repo
 function prune_orphan_rpms_from_stable {
 	local stable_home=$1
@@ -832,6 +924,10 @@ main() {
 
 	# Re-create latest symlinks at repo root after signing
 	regenerate_package_symlinks "$repo_dir"
+
+	# Prioritize the core product package time so it sorts just above its own
+	# modules
+	prioritize_core_packages "$repo_dir"
 
 	# Promote from RC repo to one or more stable repos if requested
 	if [[ -n "$promote_stable" ]]; then

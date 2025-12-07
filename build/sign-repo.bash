@@ -718,7 +718,7 @@ function prioritize_core_packages {
 
 				# Make the core just one second newer than its latest module to
 				# put it right above its own modules
-				touch -d "@$((latest + 1))" -- "$core"
+				touch -h -d "@$((latest + 1))" -- "$core"
 			done
 		}
 

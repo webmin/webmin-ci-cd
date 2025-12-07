@@ -51,7 +51,28 @@ else
 	exit 1
 fi
 
-setup_repo_variables() {
+# Cleanup testing repo packages if applicable
+function cleanup_testing_repo {
+    # Skip cleanup if a known pre-release repo path
+    if [[ "$repo_dir" =~ /rc\. ]]; then
+        return 0
+    fi
+
+    # Skip cleanup if not a known development repo
+    if ! [[ "$repo_target" =~ ^(webmin|usermin|virtualmin|cloudmin)\.dev$ ]]; then
+        return 0
+    fi
+
+    if ! command -v cleanup_packages >/dev/null; then
+        echo "Warning: cleanup_packages function not available" >&2
+		return 1
+    else
+        cleanup_packages "$repo_dir" 1 "rpm deb tar.gz"
+    fi
+}
+
+# Return APT repo metadata values based on target repo
+function get_apt_repo_metadata {
 	local -n out_origin=$1
 	local -n out_desc=$2
 	local -n out_codename=$3
@@ -81,9 +102,10 @@ setup_repo_variables() {
 	fi
 }
 
-generate_structured_apt_repo() {
+# Create APT repository structure and metadata
+function create_apt_repo {
 	local apt_origin description codename
-	setup_repo_variables apt_origin description codename
+	get_apt_repo_metadata apt_origin description codename
 
 	local apt_repo_dists_codename_dir="$apt_repo_dists/$codename"
 	local apt_repo_component_dir="$apt_repo_dists_codename_dir/$apt_component"
@@ -91,68 +113,43 @@ generate_structured_apt_repo() {
 	# Create directories
 	mkdir -p "$apt_pool_dir" "$apt_repo_component_dir"
 
-	# Clean previous builds for testing repos only
-	cleanup_old_builds
-
 	# Update symlinks
-	update_pool_symlinks
+	find "$apt_pool_dir" -type l -exec rm -f {} +
+		# Re-create symlinks for all .deb files and .deb symlinks under repo_dir
+		# but not from the pool itself, since we just cleared it
+		find "$repo_dir" \
+			\( -type f -o -type l \) \
+			-name "*.deb" \
+			! -path "$apt_pool_dir/*" \
+			-exec ln -s {} "$apt_pool_dir/" \;
 
 	# Generate metadata
 	local sha256_entries sha512_entries
-	generate_arch_metadata "$apt_repo_component_dir" sha256_entries sha512_entries
+	create_apt_arch_metadata "$apt_repo_component_dir" sha256_entries sha512_entries
 
 	# Create and sign release files
-	create_release_files "$apt_repo_dists_codename_dir" "$apt_origin" "$codename" \
+	create_apt_release_files "$apt_repo_dists_codename_dir" "$apt_origin" "$codename" \
 		"$description" "$sha256_entries" "$sha512_entries"
 }
 
-cleanup_old_builds() {
-    # Skip cleanup if path contains "/rc." (like production has all releases)
-    if [[ "$repo_dir" =~ /rc\. ]]; then
-        return 0
-    fi
-
-    # Skip cleanup if not a .dev repository
-    if ! [[ "$repo_target" =~ ^(webmin|usermin|virtualmin|cloudmin)\.dev$ ]]; then
-        return 0
-    fi
-
-    if ! command -v cleanup_packages >/dev/null; then
-        echo "Warning: cleanup_packages function not available" >&2
-		return 1
-    else
-        cleanup_packages "$repo_dir" 1 "rpm deb tar.gz"
-    fi
-}
-
-update_pool_symlinks() {
-	find "$apt_pool_dir" -type l -exec rm -f {} +
-	# Re-create symlinks for all .deb files and .deb symlinks under repo_dir
-    # but not from the pool itself, since we just cleared it
-    find "$repo_dir" \
-        \( -type f -o -type l \) \
-        -name "*.deb" \
-        ! -path "$apt_pool_dir/*" \
-        -exec ln -s {} "$apt_pool_dir/" \;
-}
-
-filter_arch_metadata() {
-    local arch=$1
-    
-    # For webmin.dev repository, we only need 'all' architecture
-    if [ "$repo_target" = "webmin.dev" ] && [ "$arch" != "all" ]; then
-        return 1
-    fi
-    
-    # Allow all default architectures for other repositories
-    return 0
-}
-
-generate_arch_metadata() {
+# Create APT architecture packages metadata
+function create_apt_arch_metadata {
 	local component_dir=$1
 	local -n sha256_ref=$2
 	local -n sha512_ref=$3
 
+	filter_arch_metadata() {
+		local arch=$1
+		
+		# For webmin.dev repository, we only need 'all' architecture
+		if [ "$repo_target" = "webmin.dev" ] && [ "$arch" != "all" ]; then
+			return 1
+		fi
+		
+		# Allow all default architectures for other repositories
+		return 0
+	}
+	
 	for arch in "${apt_architectures[@]}"; do
 		if ! filter_arch_metadata "$arch"; then
 			continue
@@ -176,54 +173,39 @@ generate_arch_metadata() {
 	done
 }
 
-detect_build_type() {
-	local dir=$1
-	local build_type="preview"  # default to preview
-
-	# Check RPM packages first
-	for file in "$dir"/*.rpm; do
-		if [ -f "$file" ]; then
-			local filename=${file##*/}
-			# Check for testing timestamp pattern in filename
-			if [[ "$filename" =~ [0-9]{12} ]]; then
-				build_type="testing"
-				break
-			fi
+# Detect build type for APT release
+function detect_apt_build_type {
+	local dists_dir=$1
+	local repo_dir=$2
+	
+	# Check if this is a preview/RC build based on directory path
+	if [[ "$repo_dir" == *"/rc."* ]]; then
+		echo "Preview Builds|preview"
+		return
+	fi
+	
+	# Check for testing timestamp pattern (YYYYMMDDHHMM) in RPM or DEB packages
+	for file in "$repo_dir"/*.{rpm,deb}; do
+		[ -f "$file" ] || continue
+		if [[ "${file##*/}" =~ [0-9]{12} ]]; then
+			echo "Testing Builds|testing"
+			return
 		fi
 	done
-
-	# If not found in RPMs, check DEBs
-	if [ "$build_type" = "preview" ]; then
-		for file in "$dir"/*.deb; do
-			if [ -f "$file" ]; then
-				local filename=${file##*/}
-				# Check for testing timestamp pattern in filename
-				if [[ "$filename" =~ [0-9]{12} ]]; then
-					build_type="testing"
-					break
-				fi
-			fi
-		done
-	fi
-	echo "$build_type"
+	
+	# Default to stable if no timestamp found
+	echo "Stable Builds|stable"
 }
 
-create_release_files() {
+# Create APT release file and sign it
+function create_apt_release_files {
 	local dists_dir=$1 origin=$2 codename=$3 description=$4 sha256_entries=$5 sha512_entries=$6
 	local release_file="$dists_dir/Release"
 
-	# Detect build type based on package names
-	local build_type
-	build_type=$(detect_build_type "$repo_dir")
-	echo "Detected build type: $build_type"
-	local label suite
-	if [ "$build_type" = "testing" ]; then
-		label="Testing Builds"
-		suite="testing"
-	else
-		label="Preview Builds"
-		suite="preview"
-	fi
+	# Detect build type
+	local build_info label suite
+	build_info=$(detect_apt_build_type "$dists_dir" "$repo_dir")
+	IFS='|' read -r label suite <<< "$build_info"
 
 	# Create Release file
 	cat > "$release_file" <<EOF
@@ -242,20 +224,14 @@ SHA512:
 $sha512_entries
 EOF
 
-	# Sign InRelease and Release files
-	sign_release_files "$dists_dir" "$release_file"
-}
-
-sign_release_files() {
-	local dists_dir=$1 release_file=$2
-
-	# Sign InRelease
+	# Sign release files
 	rm -f "$dists_dir/InRelease"
 	gpg --batch --yes --default-key "$gpg_key" --digest-algo SHA512 \
 		--clearsign -o "$dists_dir/InRelease" "$release_file"
 }
 
-make_dnf_groups_param() {
+# Make DNF groups parameter
+function make_dnf_groups_param {
 	local config_file="${HOME}/.config/dnf-groups/${repo_target}"
 	local param=""
 
@@ -285,7 +261,7 @@ make_dnf_groups_param() {
 	}
 
 	# Process URLs and get parameter
-	param=$(handle_dnf_groups "${urls[@]}") || { 
+	param=$(create_dnf_groups "${urls[@]}") || { 
 		echo "Error: Failed to process URLs" >&2
 		return 1
 	}
@@ -293,7 +269,8 @@ make_dnf_groups_param() {
 	echo "$param"
 }
 
-handle_dnf_groups() {
+# Create merged DNF groups file from configured URLs
+function create_dnf_groups {
 
     # Check if URLs were passed
     if [ "$#" -lt 1 ]; then
@@ -343,34 +320,8 @@ handle_dnf_groups() {
     echo "--groupfile $comps_all"
 }
 
-handle_rpm_packages() {
-	mkdir -p "$rpm_repo"
-	local checksum_cache="$rpm_repo/.known_checksums"
-	touch "$checksum_cache"
-	
-	# Clean existing repo files
-	find "$rpm_repo" -type f ! -name '.known_checksums' -delete
-
-	# Process RPM files
-	local rpm_repo_cache_update
-	for rpm_file in *.rpm; do
-		[ -f "$rpm_file" ] && [ ! -L "$rpm_file" ] || continue
-		process_rpm_file "$rpm_file" "$checksum_cache" rpm_repo_cache_update
-	done
-
-	# Update cache if needed
-	[ -n "${rpm_repo_cache_update-}" ] && mv "$checksum_cache.$$" "$checksum_cache"
-	rm -f "$checksum_cache.$$" 2>/dev/null || true
-
-	# Create and sign repository
-	local -a groups
-	IFS=' ' read -r -a groups <<< "$(make_dnf_groups_param)"
-	createrepo_c "${groups[@]}" "$repo_dir"
-	gpg --batch --yes --default-key "$gpg_key" --digest-algo SHA512 -abs -o \
-		"$repo_dir/repodata/repomd.xml.asc" "$repo_dir/repodata/repomd.xml"
-}
-
-process_rpm_file() {
+# Sign RPM package if it has changed
+function sign_rpm {
 	local rpm_file=$1 checksum_cache=$2
 	local -n update_ref=$3
 
@@ -404,7 +355,36 @@ process_rpm_file() {
 	echo "${rpm_file}:${current_sum}" >> "$checksum_cache.$$"
 }
 
-function regenerate_package_symlinks() {
+# Create and sign DNF repository
+function create_dnf_repo {
+	mkdir -p "$rpm_repo"
+	local checksum_cache="$rpm_repo/.known_checksums"
+	touch "$checksum_cache"
+	
+	# Clean existing repo files
+	find "$rpm_repo" -type f ! -name '.known_checksums' -delete
+
+	# Process RPM files
+	local rpm_repo_cache_update
+	for rpm_file in *.rpm; do
+		[ -f "$rpm_file" ] && [ ! -L "$rpm_file" ] || continue
+		sign_rpm "$rpm_file" "$checksum_cache" rpm_repo_cache_update
+	done
+
+	# Update cache if needed
+	[ -n "${rpm_repo_cache_update-}" ] && mv "$checksum_cache.$$" "$checksum_cache"
+	rm -f "$checksum_cache.$$" 2>/dev/null || true
+
+	# Create and sign repository
+	local -a groups
+	IFS=' ' read -r -a groups <<< "$(make_dnf_groups_param)"
+	createrepo_c "${groups[@]}" "$repo_dir"
+	gpg --batch --yes --default-key "$gpg_key" --digest-algo SHA512 -abs -o \
+		"$repo_dir/repodata/repomd.xml.asc" "$repo_dir/repodata/repomd.xml"
+}
+
+# Remove each package latest symlinks
+function remove_package_symlinks {
 	local root="$1"
 	cd "$root" || return 1
 	shopt -s nullglob
@@ -415,10 +395,16 @@ function regenerate_package_symlinks() {
 			-name '*-latest*.rpm' -o \
 			-name '*-latest*.tar.gz' \
 		\) -delete 2>/dev/null || true
+	
+}
 
-	# The main script creates new "*-latest" symlinks for each package name. It
-	# already created the repo metadata, so the links we make now won't be in
-	# the APT/RPM metadata.
+# Re-create the latest symlinks for every package name since we've already
+# created the repo metadata, so the links we make now won't be in the APT/RPM
+# metadata.
+function regenerate_package_symlinks {
+	local root="$1"
+	cd "$root" || return 1
+	shopt -s nullglob
 
 	# List regular files matching pattern
 	list_sorted() {
@@ -637,7 +623,7 @@ function copy_rpm_mtime_from_rc {
 
 # Adjust the core product package times so they sort just above their own
 # modules, but ignore other separate dedicated products
-function prioritize_core_packages {
+function prioritize_core_product {
 	local root="$1"
 
 	[ -d "$root" ] || return 0
@@ -788,11 +774,11 @@ function prune_orphan_rpms_from_stable {
 	shopt -u nullglob
 }
 
-# Remove broken symlinks to packages and scripts at stable repo root
+# Remove broken symlinks to packages and scripts at given repo root
 function cleanup_broken_root_symlinks {
 	local root=$1
 
-	# Remove only broken symlinks to packages and scripts at repo root, with
+	# Remove only broken symlinks to packages and scripts at the repo root, with
 	# -xtype l, i.e. symlink whose target cannot be resolved
 	find "$root" -maxdepth 1 -xtype l \( \
 		-name '*.rpm'    -o \
@@ -865,6 +851,8 @@ function promote_to_stable {
 	done < "$map_file"
 }
 
+# Promote files from RC repo to stable repo by symlinking, except RPMs which
+# are copied to allow separate signing
 function promote_files_to_stable {
 	local src_home=$1
 	local dst_home=$2
@@ -906,28 +894,27 @@ function promote_files_to_stable {
 }
 
 # Main script routine
-main() {
+function main {
 	cd "$repo_dir" || exit 1
 
-	# Remove .deb/.rpm/.tar.gz symlinks at repo root before signing
-	find "$repo_dir" -maxdepth 1 -type l \( \
-			-name '*-latest*.deb' -o \
-			-name '*-latest*.rpm' -o \
-			-name '*-latest*.tar.gz' \
-	\) -delete 2>/dev/null || true
+	# Remove existing symlinks to latest packages
+	remove_package_symlinks "$repo_dir"
 
-	# Generate structured APT repository
-	generate_structured_apt_repo
+	# Clean previous builds for testing repos only
+	cleanup_testing_repo
 
-	# Handle RPM packages
-	handle_rpm_packages
+	# Generate APT repository
+	create_apt_repo
 
-	# Re-create latest symlinks at repo root after signing
+	# Create DNF/YUM repository
+	create_dnf_repo
+
+	# Re-create symlinks to latest packages
 	regenerate_package_symlinks "$repo_dir"
 
 	# Prioritize the core product package time so it sorts just above its own
 	# modules
-	prioritize_core_packages "$repo_dir"
+	prioritize_core_product "$repo_dir"
 
 	# Promote from RC repo to one or more stable repos if requested
 	if [[ -n "$promote_stable" ]]; then

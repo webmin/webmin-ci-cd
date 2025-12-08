@@ -860,6 +860,23 @@ function promote_files_to_stable {
 	mkdir -p "$dst_home"
 
 	shopt -s nullglob
+	
+	# If uploaded list exists, only promote those basenames
+	local list="$src_home/.uploaded_list"
+	local -a only_files=()
+	local filtered=0
+
+	if [[ -s "$list" ]]; then
+		# Take the same lock as writer
+		{
+			flock 9
+			mapfile -t only_files <"$list"
+			rm -f -- "$list"
+		} 9>"$src_home/.uploaded_list.lock"
+
+		(( ${#only_files[@]} )) && filtered=1
+	fi
+
 	local f base target
 	for f in "$src_home"/*.rpm \
 			 "$src_home"/*.deb \
@@ -869,7 +886,22 @@ function promote_files_to_stable {
 		# Only promote real files from RC, not symlinks
 		[[ -L "$f" ]] && continue
 
+		# Get basename
 		base=$(basename -- "$f")
+		
+		# If we have a filtered list, skip anything not in it
+		if (( filtered )); then
+			local match=0 w
+			for w in "${only_files[@]}"; do
+				if [[ "$w" == "$base" ]]; then
+					match=1
+					break
+				fi
+			done
+			(( !match )) && continue
+		fi
+
+		# Determine allowed target path
 		target="$dst_home/$base"
 
 		if [[ $f == *.rpm ]]; then

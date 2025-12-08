@@ -61,7 +61,7 @@ set_virtualmin_package_preferences() {
 	if [ -z "$fn_auth_user" ] || [ -z "$fn_auth_pass" ]; then
 		printf '%s\n' \
 			"deb:pin:webmin-virtual-server=1001=gpl" \
-			"rpm:exclude:*virtual-server*pro*"
+			"rpm:exclude:webmin-virtual-server-*pro*.noarch"
 	fi
 	return 0
 }

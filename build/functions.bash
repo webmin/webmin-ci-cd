@@ -128,10 +128,13 @@ function cloud_upload {
 	fi
 	
 	# Upload files to remote
-	if [ -n "${1-}" ]; then
+	if [[ -n ${1-} ]] && declare -p "$1" &>/dev/null; then
 		echo "Uploading built files to $CLOUD_UPLOAD_SSH_HOST${ssh_warning_text-} .."
 		local -n arr_upl=$1
 		local err=0
+
+		# Upload the files
+		local u
 		for u in "${arr_upl[@]}"; do
 			if [ -n "$u" ]; then
 				local cmd2="scp $ssh_options -r $u $CLOUD_UPLOAD_SSH_USER@"
@@ -144,6 +147,34 @@ function cloud_upload {
 		done
 		postcmd $err
 		echo
+
+		# Record basenames on the remote (only for final stable builds)
+		if ((${#arr_upl[@]})) && get_flag --release && ! get_flag --prerelease; then
+			echo "Recording uploaded files list on $CLOUD_UPLOAD_SSH_HOST${ssh_warning_text-} .."
+			local tmpfile
+			tmpfile=$(mktemp)
+			for u in "${arr_upl[@]}"; do
+				[[ -n "$u" ]] && basename -- "$u" >>"$tmpfile"
+			done
+
+			# Copy list file to remote as a temporary name
+			local remote_tmp=".uploaded_list.$$"
+			local cmd3
+			cmd3="scp $ssh_options \"$tmpfile\" "
+			cmd3+="$CLOUD_UPLOAD_SSH_USER@$host:$CLOUD_UPLOAD_SSH_DIR/$remote_tmp "
+			cmd3+="$VERBOSITY_LEVEL"
+			eval "$cmd3" || true
+			rm -f "$tmpfile"
+
+			# Move it into place under a lock
+			local cmd4="ssh $ssh_options $CLOUD_UPLOAD_SSH_USER@$host "
+			cmd4+="\"cd '$CLOUD_UPLOAD_SSH_DIR' && "
+			cmd4+="{ flock 9; mv '$remote_tmp' .uploaded_list; } "
+			cmd4+="9>.uploaded_list.lock\""
+			eval "$cmd4"
+			postcmd $?
+			echo
+		fi
 	fi
 }
 

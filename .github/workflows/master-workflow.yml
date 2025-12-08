@@ -97,12 +97,14 @@ jobs:
           CLOUD__GH_TOKEN: ${{ secrets.DEV_CHILD_GITHUB_TOKEN }}
         run: |-
           # Set build mode
-          build_args=(--release)
-          if [ "${{ inputs.is-release }}" = "false" ]; then
+          build_args=()
+          if [ "${{ inputs.is-release }}" = "true" ]; then
+              build_args=(--release)
+              if [ "${{ inputs.is-prerelease }}" = "true" ]; then
+                  build_args+=(--prerelease)
+              fi
+          else
               build_args=(--testing)
-          fi
-          if [ "${{ inputs.is-prerelease }}" = "true" ]; then
-              build_args+=(--prerelease)
           fi
 
           # Set output mode

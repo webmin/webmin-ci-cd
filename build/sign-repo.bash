@@ -406,11 +406,12 @@ function regenerate_package_symlinks {
 	cd "$root" || return 1
 	shopt -s nullglob
 
-	# List regular files matching pattern
+	# List files matching pattern
 	list_sorted() {
 		local base="$1" pat="$2"
 		# outputs NUL-separated file names (relative)
-		find "$base" -maxdepth 1 -type f -name "$pat" -printf '%T@ %P\0' | \
+		find "$base" -maxdepth 1 \( -type f -o -type l \) -name "$pat" \
+			-printf '%T@ %P\0' | \
 			sort -z -nr | cut -z -d' ' -f2-
 	}
 

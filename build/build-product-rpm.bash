@@ -43,6 +43,8 @@ function build {
 	local release_type='stable'
 	if get_flag --prerelease; then
 		release_type='pre-release'
+	elif get_flag --testing; then
+		release_type='unstable'
 	fi
 	local root_prod="$ROOT_DIR/$prod"
 	local ver

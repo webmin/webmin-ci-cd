@@ -109,7 +109,7 @@ This is a quick overview of the key files involved in the build process, highlig
   ```
 
 ### **Virtualmin unstable repository**
-- **URL**: [software.virtualmin.dev](https://software.virtualmin.dev)
+- **URL**: [download.virtualmin.dev](https://download.virtualmin.dev)
 - **Description**:
   - Unstable packages for Virtualmin and its plugins
   - Built automatically on each push to the master branch of Virtualmin or its plugins
@@ -117,11 +117,12 @@ This is a quick overview of the key files involved in the build process, highlig
 
 - **Installation**:
   ```bash
-  curl -fsSL https://software.virtualmin.dev/install | sh -s -- virtualmin unstable
+  curl -fsSL https://download.virtualmin.dev/install | sh -s -- virtualmin unstable
+  curl -fsSL https://download.virtualmin.dev/install | sh -s -- virtualmin prerelease
   ```
 
 ### **Virtualmin pre-release repository**
-- **URL**: [rc.software.virtualmin.dev](https://rc.software.virtualmin.dev)
+- **URL**: [rc.download.virtualmin.dev](https://rc.download.virtualmin.dev)
 - **Description**:
   - Pre-release packages for Virtualmin and its plugins
   - Built automatically when a tagged release is created for any Virtualmin or its plugins
@@ -129,7 +130,7 @@ This is a quick overview of the key files involved in the build process, highlig
 
 - **Installation**:
   ```bash
-  curl -fsSL https://software.virtualmin.dev/install | sh -s -- virtualmin prerelease
+  curl -fsSL https://rc.download.virtualmin.dev/install | sh -s -- virtualmin prerelease
   ```
 
 ## Screenshots

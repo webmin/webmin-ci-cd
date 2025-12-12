@@ -9,8 +9,9 @@
 # Usage:
 #   ./sign-all-repos.bash
 #   ./sign-all-repos.bash download.webmin.dev
-#   ./sign-all-repos.bash software.virtualmin.dev
-#   ./sign-all-repos.bash rc.software.virtualmin.dev promote
+#   ./sign-all-repos.bash download.virtualmin.dev
+#   ./sign-all-repos.bash rc.download.webmin.dev promote
+#   ./sign-all-repos.bash rc.download.virtualmin.dev promote
 
 set -euo pipefail
 

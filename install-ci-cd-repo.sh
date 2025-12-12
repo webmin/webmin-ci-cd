@@ -10,10 +10,10 @@ url="https://raw.githubusercontent.com/webmin/webmin/master/webmin-setup-repo.sh
 virtualmin_license_file="/etc/virtualmin-license"
 cloudmin_license_file="/etc/server-manager-license"
 virtualmin_stable_host="download.virtualmin.com"
-virtualmin_unstable_host="software.virtualmin.dev"
-virtualmin_prerelease_host="rc.software.virtualmin.dev"
-cloudmin_unstable_host="software.cloudmin.dev"
-cloudmin_prerelease_host="rc.software.cloudmin.dev"
+virtualmin_unstable_host="download.virtualmin.dev"
+virtualmin_prerelease_host="rc.download.virtualmin.dev"
+cloudmin_unstable_host="download.cloudmin.dev"
+cloudmin_prerelease_host="rc.download.cloudmin.dev"
 
 download_script() {
 	tmp_file=$(mktemp)

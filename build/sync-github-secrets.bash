@@ -10,6 +10,9 @@
 # Enable strict mode
 set -euo pipefail
 
+# Use stored auth login
+unset GH_TOKEN GITHUB_TOKEN
+
 # Configuration
 secrets_zip="${ENV_SECRETS_ZIP:-$HOME/Git/.secrets/gh-secrets.zip}"
 temp_dir="/tmp/gh-secrets-$$"

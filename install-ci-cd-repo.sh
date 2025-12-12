@@ -305,6 +305,7 @@ main() {
 
 	product="$1"
 	repo_type="$2"
+	repo_type=$(echo "$repo_type" | sed 's/-//g')
 	
 	# Validate arguments
 	case "$product" in

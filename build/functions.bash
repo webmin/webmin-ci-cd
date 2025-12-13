@@ -201,13 +201,13 @@ function cloud_sign_and_build_repos {
 	fi
 
 	# Sign and update repo metadata directly on the remote server using the
-	# sign-repo.bash script (command set in CLOUD_SIGN_BUILD_REPOS_CMD). Expect
-	# the upload directory and repo type as arguments, and optionally the
-	# promote argument.
+	# forced-command wrapper (github-actions.bash). We only pass three
+	# arguments: the remote upload directory, the repo type, and optionally the
+	# promote flag. The server-side wrapper validates the request, primes GPG,
+	# and runs actual signing and repo building.
 	echo "Signing and updating repos metadata in $CLOUD_UPLOAD_SSH_HOST${ssh_warning_text-} .."
 	local cmd1="ssh $ssh_options $CLOUD_UPLOAD_SSH_USER@"
-	cmd1+="$host \"$CLOUD_SIGN_BUILD_REPOS_CMD \
-	      '$CLOUD_UPLOAD_SSH_DIR' '$repo_type' '$promote_stable'\" \
+	cmd1+="$host '$CLOUD_UPLOAD_SSH_DIR' '$repo_type' '$promote_stable'\" \
 		$VERBOSITY_LEVEL"
 	eval "$cmd1"
 	postcmd $?

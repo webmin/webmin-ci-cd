@@ -207,7 +207,7 @@ function cloud_sign_and_build_repos {
 	# and runs actual signing and repo building.
 	echo "Signing and updating repos metadata in $CLOUD_UPLOAD_SSH_HOST${ssh_warning_text-} .."
 	local cmd1="ssh $ssh_options $CLOUD_UPLOAD_SSH_USER@"
-	cmd1+="$host '$CLOUD_UPLOAD_SSH_DIR' '$repo_type' '$promote_stable'\" \
+	cmd1+="$host \"'$CLOUD_UPLOAD_SSH_DIR' '$repo_type' '$promote_stable'\" \
 		$VERBOSITY_LEVEL"
 	eval "$cmd1"
 	postcmd $?

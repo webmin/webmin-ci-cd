@@ -137,7 +137,7 @@ function cloud_upload {
 		local u
 		for u in "${arr_upl[@]}"; do
 			if [ -n "$u" ]; then
-				local cmd2="scp $ssh_options -r $u $CLOUD_UPLOAD_SSH_USER@"
+				local cmd2="scp -O $ssh_options -r $u $CLOUD_UPLOAD_SSH_USER@"
 				cmd2+="$host:$CLOUD_UPLOAD_SSH_DIR/ $VERBOSITY_LEVEL"
 				eval "$cmd2"
 				if [ "$?" != "0" ]; then
@@ -160,7 +160,7 @@ function cloud_upload {
 			# Copy list file to remote as a temporary name
 			local remote_tmp=".uploaded_list.$$"
 			local cmd3
-			cmd3="scp $ssh_options \"$tmpfile\" "
+			cmd3="scp -O $ssh_options \"$tmpfile\" "
 			cmd3+="$CLOUD_UPLOAD_SSH_USER@$host:$CLOUD_UPLOAD_SSH_DIR/$remote_tmp "
 			cmd3+="$VERBOSITY_LEVEL"
 			eval "$cmd3" || true

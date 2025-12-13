@@ -176,16 +176,16 @@ function create_apt_arch_metadata {
 # Detect build type for APT release
 function detect_apt_build_type {
 	local dists_dir=$1
-	local repo_dir=$2
+	local dir_repo=$2
 	
 	# Check if this is a preview/RC build based on directory path
-	if [[ "$repo_dir" == *"/rc."* ]]; then
+	if [[ "$dir_repo" == *"/rc."* ]]; then
 		echo "Preview Builds|preview"
 		return
 	fi
 	
 	# Check for testing timestamp pattern (YYYYMMDDHHMM) in RPM or DEB packages
-	for file in "$repo_dir"/*.{rpm,deb}; do
+	for file in "$dir_repo"/*.{rpm,deb}; do
 		[ -f "$file" ] || continue
 		if [[ "${file##*/}" =~ [0-9]{12} ]]; then
 			echo "Testing Builds|testing"

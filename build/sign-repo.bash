@@ -121,7 +121,7 @@ function create_apt_repo {
 			\( -type f -o -type l \) \
 			-name "*.deb" \
 			! -path "$apt_pool_dir/*" \
-			-exec ln -s {} "$apt_pool_dir/" \;
+			-exec ln -sr {} "$apt_pool_dir/" \;
 
 	# Generate metadata
 	local sha256_entries sha512_entries

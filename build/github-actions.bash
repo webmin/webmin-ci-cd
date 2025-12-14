@@ -139,4 +139,10 @@ if [[ $orig =~ $sign_re ]]; then
 		 "$repo_dir_rp" "$repo_target" "$promote"
 fi
 
+# Allow sync call using: sync
+readonly sync_re="^sync[[:space:]]*$"
+if [[ $orig =~ $sync_re ]]; then
+	exec "$HOME/.local/sbin/sync-remote-repos.bash"
+fi
+
 deny

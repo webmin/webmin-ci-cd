@@ -183,7 +183,7 @@ function cloud_upload {
 	fi
 }
 
-# Sign and update repos metadata in remote
+# Sign, build and sync repos in clouds
 function cloud_sign_and_build_repos {
 	# shellcheck disable=SC2034
 	local repo_type="$1"
@@ -215,6 +215,15 @@ function cloud_sign_and_build_repos {
 	cmd1+="\"sign '$CLOUD_UPLOAD_SSH_DIR' '$repo_type' '$promote_stable'\" "
 	cmd1+="$VERBOSITY_LEVEL"
 	eval "$cmd1"
+	postcmd $?
+	echo
+
+	# Sync repos from staging to repo server
+	echo "Syncing repos ${ssh_warning_text-} .."
+	local cmd_sync="ssh $ssh_options $CLOUD_UPLOAD_SSH_USER@$host "
+	cmd_sync+="\"sync\" "
+	cmd_sync+="$VERBOSITY_LEVEL"
+	eval "$cmd_sync"
 	postcmd $?
 	echo
 }

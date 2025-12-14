@@ -114,9 +114,9 @@ function cloud_upload {
 				local patterns="${remaining#* }"
 				local pre_pattern="${patterns%% *}"
 				local post_pattern="${patterns#* }"
+				local pat="${pre_pattern}${filename}${post_pattern}"
 				local cmd1="ssh $ssh_options $CLOUD_UPLOAD_SSH_USER@$host "
-				cmd1+="\"cd '$remote_dir' && find . -maxdepth 1 "
-				cmd1+="-name '${pre_pattern}${filename}${post_pattern}' -delete $VERBOSITY_LEVEL\""
+				cmd1+="\"delete '$remote_dir' '$pat'\" $VERBOSITY_LEVEL"
 				eval "$cmd1"
 				if [ "$?" != "0" ]; then
 					err=1
@@ -159,18 +159,23 @@ function cloud_upload {
 
 			# Copy list file to remote as a temporary name
 			local remote_tmp=".uploaded_list.$$"
+			local tmpdir
+			tmpdir=$(mktemp -d)
+			cp -f -- "$tmpfile" "$tmpdir/$remote_tmp"
+			
 			local cmd3
-			cmd3="scp -O $ssh_options \"$tmpfile\" "
-			cmd3+="$CLOUD_UPLOAD_SSH_USER@$host:$CLOUD_UPLOAD_SSH_DIR/$remote_tmp "
+			cmd3="scp -O $ssh_options \"$tmpdir/$remote_tmp\" "
+			cmd3+="$CLOUD_UPLOAD_SSH_USER@$host:$CLOUD_UPLOAD_SSH_DIR/ "
 			cmd3+="$VERBOSITY_LEVEL"
 			eval "$cmd3" || true
-			rm -f "$tmpfile"
+			
+			rm -rf -- "$tmpdir"
+			rm -f -- "$tmpfile"
 
 			# Move it into place under a lock
 			local cmd4="ssh $ssh_options $CLOUD_UPLOAD_SSH_USER@$host "
-			cmd4+="\"cd '$CLOUD_UPLOAD_SSH_DIR' && "
-			cmd4+="{ flock 9; mv '$remote_tmp' .uploaded_list; } "
-			cmd4+="9>.uploaded_list.lock\""
+			cmd4+="\"uploaded_list '$CLOUD_UPLOAD_SSH_DIR' '$remote_tmp'\" "
+			cmd4+="$VERBOSITY_LEVEL"
 			eval "$cmd4"
 			postcmd $?
 			echo
@@ -206,9 +211,9 @@ function cloud_sign_and_build_repos {
 	# promote flag. The server-side wrapper validates the request, primes GPG,
 	# and runs actual signing and repo building.
 	echo "Signing and updating repos metadata in $CLOUD_UPLOAD_SSH_HOST${ssh_warning_text-} .."
-	local cmd1="ssh $ssh_options $CLOUD_UPLOAD_SSH_USER@"
-	cmd1+="$host \"'$CLOUD_UPLOAD_SSH_DIR' '$repo_type' '$promote_stable'\" \
-		$VERBOSITY_LEVEL"
+	local cmd1="ssh $ssh_options $CLOUD_UPLOAD_SSH_USER@$host "
+	cmd1+="\"sign '$CLOUD_UPLOAD_SSH_DIR' '$repo_type' '$promote_stable'\" "
+	cmd1+="$VERBOSITY_LEVEL"
 	eval "$cmd1"
 	postcmd $?
 	echo

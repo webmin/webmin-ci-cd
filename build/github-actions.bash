@@ -77,9 +77,45 @@ if [[ $orig == */sftp-server* ]] || [[ $orig == internal-sftp* ]]; then
 	exit 1
 fi
 
-# Allow signing call, with  'dir' 'target' ['promote']
-readonly re="^'([^']*)'[[:space:]]+'([^']*)'([[:space:]]+'([^']*)')?[[:space:]]*$"
-if [[ $orig =~ $re ]]; then
+# Allow delete call using: delete 'dir' 'pattern'
+readonly del_re="^delete[[:space:]]+'([^']+)'[[:space:]]+'([^']+)'[[:space:]]*$"
+if [[ $orig =~ $del_re ]]; then
+	readonly del_dir=${BASH_REMATCH[1]}
+	readonly del_pat=${BASH_REMATCH[2]}
+
+	del_dir_rp="$(readlink -f -- "$del_dir")" || deny
+	readonly del_dir_rp
+	[[ -d "$del_dir_rp" ]] || deny
+	[[ $del_dir_rp == "$allow_base_rp"/* ]] || deny
+
+	[[ $del_pat == */* ]] && deny
+
+	exec /usr/bin/find "$del_dir_rp" -maxdepth 1 -name "$del_pat" -delete
+fi
+
+# Allow locked list using: uploaded_list 'dir' 'uploaded-list-tmp-file'
+readonly mv_re="^uploaded_list[[:space:]]+'([^']+)'[[:space:]]+'([^']+)'[[:space:]]*$"
+if [[ $orig =~ $mv_re ]]; then
+	readonly mv_dir=${BASH_REMATCH[1]}
+	readonly mv_tmp=${BASH_REMATCH[2]}
+
+	# Temporary file must be a simple basename under the dir
+	[[ $mv_tmp == */* ]] && deny
+	[[ $mv_tmp == .uploaded_list.* ]] || deny
+
+	mv_dir_rp="$(readlink -f -- "$mv_dir")" || deny
+	readonly mv_dir_rp
+	[[ -d "$mv_dir_rp" ]] || deny
+	[[ $mv_dir_rp == "$allow_base_rp"/* ]] || deny
+
+	cd "$mv_dir_rp" || deny
+	exec /usr/bin/flock -x .uploaded_list.lock \
+		/usr/bin/mv -f -- "$mv_tmp" .uploaded_list
+fi
+
+# Allow signing call using: sign 'dir' 'target' ['promote']
+readonly sign_re="^sign[[:space:]]+'([^']*)'[[:space:]]+'([^']*)'([[:space:]]+'([^']*)')?[[:space:]]*$"
+if [[ $orig =~ $sign_re ]]; then
 	readonly repo_dir=${BASH_REMATCH[1]}
 	readonly repo_target=${BASH_REMATCH[2]}
 	readonly promote=${BASH_REMATCH[4]-}

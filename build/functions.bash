@@ -183,7 +183,7 @@ function cloud_upload {
 	fi
 }
 
-# Sign and build repos in remote
+# Sign, build and sync repos in remote
 function cloud_sign_and_build_repos {
 	# shellcheck disable=SC2034
 	local repo_type="$1"

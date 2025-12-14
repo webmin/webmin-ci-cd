@@ -72,6 +72,8 @@ This is a quick overview of the key files involved in the build process, highlig
 
 - **sign-all-repos.bash** - this script allows for manually signing and building all repositories or a specific repository. It's useful for situations where you need to re-sign packages or update repository metadata without going through the entire build process again.
 
+- **sync-remote-repos.bash** - this script performs a full mirror sync from the staging environment to the repository server. This makes sure the repository server is identical to the staging environment.
+
 - **mod-auth-check-external.bash** - this helper script checks a username and password with a web service and allows or denies access, caching recent successes to avoid repeated calls during page loads.
 
 - **module-groups.txt** — this text file defines groups of modules that need to be rebuilt if certain modules are changed. For instance, changes in the Virtualmin GPL module will trigger a rebuild of the Virtualmin Pro package.

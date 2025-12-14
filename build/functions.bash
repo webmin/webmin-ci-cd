@@ -183,7 +183,7 @@ function cloud_upload {
 	fi
 }
 
-# Sign, build and sync repos in clouds
+# Sign and build repos in remote
 function cloud_sign_and_build_repos {
 	# shellcheck disable=SC2034
 	local repo_type="$1"
@@ -219,18 +219,12 @@ function cloud_sign_and_build_repos {
 	echo
 
 	# Sync repos from staging to repo server
-	echo "Syncing repos ${ssh_warning_text-} .."
-	local cmd_sync="ssh $ssh_options $CLOUD_UPLOAD_SSH_USER@$host "
-	cmd_sync+="\"sync\" "
-	cmd_sync+="$VERBOSITY_LEVEL"
-	eval "$cmd_sync"
-	postcmd $?
-	echo
+	cloud_sync_remote_repos
 }
 
 # Sign and update repos metadata in remote, promoting RC to stable for final
 # releases
-cloud_sign_and_build_repos_auto() {
+function cloud_sign_and_build_repos_auto() {
 	local repo_type="$1"
 	local promote_arg=""
 
@@ -240,6 +234,33 @@ cloud_sign_and_build_repos_auto() {
 	fi
 
 	cloud_sign_and_build_repos "$repo_type" "$promote_arg"
+}
+
+# Sync repos from staging to repo server
+function cloud_sync_remote_repos {
+	# Setup SSH keys on the build machine and configure known hosts if any
+	local ssh_options ssh_warning_text
+	ssh_options=$(setup_ssh_known_hosts)
+	if [ -n "${ssh_options-}" ]; then
+		ssh_warning_text=" (insecure)"
+	fi
+	# Setup SSH keys on the build machine
+	setup_ssh
+
+	# If host is an IPv6 literal, bracket it and prefer IPv6
+	local host="$CLOUD_UPLOAD_SSH_HOST"
+	if [[ "$host" == *:*:* && "$host" != \[*\] ]]; then
+		host="[$host]"
+		ssh_options="${ssh_options:+$ssh_options }-6"
+	fi
+
+	# Sync repos from staging to repo server
+	echo "Syncing repos ${ssh_warning_text-} .."
+	local cmd_sync="ssh $ssh_options $CLOUD_UPLOAD_SSH_USER@$host "
+	cmd_sync+="sync $VERBOSITY_LEVEL"
+	eval "$cmd_sync"
+	postcmd $?
+	echo
 }
 
 # Post command func

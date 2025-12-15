@@ -121,7 +121,7 @@ function create_apt_repo {
 			\( -type f -o -type l \) \
 			-name "*.deb" \
 			! -path "$apt_pool_dir/*" \
-			-exec ln -sr {} "$apt_pool_dir/" \;
+			-exec ln -srf {} "$apt_pool_dir/" \;
 
 	# Generate metadata
 	local sha256_entries sha512_entries
@@ -906,13 +906,7 @@ function promote_files_to_stable {
 			fi
 		else
 			# Non-RPMs, keep symlink behavior
-			if [[ -L "$target" ]]; then
-				ln -sfn "$f" "$target"
-			elif [[ -e "$target" ]]; then
-				echo "Warning: $target exists and is not a symlink; leaving as-is" >&2
-			else
-				ln -sr "$f" "$target"
-			fi
+			ln -srf "$f" "$target"
 		fi
 	done
 	shopt -u nullglob

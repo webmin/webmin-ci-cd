@@ -83,8 +83,10 @@ jobs:
           set -euo pipefail
           if [ "${{ inputs.is-release }}" = "true" ] && [ "${{ inputs.is-prerelease }}" != "true" ]; then
             base="${CI_CD_STABLE_BASE}"
+            echo "Using stable build scripts from: $base"
           else
             base="${CI_CD_UNSTABLE_BASE}"
+            echo "Using unstable build scripts from: $base"
           fi
           echo "BUILD_BOOTSTRAP_URL=$base" >> "$GITHUB_ENV"
           curl -fsSLo bootstrap.bash "$base/bootstrap.bash"

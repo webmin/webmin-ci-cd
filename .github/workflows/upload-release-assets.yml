@@ -29,7 +29,7 @@ jobs:
 
           while IFS= read -r -d '' f; do
             cp -a "$f" "assets/$(basename "$f")"
-          done < <(find builds -type f -print0)
+          done < <(find build -type f -print0)
 
           ls -lah assets
 

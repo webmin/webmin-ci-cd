@@ -31,11 +31,11 @@ on:
         type: string
         default: 'core'
         description: 'Build type for packages (e.g. full, core, minimal)'
-      no-commit-check:
+      rebuild-all-modules:
         required: false
         type: boolean
         default: false
-        description: 'Skip internal check during build to force rebuilding all excluded modules'
+        description: 'Rebuild all product modules by skipping incremental build checks'
       legacy-rpm-names:
         required: false
         type: boolean
@@ -122,9 +122,19 @@ jobs:
               build_args+=(--build-type="${{ inputs.module-build-type }}")
           fi
 
-          # Add no commit check if enabled
-          [ "${{ inputs.no-commit-check || (github.event_name == 'push' && contains(github.event.head_commit.message, '[no-commit-check]')) }}" = "true" ] \
-            && build_args+=(--no-commit-check)
+          # Add no commit check if enabled to re-build all non-core modules with
+          # a new version
+          should_force_rebuild=false
+          [ "${{ inputs.rebuild-all-modules }}" = "true" ] && should_force_rebuild=true
+          [ "${{ github.ref_type }}" = "tag" ] && should_force_rebuild=true
+          [ "${{ github.event_name }}" = "release" ] && should_force_rebuild=true
+          if [ "${{ github.event_name }}" = "push" ]; then
+            commit_msg="${{ github.event.head_commit.message || '' }}"
+            [[ "$commit_msg" == *"[rebuild-all-modules]"* ]] && should_force_rebuild=true
+            [[ "$commit_msg" == *"version bump"* ]] && should_force_rebuild=true
+            [[ "$commit_msg" =~ ^v?[0-9]+\.[0-9]+(\.[0-9]+)*$ ]] && should_force_rebuild=true
+          fi
+          [ "$should_force_rebuild" = "true" ] && build_args+=(--rebuild-all-modules)
 
           # Use legacy RPM names if enabled, otherwise use new
           [ "${{ inputs.legacy-rpm-names }}" = "false" ] && \

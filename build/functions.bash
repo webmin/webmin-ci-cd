@@ -1853,7 +1853,7 @@ function build_core_modules {
 
 	# Build all modules and don't check for the last Git commit
 	local git_check=1
-	if get_flag --no-commit-check >/dev/null; then
+	if get_flag --rebuild-all-modules >/dev/null; then
 		git_check=0
 	fi
 

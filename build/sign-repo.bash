@@ -911,7 +911,7 @@ function promote_files_to_stable {
 			elif [[ -e "$target" ]]; then
 				echo "Warning: $target exists and is not a symlink; leaving as-is" >&2
 			else
-				ln -s "$f" "$target"
+				ln -sr "$f" "$target"
 			fi
 		fi
 	done

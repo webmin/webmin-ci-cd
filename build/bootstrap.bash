@@ -11,7 +11,7 @@
 set -euo pipefail
 
 # Bootstrap URL
-build_bootstrap_url="https://raw.githubusercontent.com/webmin/webmin-ci-cd/main/build"
+build_bootstrap_url="${BUILD_BOOTSTRAP_URL:-https://raw.githubusercontent.com/webmin/webmin-ci-cd/main/build}"
 
 # Bootstrap scripts
 bootstrap_scripts=(

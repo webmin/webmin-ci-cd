@@ -63,6 +63,8 @@ jobs:
     if: ${{ !contains(github.event.head_commit.message, '[no-build]') }}
     env:
       TZ: Europe/Nicosia
+      CI_CD_STABLE_BASE: https://github.com/webmin/webmin-ci-cd/releases/latest/download
+      CI_CD_UNSTABLE_BASE: https://raw.githubusercontent.com/webmin/webmin-ci-cd/main/build
     steps:
       - name: Checkout code
         if: ${{ inputs.is-checkout }}
@@ -77,8 +79,16 @@ jobs:
           version: 1.0
 
       - name: Fetch dependencies
-        run: |-
-          curl -O https://raw.githubusercontent.com/webmin/webmin-ci-cd/main/build/bootstrap.bash
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.is-release }}" = "true" ] && [ "${{ inputs.is-prerelease }}" != "true" ]; then
+            base="${CI_CD_STABLE_BASE}"
+          else
+            base="${CI_CD_UNSTABLE_BASE}"
+          fi
+          echo "BUILD_BOOTSTRAP_URL=$base" >> "$GITHUB_ENV"
+          curl -fsSLo bootstrap.bash "$base/bootstrap.bash"
+          chmod +x bootstrap.bash
 
       - name: Set timezone
         run: sudo timedatectl set-timezone ${{ env.TZ }}

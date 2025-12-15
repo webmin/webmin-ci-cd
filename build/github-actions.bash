@@ -114,14 +114,21 @@ if [[ $orig =~ $hold_re ]]; then
 
 	# Keep file local to the repo dir
 	readonly hold_file=".promote-hold"
-	readonly lock_file=".promote-hold.lock"
 
+	# Take the lock on the file and the same repo lock as sign process to
+	# serialize with signing and avoid race conditions
+	readonly repo_lock="$hold_dir_rp/.lock"
+	touch -- "$repo_lock" || deny
+	readonly lock_file=".promote-hold.lock"
+	touch -- "$lock_file" || deny
+
+	readonly -a lock_cmd=(/usr/bin/flock -w 120 -x)
 	if [[ $action == add ]]; then
-		exec /usr/bin/flock -x "$lock_file" /usr/bin/bash -c \
+		exec "${lock_cmd[@]}" "$repo_lock" "${lock_cmd[@]}" "$lock_file" /usr/bin/bash -c \
 			"touch '$hold_file' &&
 			 ( grep -Fxq '$pkg_base' '$hold_file' || echo '$pkg_base' >> '$hold_file' )"
 	else
-		exec /usr/bin/flock -x "$lock_file" /usr/bin/bash -c \
+		exec "${lock_cmd[@]}" "$repo_lock" "${lock_cmd[@]}" "$lock_file" /usr/bin/bash -c \
 			"[ -f '$hold_file' ] || exit 0
 			 grep -Fxv '$pkg_base' '$hold_file' > '$hold_file.tmp' || true
 			 /usr/bin/mv -f -- '$hold_file.tmp' '$hold_file'"

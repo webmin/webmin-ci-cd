@@ -1,0 +1,42 @@
+name: Upload release assets
+
+on:
+  release:
+    types:
+      - published
+
+jobs:
+  upload-assets:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout the release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Prepare assets
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rm -rf assets
+          mkdir -p assets
+
+          cp -a install-ci-cd-repo.sh assets/
+
+          while IFS= read -r -d '' f; do
+            cp -a "$f" "assets/$(basename "$f")"
+          done < <(find builds -type f -print0)
+
+          ls -lah assets
+
+      - name: Upload assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${{ github.event.release.tag_name }}"
+          gh release upload "$tag" assets/* --clobber

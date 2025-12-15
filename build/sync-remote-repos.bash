@@ -35,7 +35,6 @@ readonly -a rsync_opts=(
 	"--delete-delay"
 	"--itemize-changes"
 	"--human-readable"
-	"--safe-links"
 	"--chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r"
 	"--exclude=/.repo-theme"
 	"--exclude=/.lock*"

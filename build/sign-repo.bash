@@ -862,20 +862,15 @@ function promote_files_to_stable {
 
 	shopt -s nullglob
 	
-	# If uploaded list exists, only promote those basenames
-	local list="$src_home/.uploaded_list"
-	local -a only_files=()
-	local filtered=0
-
-	if [[ -s "$list" ]]; then
+	# Read promotion holds to skip these package bases
+	local hold_file="$src_home/.promote-hold"
+	local -a held=()
+	if [[ -s "$hold_file" ]]; then
 		# Take the same lock as writer
 		{
 			flock 9
-			mapfile -t only_files <"$list"
-			rm -f -- "$list"
-		} 9>"$src_home/.uploaded_list.lock"
-
-		(( ${#only_files[@]} )) && filtered=1
+			mapfile -t held <"$hold_file"
+		} 9>"$src_home/.promote-hold.lock"
 	fi
 
 	local f base target
@@ -890,17 +885,14 @@ function promote_files_to_stable {
 		# Get basename
 		base=$(basename -- "$f")
 		
-		# If we have a filtered list, skip anything not in it
-		if (( filtered )); then
-			local match=0 w
-			for w in "${only_files[@]}"; do
-				if [[ "$w" == "$base" ]]; then
-					match=1
-					break
-				fi
-			done
-			(( !match )) && continue
-		fi
+		# Skip anything on promote hold
+		local pkg_base w skip
+		pkg_base=$(get_base_package_base "$base") || continue
+		skip=0
+		for w in "${held[@]}"; do
+			[[ $w == "$pkg_base" ]] && { skip=1; break; }
+		done
+		[[ $skip -eq 1 ]] && continue
 
 		# Determine allowed target path
 		target="$dst_home/$base"

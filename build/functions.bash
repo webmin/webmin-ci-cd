@@ -148,37 +148,53 @@ function cloud_upload {
 		postcmd $err
 		echo
 
-		# Record basenames on the remote (only for final stable builds)
-		if ((${#arr_upl[@]})) && get_flag --release && ! get_flag --prerelease; then
-			echo "Recording uploaded files list on $CLOUD_UPLOAD_SSH_HOST${ssh_warning_text-} .."
-			local tmpfile
-			tmpfile=$(mktemp)
+		# Update promote hold state for release builds
+		if ((${#arr_upl[@]})) && get_flag --release; then
+			declare -A seen=()
+			local -a bases=()
+			local u bn pkg_base
+
+			# Collect unique package bases from the uploaded artifact list
 			for u in "${arr_upl[@]}"; do
-				[[ -n "$u" ]] && basename -- "$u" >>"$tmpfile"
+				[[ -n $u ]] || continue
+				bn=$(basename -- "$u")
+
+				case "$bn" in
+					*.rpm|*.deb|*.tar.gz|*.sh)
+						pkg_base=$(get_base_package_base "$bn") || continue
+						[[ -n $pkg_base ]] || continue
+						if [[ -z ${seen[$pkg_base]+x} ]]; then
+							seen["$pkg_base"]=1
+							bases+=("$pkg_base")
+						fi
+						;;
+				esac
 			done
 
-			# Copy list file to remote as a temporary name
-			local remote_tmp=".uploaded_list.$$"
-			local tmpdir
-			tmpdir=$(mktemp -d)
-			cp -f -- "$tmpfile" "$tmpdir/$remote_tmp"
-			
-			local cmd3
-			cmd3="scp -O $ssh_options \"$tmpdir/$remote_tmp\" "
-			cmd3+="$CLOUD_UPLOAD_SSH_USER@$host:$CLOUD_UPLOAD_SSH_DIR/ "
-			cmd3+="$VERBOSITY_LEVEL"
-			eval "$cmd3" || true
-			
-			rm -rf -- "$tmpdir"
-			rm -f -- "$tmpfile"
+			# Nothing to do if no package-looking files were in the list
+			if ((${#bases[@]} == 0)); then
+				echo "Warning: No package files found to update promote-hold" >&2
+			else
+				local action
+				if get_flag --prerelease; then
+					echo "Marking as pre-release build .."
+					action="add"
+				else
+					echo "Promoting release build .."
+					action="remove"
+				fi
 
-			# Move it into place under a lock
-			local cmd4="ssh $ssh_options $CLOUD_UPLOAD_SSH_USER@$host "
-			cmd4+="\"uploaded_list '$CLOUD_UPLOAD_SSH_DIR' '$remote_tmp'\" "
-			cmd4+="$VERBOSITY_LEVEL"
-			eval "$cmd4"
-			postcmd $?
-			echo
+				local err=0
+				for pkg_base in "${bases[@]}"; do
+					local cmdh="ssh $ssh_options $CLOUD_UPLOAD_SSH_USER@$host "
+					cmdh+="\"promote_hold '$CLOUD_UPLOAD_SSH_DIR' "
+					cmdh+="'$pkg_base' '$action'\" "
+					cmdh+="$VERBOSITY_LEVEL"
+					eval "$cmdh" || err=1
+				done
+				postcmd $err
+				echo
+			fi
 		fi
 	fi
 }
@@ -944,6 +960,81 @@ get_related_modules() {
 	echo "$module"
 }
 
+# Extracts the base package name from a given filename including edition and
+# architecture
+function get_base_package {
+	local filename="$1"
+
+	# Strip extensions (.deb/.rpm and .tar.gz)
+	filename=${filename%.*}
+	filename=${filename%.tar}
+
+	# Capture arch, remove from filename, but remember it to
+	# make sure we group by it
+	local arch=""
+	if [[ $filename =~ _(amd64|arm64|i386|)$ ]]; then
+		arch="${BASH_REMATCH[1]}"
+		filename="${filename%_*}"
+	elif [[ $filename =~ \.(x86_64|aarch64|i386|noarch)$ ]]; then
+		arch="${BASH_REMATCH[1]}"
+		filename="${filename%.*}"
+	fi
+	
+	# Treat neutral as no arch bucket
+	[[ $arch == "all" || $arch == "noarch" ]] && arch=""
+
+	# Optional edition at end (e.g., gpl/pro/beta)
+	local edition=""
+	if [[ $filename =~ [._-]([A-Za-z][A-Za-z0-9_]*)$ ]]; then
+		edition="${BASH_REMATCH[1]}"
+		filename=${filename%[._-]$edition}
+	fi
+
+	# Drop trailing release like -2
+	if [[ $filename =~ ^(.*)-([0-9]+)$ ]]; then
+		filename="${BASH_REMATCH[1]}"
+	fi
+
+	# Base before version (has at least one dot)
+	local base
+	if [[ $filename =~ ^(.*)[-_][0-9]+\.[0-9]+ ]]; then
+		base="${BASH_REMATCH[1]}"
+	elif [[ $filename =~ ^(.*)[-_]latest ]]; then
+		base="${BASH_REMATCH[1]}"
+	else
+		base="$filename"
+	fi
+
+	# build key: per edition, per arch
+	[[ -n "$edition" ]] && base="$base-$edition"
+	[[ -n "$arch" ]] && base="$base-$arch"
+	echo "$base"
+}
+
+# Extracts the core base package name from a given filename, stripping edition
+# and architecture suffixes
+function get_base_package_base {
+	local f="$1"
+	local b
+
+	b=$(get_base_package "$f") || return 1
+
+	# Strip known edition suffixes
+	b="${b%-gpl}"
+	b="${b%-pro}"
+
+	# Strip known arch suffixes
+	b="${b%-all}"
+	b="${b%-noarch}"
+	b="${b%-amd64}"
+	b="${b%-arm64}"
+	b="${b%-i386}"
+	b="${b%-x86_64}"
+	b="${b%-aarch64}"
+
+	echo "$b"
+}
+
 # Cleans up package files by keeping only the latest version of each package
 # 
 # Usage:
@@ -983,55 +1074,6 @@ function cleanup_packages {
 		local filename="$1"
 		[[ $filename =~ [-_]latest[._] ]] && return 0
 		return 1
-	}
-
-	get_base_package() {
-		local filename="$1"
-	
-		# Strip extensions (.deb/.rpm and .tar.gz)
-		filename=${filename%.*}
-		filename=${filename%.tar}
-	
-		# Capture arch, remove from filename, but remember it to
-		# make sure we group by it
-		local arch=""
-		if [[ $filename =~ _(amd64|arm64|i386|)$ ]]; then
-			arch="${BASH_REMATCH[1]}"
-			filename="${filename%_*}"
-		elif [[ $filename =~ \.(x86_64|aarch64|i386|noarch)$ ]]; then
-			arch="${BASH_REMATCH[1]}"
-			filename="${filename%.*}"
-		fi
-		
-		# Treat neutral as no arch bucket
-		[[ $arch == "all" || $arch == "noarch" ]] && arch=""
-	
-		# Optional edition at end (e.g., gpl/pro/beta)
-		local edition=""
-		if [[ $filename =~ [._-]([A-Za-z][A-Za-z0-9_]*)$ ]]; then
-			edition="${BASH_REMATCH[1]}"
-			filename=${filename%[._-]$edition}
-		fi
-	
-		# Drop trailing release like -2
-		if [[ $filename =~ ^(.*)-([0-9]+)$ ]]; then
-			filename="${BASH_REMATCH[1]}"
-		fi
-	
-		# Base before version (has at least one dot)
-		local base
-		if [[ $filename =~ ^(.*)[-_][0-9]+\.[0-9]+ ]]; then
-			base="${BASH_REMATCH[1]}"
-		elif [[ $filename =~ ^(.*)[-_]latest ]]; then
-			base="${BASH_REMATCH[1]}"
-		else
-			base="$filename"
-		fi
-	
-		# build key: per edition, per arch
-		[[ -n "$edition" ]] && base="$base-$edition"
-		[[ -n "$arch" ]] && base="$base-$arch"
-		echo "$base"
 	}
 
 	get_version() {

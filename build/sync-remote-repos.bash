@@ -11,7 +11,7 @@
 #   .htaccess
 #   401.html
 #   .lock*
-#   .uploaded_list*
+#   .promote-hold*
 
 # Add strict error handling
 set -euo pipefail
@@ -37,9 +37,9 @@ readonly -a rsync_opts=(
 	"--human-readable"
 	"--safe-links"
 	"--chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r"
-	"--exclude=/.repo-theme/"
+	"--exclude=/.repo-theme"
 	"--exclude=/.lock*"
-	"--exclude=/.uploaded_list*"
+	"--exclude=/.promote-hold*"
 	"--exclude=/.htaccess"
 	"--exclude=/401.html"
 )

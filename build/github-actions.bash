@@ -93,24 +93,39 @@ if [[ $orig =~ $del_re ]]; then
 	exec /usr/bin/find "$del_dir_rp" -maxdepth 1 -name "$del_pat" -delete
 fi
 
-# Allow locked list using: uploaded_list 'dir' 'uploaded-list-tmp-file'
-readonly mv_re="^uploaded_list[[:space:]]+'([^']+)'[[:space:]]+'([^']+)'[[:space:]]*$"
-if [[ $orig =~ $mv_re ]]; then
-	readonly mv_dir=${BASH_REMATCH[1]}
-	readonly mv_tmp=${BASH_REMATCH[2]}
+# Allow promote hold management using:
+#   promote_hold 'dir' 'pkgbase' 'add'
+#   promote_hold 'dir' 'pkgbase' 'remove'
+readonly hold_re="^promote_hold[[:space:]]+'([^']+)'[[:space:]]+'([^']+)'[[:space:]]+'(add|remove)'[[:space:]]*$"
+if [[ $orig =~ $hold_re ]]; then
+	readonly hold_dir=${BASH_REMATCH[1]}
+	readonly pkg_base=${BASH_REMATCH[2]}
+	readonly action=${BASH_REMATCH[3]}
 
-	# Temporary file must be a simple basename under the dir
-	[[ $mv_tmp == */* ]] && deny
-	[[ $mv_tmp == .uploaded_list.* ]] || deny
+	hold_dir_rp="$(readlink -f -- "$hold_dir")" || deny
+	readonly hold_dir_rp
+	[[ -d "$hold_dir_rp" ]] || deny
+	[[ $hold_dir_rp == "$allow_base_rp"/* ]] || deny
 
-	mv_dir_rp="$(readlink -f -- "$mv_dir")" || deny
-	readonly mv_dir_rp
-	[[ -d "$mv_dir_rp" ]] || deny
-	[[ $mv_dir_rp == "$allow_base_rp"/* ]] || deny
+	# Only allow simple names
+	[[ $pkg_base =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || deny
 
-	cd "$mv_dir_rp" || deny
-	exec /usr/bin/flock -x .uploaded_list.lock \
-		/usr/bin/mv -f -- "$mv_tmp" .uploaded_list
+	cd "$hold_dir_rp" || deny
+
+	# Keep file local to the repo dir
+	readonly hold_file=".promote-hold"
+	readonly lock_file=".promote-hold.lock"
+
+	if [[ $action == add ]]; then
+		exec /usr/bin/flock -x "$lock_file" /usr/bin/bash -c \
+			"touch '$hold_file' &&
+			 ( grep -Fxq '$pkg_base' '$hold_file' || echo '$pkg_base' >> '$hold_file' )"
+	else
+		exec /usr/bin/flock -x "$lock_file" /usr/bin/bash -c \
+			"[ -f '$hold_file' ] || exit 0
+			 grep -Fxv '$pkg_base' '$hold_file' > '$hold_file.tmp' || true
+			 /usr/bin/mv -f -- '$hold_file.tmp' '$hold_file'"
+	fi
 fi
 
 # Allow signing call using: sign 'dir' 'target' ['promote']

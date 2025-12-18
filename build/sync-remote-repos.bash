@@ -33,6 +33,7 @@ readonly -a rsync_opts=(
 	"--archive"
 	"--delete"
 	"--delete-delay"
+	"--checksum"
 	"--itemize-changes"
 	"--human-readable"
 	"--chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r"

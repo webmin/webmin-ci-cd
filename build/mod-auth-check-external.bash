@@ -90,6 +90,7 @@ printf 'machine %s login %s password %s\n' "${host}" "${login}" "${password}" > 
 status="$(curl -sS -o /dev/null -w '%{http_code}' \
                --netrc-file "${netrc}" \
                -H "X-Auth-IP: ${REMOTE_ADDR:-}" \
+               -H "X-Auth-Secret: SECRET" \
                --connect-timeout 3 --max-time 8 \
                "${ENDPOINT}" || true)"
 

@@ -145,6 +145,7 @@ function build {
 	cd "$root_prod" || exit 1
 
 	echo "Pre-building package .."
+	local cmd
 	cmd="./makedist.pl \"--mod-list $build_type ${ver}${relval-}\" \
 		$VERBOSITY_LEVEL"
 	eval "$cmd"
@@ -172,10 +173,20 @@ function build {
 	cmd="find $root_apt -name ${prod}*${ver}*\.deb -exec mv '{}' \
 		$ROOT_REPOS \; $VERBOSITY_LEVEL"
 	eval "$cmd"
-	cmd="mv -f $ROOT_REPOS/${prod}*${ver}*\.deb \
-		$ROOT_REPOS/${prod}_${ver}-${rel}_all.deb $VERBOSITY_LEVEL"
-	eval "$cmd"
-	postcmd $?
+	local -a debs
+	local dst src
+	shopt -s nullglob
+	debs=( "$ROOT_REPOS/${prod}"*"$ver"*.deb )
+	shopt -u nullglob
+	dst="$ROOT_REPOS/${prod}_${ver}-${rel}_all.deb"
+	src="${debs[0]-}"
+	if [[ -n "$src" && ! "$src" -ef "$dst" ]]; then
+		cmd="mv -f -- \"$src\" \"$dst\" $VERBOSITY_LEVEL"
+		eval "$cmd"
+		postcmd $?
+	else
+		postcmd 0
+	fi
 
 	# If the build type isn't full, build other modules separately for each product
 	if [ "$build_type" != 'full' ]; then

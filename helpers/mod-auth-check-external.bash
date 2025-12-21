@@ -10,6 +10,11 @@
 set -euo pipefail
 umask 077
 
+# Set input args from environment
+readonly login="${USER:-}"
+readonly password="${PASS:-}"
+readonly client_ip="${AUTH_CLIENT_IP:-}"
+
 # Defaults
 ENDPOINT="${HTTP_AUTH_ENDPOINT:-}"  # required
 TTL="${HTTP_AUTH_TTL:-10}"
@@ -41,10 +46,6 @@ done
 # Validate
 [[ -n "${ENDPOINT}" ]] || { echo "Error: --endpoint is required." >&2; exit 1; }
 [[ "${TTL}" =~ ^[0-9]+$ ]] || { echo "Error: TTL must be an integer." >&2; exit 1; }
-
-# Read credentials from stdin
-read -r login  || exit 1
-read -r password || exit 1
 
 # Cache setup
 mkdir -p "${CACHE_DIR}"
@@ -88,12 +89,9 @@ chmod 600 "${netrc}"
 printf 'machine %s login %s password %s\n' "${host}" "${login}" "${password}" > "${netrc}"
 
 # Get real client IP: X-Forwarded-For first, then IP, then REMOTE_ADDR
-real_ip="${HTTP_X_FORWARDED_FOR:-}"
-real_ip="${real_ip%%,*}"
-real_ip="${real_ip:-${IP:-${REMOTE_ADDR:-}}}"
 status="$(curl -sS -o /dev/null -w '%{http_code}' \
                --netrc-file "${netrc}" \
-               -H "X-Auth-IP: ${real_ip}" \
+               -H "X-Auth-IP: ${client_ip}" \
                -H "X-Auth-Secret: SECRET" \
                --connect-timeout 3 --max-time 8 \
                "${ENDPOINT}" || true)"

@@ -88,7 +88,7 @@ trap 'rm -f "${netrc}"' EXIT
 chmod 600 "${netrc}"
 printf 'machine %s login %s password %s\n' "${host}" "${login}" "${password}" > "${netrc}"
 
-# Get real client IP: X-Forwarded-For first, then IP, then REMOTE_ADDR
+# Call endpoint
 status="$(curl -sS -o /dev/null -w '%{http_code}' \
                --netrc-file "${netrc}" \
                -H "X-Auth-IP: ${client_ip}" \

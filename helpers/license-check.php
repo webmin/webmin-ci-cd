@@ -24,6 +24,7 @@
  *
  * Response headers:
  *   X-License: valid|invalid|expired
+ *   X-Client-IP: (client IP used for rate limiting)
  *   X-Cache-Status: cached|fresh|bypass
  *   X-Cache-TTL: (time remaining, e.g., 4m30s)
  *   X-Cache-Via: socket|tcp
@@ -79,11 +80,12 @@ function formatTtl(int $seconds): string
  * Deny access without prompting for credentials. Used for bad credentials, rate
  * limiting, or failed checks.
  */
-function deny(bool $cached, int $ttl, ?string $connType, string $reason = 'invalid'): never
+function deny(bool $cached, int $ttl, ?string $connType, string $clientIp, string $reason = 'invalid'): never
 {
 	http_response_code(401);
 	header('Cache-Control: no-store');
 	header('X-License: ' . $reason);
+	header('X-Client-IP: ' . $clientIp);
 	if ($connType === null) {
 		header('X-Cache-Status: bypass');
 	} else {
@@ -97,18 +99,19 @@ function deny(bool $cached, int $ttl, ?string $connType, string $reason = 'inval
 /**
  * Forbid access. Used when IP is not in allowlist or secret mismatch.
  */
-function forbidden(string $reason = 'denied'): never
+function forbidden(string $reason, string $clientIp): never
 {
 	http_response_code(403);
 	header('Cache-Control: no-store');
 	header('X-Forbidden-Reason: ' . $reason);
+	header('X-Client-IP: ' . $clientIp);
 	exit;
 }
 
 /**
  * Too many requests. Used when rate limited.
  */
-function tooManyRequests(int $retryAfter, string $connType): never
+function tooManyRequests(int $retryAfter, string $connType, string $clientIp): never
 {
 	http_response_code(429);
 	header('Retry-After: ' . $retryAfter);
@@ -116,6 +119,7 @@ function tooManyRequests(int $retryAfter, string $connType): never
 	header('X-RateLimit-Status: blocked');
 	header('X-RateLimit-Retry: ' . formatTtl($retryAfter));
 	header('X-RateLimit-Via: ' . $connType);
+	header('X-Client-IP: ' . $clientIp);
 	exit;
 }
 
@@ -145,11 +149,12 @@ function denyNoCredentials(): never
 /**
  * Allow access. License is valid.
  */
-function allow(bool $cached, int $ttl, ?string $connType): never
+function allow(bool $cached, int $ttl, ?string $connType, string $clientIp): never
 {
 	http_response_code(200);
 	header('Cache-Control: no-store');
 	header('X-License: valid');
+	header('X-Client-IP: ' . $clientIp);
 	if ($connType === null) {
 		header('X-Cache-Status: bypass');
 	} else {
@@ -166,11 +171,13 @@ function allow(bool $cached, int $ttl, ?string $connType): never
  */
 function main(): void
 {
+	// Set initial client IP from remote addr
+	$clientIp = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+
 	// Check IP allowlist first
 	if (ALLOWED_IPS !== []) {
-		$remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '';
-		if (!in_array($remoteAddr, ALLOWED_IPS, true)) {
-			forbidden('ip-not-allowed');
+		if (!in_array($clientIp, ALLOWED_IPS, true)) {
+			forbidden('ip-not-allowed', $clientIp);
 		}
 	}
 
@@ -178,7 +185,7 @@ function main(): void
 	if (AUTH_SECRET !== '') {
 		$providedSecret = $_SERVER['HTTP_X_AUTH_SECRET'] ?? '';
 		if ($providedSecret !== AUTH_SECRET) {
-			forbidden('secret-mismatch');
+			forbidden('secret-mismatch', $clientIp);
 		}
 	}
 
@@ -192,11 +199,10 @@ function main(): void
 
 	// Reject oversized input
 	if (strlen($serialId) > 16 || strlen($licenseKey) > 16) {
-		deny(false, CACHE_FAIL_TTL, null, 'invalid');
+		deny(false, CACHE_FAIL_TTL, null, $clientIp, 'invalid');
 	}
 
-	// Figure out client IP but trust X-Auth-IP only if secret matches
-	$clientIp = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+	// Trust X-Auth-IP only if secret matches
 	if (AUTH_SECRET !== '' && ($_SERVER['HTTP_X_AUTH_SECRET'] ?? '') === AUTH_SECRET) {
 		$headerIp = trim($_SERVER['HTTP_X_AUTH_IP'] ?? '');
 		if ($headerIp !== '') {
@@ -224,7 +230,7 @@ function main(): void
 		try {
 			if ($valkey->exists($cacheOkKey)) {
 				$ttl = $valkey->ttl($cacheOkKey);
-				allow(true, $ttl > 0 ? $ttl : CACHE_OK_TTL, $connType);
+				allow(true, $ttl > 0 ? $ttl : CACHE_OK_TTL, $connType, $clientIp);
 			}
 		} catch (Throwable) {}
 	}
@@ -244,7 +250,7 @@ function main(): void
 				$valkey->expire($rateLimitKey, $blockTime);
 				
 				$ttl = $valkey->ttl($rateLimitKey);
-				tooManyRequests($ttl > 0 ? $ttl : $blockTime, $connType);
+				tooManyRequests($ttl > 0 ? $ttl : $blockTime, $connType, $clientIp);
 			}
 		} catch (Throwable) {}
 	}
@@ -256,7 +262,7 @@ function main(): void
 			if ($cachedReason !== false) {
 				$ttl = $valkey->ttl($cacheFailKey);
 				$reason = strtolower($cachedReason) ?: 'invalid';
-				deny(true, $ttl > 0 ? $ttl : CACHE_FAIL_TTL, $connType, $reason);
+				deny(true, $ttl > 0 ? $ttl : CACHE_FAIL_TTL, $connType, $clientIp, $reason);
 			}
 		} catch (Throwable) {}
 	}
@@ -289,16 +295,16 @@ function main(): void
 	}
 
 	if ($result === 'valid') {
-		allow(false, CACHE_OK_TTL, $connType);
+		allow(false, CACHE_OK_TTL, $connType, $clientIp);
 	} else {
-		deny(false, CACHE_FAIL_TTL, $connType, strtolower($result));
+		deny(false, CACHE_FAIL_TTL, $connType, $clientIp, strtolower($result));
 	}
 }
 
 /**
  * Connect to Valkey. Prefers unix socket if available.
  * Returns null if connection fails (script continues without caching).
- * Sets $connType to 'SOCK', 'TCP', or leaves as null on failure.
+ * Sets $connType to 'socket', 'tcp', or leaves as null on failure.
  */
 function connectValkey(?string &$connType): ?Redis
 {

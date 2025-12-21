@@ -36,39 +36,21 @@
  * Logging (when LOG_ENABLED = true):
  *   Writes to $HOME/logs/license-auth-check.log
  *   Format: [timestamp] code client_ip serial status [extra]
+ *
+ * Config:
+ *   Loaded from $HOME/.config/mod-auth-check.conf or fails with 500 if missing
  */
 
 declare(strict_types=1);
 
-// Database
-const DB_DSN    = 'mysql:host=127.0.0.1;dbname=database;';
-const DB_USER   = 'user';
-const DB_PASS   = 'password';
-const DB_TABLE  = 'table';
-
-// Valkey (tries unix socket first, falls back to TCP)
-const VALKEY_SOCKET = '/run/valkey/valkey.sock';
-const VALKEY_HOST   = '127.0.0.1';
-const VALKEY_PORT   = 6379;
-
-// Timing
-const GRACE_DAYS        = 7;    // days after expiry to still allow access
-const CACHE_OK_TTL      = 600;  // cache valid auth for 10 minutes
-const CACHE_FAIL_TTL    = 45;   // cache invalid auth for 45 seconds
-const RATE_LIMIT_WINDOW = 3;    // initial seconds between attempts per IP+serial
-const RATE_LIMIT_MAX    = 90;   // max block time after repeated failures
-
-// Repo server must send this secret (unless empty) to trust X-Auth-IP header
-const AUTH_SECRET = 'SECRET';
-
-// Only these IPs can use this endpoint (empty to allow all and rely on secret)
-const ALLOWED_IPS = [
-	'127.0.0.1',
-	'::1',
-];
-
-// Logging. If enabled, logs to $HOME/logs/license-auth-check.log
-const LOG_ENABLED = false;
+// Load config from ~/.config/mod-auth-check.conf
+$home = $_SERVER['HOME'] ?? getenv('HOME');
+$configFile = "{$home}/.config/mod-auth-check.conf";
+if (!$home || !file_exists($configFile)) {
+	http_response_code(500);
+	exit;
+}
+require $configFile;
 
 /**
  * Format TTL for display
@@ -120,7 +102,7 @@ function deny(bool $cached, int $ttl, ?string $connType, string $clientIp, strin
 		? 'bypass'
 		: ($cached
 			? 'cached'
-			: 'fresh') . ' ' . formatTtl($ttl) . '[' . $connType . ']';
+			: 'fresh') . ' ' . formatTtl($ttl) . ' [' . $connType . ']';
 	writeLog(401, $clientIp, $reason, $cacheInfo);
 	
 	http_response_code(401);
@@ -157,7 +139,7 @@ function forbidden(string $reason, string $clientIp): never
 function tooManyRequests(int $retryAfter, string $connType, string $clientIp): never
 {
 	writeLog(429, $clientIp, 'rate-limited',
-	         formatTtl($retryAfter) . '[' . $connType . ']');
+	         formatTtl($retryAfter) . ' [' . $connType . ']');
 	
 	http_response_code(429);
 	header('Retry-After: ' . $retryAfter);
@@ -205,7 +187,7 @@ function allow(bool $cached, int $ttl, ?string $connType, string $clientIp): nev
 		? 'bypass'
 		: ($cached
 			? 'cached'
-			: 'fresh') . ' ' . formatTtl($ttl) . '[' . $connType . ']';
+			: 'fresh') . ' ' . formatTtl($ttl) . ' [' . $connType . ']';
 	writeLog(200, $clientIp, 'valid', $cacheInfo);
 	
 	http_response_code(200);

@@ -13,7 +13,7 @@ umask 077
 # Set input args from environment
 readonly login="${USER:-}"
 readonly password="${PASS:-}"
-readonly client_ip="${AUTH_CLIENT_IP:-}"
+readonly client_ip="${IP:-}"
 
 # Defaults
 ENDPOINT="${HTTP_AUTH_ENDPOINT:-}"  # required

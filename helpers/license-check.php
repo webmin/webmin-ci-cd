@@ -32,6 +32,10 @@
  *   X-RateLimit-Retry: (time remaining)
  *   X-RateLimit-Via: socket|tcp
  *   X-Forbidden-Reason: ip-not-allowed|secret-mismatch (only on 403)
+ *
+ * Logging (when LOG_ENABLED = true):
+ *   Writes to $HOME/logs/license-auth-check.log
+ *   Format: [timestamp] code client_ip serial status [extra]
  */
 
 declare(strict_types=1);
@@ -63,6 +67,9 @@ const ALLOWED_IPS = [
 	'::1',
 ];
 
+// Logging. If enabled, logs to $HOME/logs/license-auth-check.log
+const LOG_ENABLED = false;
+
 /**
  * Format TTL for display
  */
@@ -77,11 +84,45 @@ function formatTtl(int $seconds): string
 }
 
 /**
+ * Write log entry if logging is enabled
+ */
+function writeLog(int $code, string $clientIp, string $status, string $extra = ''): void
+{
+	if (!LOG_ENABLED) {
+		return;
+	}
+
+	$home = $_SERVER['HOME'] ?? getenv('HOME') ?: '/tmp';
+	$logDir = "{$home}/logs";
+	$logFile = "{$logDir}/license-auth-check.log";
+
+	// Create log directory if needed
+	if (!is_dir($logDir)) {
+		@mkdir($logDir, 0750, true);
+	}
+
+	$timestamp = date('Y-m-d H:i:s');
+	$serial = $_SERVER['PHP_AUTH_USER'] ?? '-';
+	$extra = $extra !== '' ? " {$extra}" : '';
+	
+	$line = "[{$timestamp}] {$code} {$clientIp} {$serial} {$status}{$extra}\n";
+	
+	@file_put_contents($logFile, $line, FILE_APPEND | LOCK_EX);
+}
+
+/**
  * Deny access without prompting for credentials. Used for bad credentials, rate
  * limiting, or failed checks.
  */
 function deny(bool $cached, int $ttl, ?string $connType, string $clientIp, string $reason = 'invalid'): never
 {
+	$cacheInfo = $connType === null
+		? 'bypass'
+		: ($cached
+			? 'cached'
+			: 'fresh') . ' ' . formatTtl($ttl) . '[' . $connType . ']';
+	writeLog(401, $clientIp, $reason, $cacheInfo);
+	
 	http_response_code(401);
 	header('Cache-Control: no-store');
 	header('X-License: ' . $reason);
@@ -101,6 +142,8 @@ function deny(bool $cached, int $ttl, ?string $connType, string $clientIp, strin
  */
 function forbidden(string $reason, string $clientIp): never
 {
+	writeLog(403, $clientIp, $reason);
+	
 	http_response_code(403);
 	header('Cache-Control: no-store');
 	header('X-Forbidden-Reason: ' . $reason);
@@ -113,6 +156,9 @@ function forbidden(string $reason, string $clientIp): never
  */
 function tooManyRequests(int $retryAfter, string $connType, string $clientIp): never
 {
+	writeLog(429, $clientIp, 'rate-limited',
+	         formatTtl($retryAfter) . '[' . $connType . ']');
+	
 	http_response_code(429);
 	header('Retry-After: ' . $retryAfter);
 	header('Cache-Control: no-store');
@@ -126,8 +172,10 @@ function tooManyRequests(int $retryAfter, string $connType, string $clientIp): n
 /**
  * Service unavailable. Used when DB is down.
  */
-function serviceUnavailable(): never
+function serviceUnavailable(string $clientIp): never
 {
+	writeLog(503, $clientIp, 'db-unavailable');
+	
 	http_response_code(503);
 	header('Retry-After: 5');
 	header('Cache-Control: no-store');
@@ -138,8 +186,10 @@ function serviceUnavailable(): never
  * Deny access and prompt for credentials.
  * Used when no credentials were provided.
  */
-function denyNoCredentials(): never
+function denyNoCredentials(string $clientIp): never
 {
+	writeLog(401, $clientIp, 'no-credentials');
+	
 	http_response_code(401);
 	header('WWW-Authenticate: Basic realm="License Required"');
 	header('Cache-Control: no-store');
@@ -151,6 +201,13 @@ function denyNoCredentials(): never
  */
 function allow(bool $cached, int $ttl, ?string $connType, string $clientIp): never
 {
+	$cacheInfo = $connType === null
+		? 'bypass'
+		: ($cached
+			? 'cached'
+			: 'fresh') . ' ' . formatTtl($ttl) . '[' . $connType . ']';
+	writeLog(200, $clientIp, 'valid', $cacheInfo);
+	
 	http_response_code(200);
 	header('Cache-Control: no-store');
 	header('X-License: valid');
@@ -194,7 +251,7 @@ function main(): void
 	$licenseKey = $_SERVER['PHP_AUTH_PW'] ?? '';
 
 	if ($serialId === '' || $licenseKey === '') {
-		denyNoCredentials();
+		denyNoCredentials($clientIp);
 	}
 
 	// Reject oversized input
@@ -272,7 +329,7 @@ function main(): void
 
 	// DB error
 	if ($result === null) {
-		serviceUnavailable();
+		serviceUnavailable($clientIp);
 	}
 
 	// Cache the result

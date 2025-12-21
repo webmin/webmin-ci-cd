@@ -1,6 +1,6 @@
 <?php
 /**
- * license-check.php (https://github.com/webmin/webmin-ci-cd)
+ * mod-auth-license-check.php (https://github.com/webmin/webmin-ci-cd)
  * Copyright Ilia Ross <ilia@webmin.dev>
  * Licensed under the MIT License
  *

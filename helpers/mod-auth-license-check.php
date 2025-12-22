@@ -256,9 +256,9 @@ function main(): void
 
 	// Build cache keys
 	$credHash     = hash('sha256', "{$serialId}\0{$licenseKey}");
-	$cacheOkKey   = "license_auth:ok:{$credHash}";
-	$cacheFailKey = "license_auth:fail:{$credHash}";
-	$rateLimitKey = "license_auth:rl:" . hash('sha256', "{$clientIp}\0{$serialId}");
+	$cacheOkKey   = "repo_auth:ok:{$credHash}";
+	$cacheFailKey = "repo_auth:fail:{$credHash}";
+	$rateLimitKey = "repo_auth:rl:" . hash('sha256', "{$clientIp}\0{$serialId}");
 
 	// Connect to Valkey
 	$connType = null;
@@ -277,7 +277,7 @@ function main(): void
 	// Rate limit check only applies to potentially invalid attempts
 	if ($valkey !== null && RATE_LIMIT_WINDOW > 0) {
 		try {
-			$penaltyKey = "license_auth:pen:" . hash('sha256', "{$clientIp}\0{$serialId}");
+			$penaltyKey = "repo_auth:pen:" . hash('sha256', "{$clientIp}\0{$serialId}");
 			
 			if ($valkey->set($rateLimitKey, '1', ['nx', 'ex' => RATE_LIMIT_WINDOW]) === false) {
 				// Already rate limited, just bump penalty and extend block time
@@ -322,7 +322,7 @@ function main(): void
 					$valkey->setex($cacheOkKey, CACHE_OK_TTL, '1');
 				}
 				// Reset penalty on success so future typos don't start from high penalty
-				$penaltyKey = "license_auth:pen:" . hash('sha256', "{$clientIp}\0{$serialId}");
+				$penaltyKey = "repo_auth:pen:" . hash('sha256', "{$clientIp}\0{$serialId}");
 				$valkey->del($penaltyKey);
 			} else {
 				if (CACHE_FAIL_TTL > 0) {

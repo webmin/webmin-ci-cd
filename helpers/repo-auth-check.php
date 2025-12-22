@@ -93,6 +93,29 @@ function writeLog(int $code, string $clientIp, string $status, string $extra = '
 }
 
 /**
+ * Log error message if logging is enabled
+ */
+function logError(string $context, string $message): void
+{
+	if (!LOG_ENABLED) {
+		return;
+	}
+
+	$home = $_SERVER['HOME'] ?? getenv('HOME') ?: '/tmp';
+	$logDir = "{$home}/logs";
+	$logFile = "{$logDir}/api-license-repo.log";
+
+	if (!is_dir($logDir)) {
+		@mkdir($logDir, 0750, true);
+	}
+
+	$timestamp = date('Y-m-d H:i:s');
+	$line = "[{$timestamp}] ERROR {$context}: {$message}\n";
+	
+	@file_put_contents($logFile, $line, FILE_APPEND | LOCK_EX);
+}
+
+/**
  * Deny access without prompting for credentials. Used for bad credentials, rate
  * limiting, or failed checks.
  */
@@ -274,7 +297,9 @@ function main(): void
 				$ttl = $valkey->ttl($cacheOkKey);
 				allow(true, $ttl > 0 ? $ttl : CACHE_OK_TTL, $connType, $clientIp);
 			}
-		} catch (Throwable) {}
+		} catch (Throwable $e) {
+			logError('main:cacheRead', $e->getMessage());
+		}
 	}
 
 	// Rate limit check only applies to potentially invalid attempts
@@ -294,7 +319,9 @@ function main(): void
 				$ttl = $valkey->ttl($rateLimitKey);
 				tooManyRequests($ttl > 0 ? $ttl : $blockTime, $connType, $clientIp);
 			}
-		} catch (Throwable) {}
+		} catch (Throwable $e) {
+			logError('main:rateLimit', $e->getMessage());
+		}
 	}
 
 	// Check fail cache, after rate limit so repeated failures are throttled
@@ -306,7 +333,9 @@ function main(): void
 				$reason = strtolower($cachedReason) ?: 'invalid';
 				deny(true, $ttl > 0 ? $ttl : CACHE_FAIL_TTL, $connType, $clientIp, $reason);
 			}
-		} catch (Throwable) {}
+		} catch (Throwable $e) {
+			logError('main:cacheReadFail', $e->getMessage());
+		}
 	}
 
 	// Check database
@@ -333,7 +362,9 @@ function main(): void
 					$valkey->setex($cacheFailKey, CACHE_FAIL_TTL, $result);
 				}
 			}
-		} catch (Throwable) {}
+		} catch (Throwable $e) {
+			logError('main:cacheWrite', $e->getMessage());
+		}
 	}
 
 	if ($result === 'valid') {
@@ -381,7 +412,8 @@ function connectValkey(?string &$connType): ?Redis
 		}
 
 		return $redis;
-	} catch (Throwable) {
+	} catch (Throwable $e) {
+		logError('connectValkey', $e->getMessage());
 		$connType = null;
 		return null;
 	}
@@ -443,7 +475,8 @@ function checkLicense(string $serialId, string $licenseKey): ?string
 
 		return 'expired';
 
-	} catch (Throwable) {
+	} catch (Throwable $e) {
+		logError('checkLicense', $e->getMessage());
 		return null;
 	}
 }

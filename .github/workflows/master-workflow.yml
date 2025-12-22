@@ -104,6 +104,7 @@ jobs:
           CLOUD__UPLOAD_SSH_DIR: ${{ inputs.is-release && secrets.PRERELEASE_UPLOAD_SSH_DIR || secrets.DEV_UPLOAD_SSH_DIR }}
           CLOUD__SSH_PRV_KEY: ${{ secrets.DEV_SSH_PRV_KEY }}
           CLOUD__GH_TOKEN: ${{ secrets.DEV_CHILD_GITHUB_TOKEN }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message || '' }}
         run: |-
           # Set build mode
           build_args=()
@@ -131,7 +132,7 @@ jobs:
           [ "${{ github.ref_type }}" = "tag" ] && should_force_rebuild=true
           [ "${{ github.event_name }}" = "release" ] && should_force_rebuild=true
           if [ "${{ github.event_name }}" = "push" ]; then
-            commit_msg="${{ github.event.head_commit.message || '' }}"
+            commit_msg="$COMMIT_MESSAGE"
             [[ "$commit_msg" == *"[rebuild-all-modules]"* ]] && should_force_rebuild=true
             [[ "$commit_msg" == *"version bump"* ]] && should_force_rebuild=true
             [[ "$commit_msg" =~ ^v?[0-9]+\.[0-9]+(\.[0-9]+)*$ ]] && should_force_rebuild=true

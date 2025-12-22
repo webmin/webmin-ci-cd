@@ -210,6 +210,9 @@ function allow(bool $cached, int $ttl, ?string $connType, string $clientIp): nev
  */
 function main(): void
 {
+	// Remove identifying headers
+	header_remove('X-Powered-By');
+
 	// Set initial client IP from remote addr
 	$clientIp = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
 

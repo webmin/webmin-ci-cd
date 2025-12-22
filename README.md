@@ -76,6 +76,8 @@ This is a quick overview of the key files involved in the build process, highlig
 
 - **repo-auth-check.bash** - this helper script checks a username and password with a web service and allows or denies access, caching recent successes to avoid repeated calls during page loads.
 
+- **repo-auth-check.php** - this is an HTTP endpoint for license validation, designed to be called by `mod_authnz_external` via a bash script on the repository server. The script checks credentials against a MariaDB database and verifies that the license hasn't expired, considering a configurable grace period.
+
 - **module-groups.txt** — this text file defines groups of modules that need to be rebuilt if certain modules are changed. For instance, changes in the Virtualmin GPL module will trigger a rebuild of the Virtualmin Pro package.
 
 - **modules-mapping.txt** — this text file provides a mapping between repository names and package names, addressing cases where the package name differs from the repository name. It also allows configuration of the package edition, license type, and other options, such as the package target directory.

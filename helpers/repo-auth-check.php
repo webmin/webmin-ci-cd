@@ -34,7 +34,7 @@
  *   X-Forbidden-Reason: ip-not-allowed|secret-mismatch (only on 403)
  *
  * Logging (when LOG_ENABLED = true):
- *   Writes to $HOME/logs/license-auth-check.log
+ *   Writes to $HOME/logs/api-license-repo.log
  *   Format: [timestamp] code client_ip serial status [extra]
  *
  * Config:
@@ -76,7 +76,7 @@ function writeLog(int $code, string $clientIp, string $status, string $extra = '
 
 	$home = $_SERVER['HOME'] ?? getenv('HOME') ?: '/tmp';
 	$logDir = "{$home}/logs";
-	$logFile = "{$logDir}/license-auth-check.log";
+	$logFile = "{$logDir}/api-license-repo.log";
 
 	// Create log directory if needed
 	if (!is_dir($logDir)) {

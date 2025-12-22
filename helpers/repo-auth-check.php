@@ -1,6 +1,6 @@
 <?php
 /**
- * mod-auth-license-check.php (https://github.com/webmin/webmin-ci-cd)
+ * repo-auth-check.php (https://github.com/webmin/webmin-ci-cd)
  * Copyright Ilia Ross <ilia@webmin.dev>
  * Licensed under the MIT License
  *
@@ -38,14 +38,14 @@
  *   Format: [timestamp] code client_ip serial status [extra]
  *
  * Config:
- *   Loaded from $HOME/.config/mod-auth-check.conf or fails with 500 if missing
+ *   Loaded from $HOME/.config/repo-auth-check.conf or fails with 500 if missing
  */
 
 declare(strict_types=1);
 
-// Load config from ~/.config/mod-auth-check.conf
+// Load config from ~/.config/repo-auth-check.conf
 $home = $_SERVER['HOME'] ?? getenv('HOME');
-$configFile = "{$home}/.config/mod-auth-check.conf";
+$configFile = "{$home}/.config/repo-auth-check.conf";
 if (!$home || !file_exists($configFile)) {
 	http_response_code(500);
 	exit;

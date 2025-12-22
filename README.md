@@ -74,7 +74,7 @@ This is a quick overview of the key files involved in the build process, highlig
 
 - **sync-remote-repos.bash** - this script performs a full mirror sync from the staging environment to the repository server. This makes sure the repository server is identical to the staging environment.
 
-- **mod-auth-check-external.bash** - this helper script checks a username and password with a web service and allows or denies access, caching recent successes to avoid repeated calls during page loads.
+- **repo-auth-check.bash** - this helper script checks a username and password with a web service and allows or denies access, caching recent successes to avoid repeated calls during page loads.
 
 - **module-groups.txt** — this text file defines groups of modules that need to be rebuilt if certain modules are changed. For instance, changes in the Virtualmin GPL module will trigger a rebuild of the Virtualmin Pro package.
 

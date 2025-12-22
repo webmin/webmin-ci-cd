@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# mod-auth-check-external.bash (https://github.com/webmin/webmin-ci-cd)
+# repo-auth-check.bash (https://github.com/webmin/webmin-ci-cd)
 # Copyright Ilia Ross <ilia@webmin.dev>
 # Licensed under the MIT License
 #
 # Validates basic credentials via remote endpoint for mod_authnz_external. Reads
-# login and password from stdin; caches result in /dev/shm; exits 0 (allow) or 1
-# (deny).
+# login and password from environment variables; caches result in /dev/shm;
+# exits 0 (allow) or 1 (deny).
 
 set -euo pipefail
 umask 077

@@ -31,6 +31,10 @@ jobs:
             cp -a "$f" "assets/$(basename "$f")"
           done < <(find build -type f -print0)
 
+          while IFS= read -r -d '' f; do
+            cp -a "$f" "assets/$(basename "$f")"
+          done < <(find helpers -type f -print0)
+
           ls -lah assets
 
       - name: Upload assets

@@ -12,6 +12,7 @@
 
 # Add strict error handling
 set -euo pipefail
+set +x
 
 # Set environment
 export HOME=/home/repositories
@@ -148,17 +149,19 @@ if [[ $orig =~ $sign_re ]]; then
 	[[ -d "$repo_dir_rp" ]] || deny
 	[[ $repo_dir_rp == "$allow_base_rp"/* ]] || deny
 
-	# Re-preset GPG signing key passphrases into agent cache
-	if ! /usr/bin/sudo -n /usr/bin/systemctl restart \
-		gpg-preset-repositories.service >/dev/null 2>&1
-	then
-		echo "Warning: Could not preset GPG passphrases, signing may" \
-			 "fail if cache expired" >&2
+	# Ensure gpg-agent is always killed to clear passphrases from memory
+	trap '/usr/bin/gpgconf --kill gpg-agent >/dev/null 2>&1 || true' EXIT INT TERM HUP
+
+	# Preset passphrases provided via stdin
+	if ! /usr/bin/sudo -n -S /usr/local/sbin/gpg-preset-repositories.bash >/dev/null; then
+		echo "Error: Could not preset GPG passphrases" >&2
+		deny
 	fi
 
 	# Execute the signing script with validated params
-	exec "$HOME/.local/sbin/sign-repo.bash" \
-		 "$repo_dir_rp" "$repo_target" "$promote"
+	/usr/bin/timeout --signal=TERM --kill-after=30 600 \
+		"$HOME/.local/sbin/sign-repo.bash" "$repo_dir_rp" "$repo_target" "$promote"
+	exit $?
 fi
 
 # Allow sync call using: sync

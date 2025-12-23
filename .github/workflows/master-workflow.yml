@@ -50,9 +50,11 @@ on:
         required: true
       DEV_UPLOAD_SSH_DIR:
         required: true
+      DEV_SSH_PRV_KEY:
+        required: true
       PRERELEASE_UPLOAD_SSH_DIR:
         required: true
-      DEV_SSH_PRV_KEY:
+      ALL_GPG_PH2:
         required: true
       DEV_CHILD_GITHUB_TOKEN:
         required: false
@@ -103,6 +105,7 @@ jobs:
           CLOUD__UPLOAD_SSH_USER: ${{ secrets.DEV_UPLOAD_SSH_USER }}
           CLOUD__UPLOAD_SSH_DIR: ${{ inputs.is-release && secrets.PRERELEASE_UPLOAD_SSH_DIR || secrets.DEV_UPLOAD_SSH_DIR }}
           CLOUD__SSH_PRV_KEY: ${{ secrets.DEV_SSH_PRV_KEY }}
+          CLOUD__GPG_PH2: ${{ secrets.ALL_GPG_PH2 }}
           CLOUD__GH_TOKEN: ${{ secrets.DEV_CHILD_GITHUB_TOKEN }}
           COMMIT_MESSAGE: ${{ github.event.head_commit.message || '' }}
         run: |-

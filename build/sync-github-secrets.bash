@@ -62,6 +62,7 @@ secrets=(
 	"DEV_UPLOAD_SSH_DIR"
 	"DEV_SSH_PRV_KEY"
 	"PRERELEASE_UPLOAD_SSH_DIR"
+	"ALL_GPG_PH2"
 )
 
 # Cleanup function

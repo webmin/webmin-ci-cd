@@ -230,7 +230,8 @@ function cloud_sign_and_build_repos {
 	local cmd1="ssh $ssh_options $CLOUD_UPLOAD_SSH_USER@$host "
 	cmd1+="\"sign '$CLOUD_UPLOAD_SSH_DIR' '$repo_type' '$promote_stable'\" "
 	cmd1+="$VERBOSITY_LEVEL"
-	eval "$cmd1"
+	set +x
+	printf '%s' "${CLOUD_GPG_PH2:?Missing CLOUD_GPG_PH2}" | eval "$cmd1"
 	postcmd $?
 	echo
 

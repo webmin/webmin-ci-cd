@@ -53,6 +53,7 @@ export CLOUD_UPLOAD_SSH_USER="${CLOUD__UPLOAD_SSH_USER-ghost}"
 export CLOUD_UPLOAD_SSH_DIR="${CLOUD__UPLOAD_SSH_DIR-}"
 export CLOUD_SSH_PRV_KEY="${CLOUD__SSH_PRV_KEY-}"
 export CLOUD_GH_TOKEN="${CLOUD__GH_TOKEN-}"
+export CLOUD_GPG_PH2="${CLOUD__GPG_PH2-}"
 
 # Define verbosity level
 if get_flag --verbose; then

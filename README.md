@@ -68,6 +68,8 @@ This is a quick overview of the key files involved in the build process, highlig
 
 - **github-actions.bash** - this is a forced-command wrapper script for secure automated repository operations over SSH. It allows specific commands like repository signing with strict path checks and SCP uploads only to the given directory, while denying interactive shells, SFTP, SCP downloads, and all other commands. This ensures that only authorized operations can be performed by the CI/CD system, enhancing security.
 
+- **gpg-preset-repositories.bash** — this script presets the GPG passphrases (both server-side and user/CI-side) into the repositories user's gpg-agent for repository signing. It ensures that the necessary passphrases are available in memory for signing operations, facilitating secure and automated package signing during the build process.
+
 - **sign-repo.bash** — this script signs and builds repositories on a remote system. It's called at the final stage of the workflow, after all packages have been uploaded to the remote server. It's versatile and can be reused independently.
 
 - **sign-all-repos.bash** - this script allows for manually signing and building all repositories or a specific repository. It's useful for situations where you need to re-sign packages or update repository metadata without going through the entire build process again.

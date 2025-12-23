@@ -229,7 +229,7 @@ function cloud_sign_and_build_repos {
 	echo "Signing and updating repos metadata in $CLOUD_UPLOAD_SSH_HOST${ssh_warning_text-} .."
 	local cmd1="ssh $ssh_options $CLOUD_UPLOAD_SSH_USER@$host "
 	cmd1+="\"sign '$CLOUD_UPLOAD_SSH_DIR' '$repo_type' '$promote_stable'\" "
-	cmd1+="$VERBOSITY_LEVEL"
+	cmd1+="$VERBOSITY_LEVEL_WITH_INPUT"
 	set +x
 	printf '%s' "${CLOUD_GPG_PH2:?Missing CLOUD_GPG_PH2}" | eval "$cmd1"
 	postcmd $?

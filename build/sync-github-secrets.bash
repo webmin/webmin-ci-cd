@@ -35,6 +35,7 @@ virtualmin_repos=(
 	"virtualmin/virtualmin-registrar"
 	"virtualmin/virtualmin-support"
 	"virtualmin/ruby-gems"
+	"virtualmin/jailkit"
 	"virtualmin/webmin-jailkit"
 	"virtualmin/procmail-wrapper"
 	"virtualmin/Virtualmin-Config"

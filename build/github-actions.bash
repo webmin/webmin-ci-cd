@@ -149,6 +149,11 @@ if [[ $orig =~ $sign_re ]]; then
 	[[ -d "$repo_dir_rp" ]] || deny
 	[[ $repo_dir_rp == "$allow_base_rp"/* ]] || deny
 
+	# Global signing lock to serialize all signing jobs on this host
+	readonly sign_lock="$HOME/.signing-repos.lock"
+	exec 9>"$sign_lock" || deny
+	/usr/bin/flock -w 1800 -x 9 || { echo "Error: signing busy" >&2; deny; }
+
 	# Ensure gpg-agent is always killed to clear passphrases from memory
 	trap '/usr/bin/gpgconf --kill gpg-agent >/dev/null 2>&1 || true' EXIT INT TERM HUP
 

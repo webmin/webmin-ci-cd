@@ -51,18 +51,8 @@ else
 	exit 1
 fi
 
-# Cleanup testing repo packages if applicable
-function cleanup_testing_repo {
-    # Skip cleanup if a known pre-release repo path
-    if [[ "$repo_dir" =~ /rc\. ]]; then
-        return 0
-    fi
-
-    # Skip cleanup if not a known development repo
-    if ! [[ "$repo_target" =~ ^(webmin|usermin|virtualmin|cloudmin)\.dev$ ]]; then
-        return 0
-    fi
-
+# Clean up repo packages to always keep only the latest ones in the repo
+function cleanup_repo {
     if ! command -v cleanup_packages >/dev/null; then
         echo "Warning: cleanup_packages function not available" >&2
 		return 1
@@ -919,8 +909,8 @@ function main {
 	# Remove existing symlinks to latest packages
 	remove_package_symlinks "$repo_dir"
 
-	# Clean previous builds for testing repos only
-	cleanup_testing_repo
+	# Clean up repo packages to always keep only the latest ones in the repo
+	cleanup_repo
 
 	# Generate APT repository
 	create_apt_repo

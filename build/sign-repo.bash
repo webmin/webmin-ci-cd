@@ -273,7 +273,7 @@ function create_dnf_groups {
     local downloaded_files=()
     for url in "$@"; do
         local filename="$temp_dir/${url##*/}"
-        if ! curl -fsS "$url" -o "$filename"; then
+        if ! curl -fsSL "$url" -o "$filename"; then
 			echo ".. error : failed to download $url" >&2
 			return 1
 		fi

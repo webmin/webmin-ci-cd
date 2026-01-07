@@ -194,7 +194,7 @@ function build {
 		local product_upper="${prod^}"
 		echo "Building $product_upper modules not included in the $build_type build .."
 		old_e=${-//[^e]/}; set +e
-		output=$(build_core_modules "$prod" "deb" 2>&1)
+		output=$(build_core_modules "$prod" "deb" "$ver" "$rel" 2>&1)
 		exit_code=$?
 		[ "$old_e" ] && set -e
 		if [ $exit_code -eq 0 ]; then

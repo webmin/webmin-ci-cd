@@ -1829,6 +1829,8 @@ function create_symlinks {
 function build_core_modules {
 	local product="$1"
 	local build_script_type="$2"
+	local product_version="$3"
+	local product_release="$4"
 	
 	# Set build mode
 	local build_mode="--release"
@@ -1986,7 +1988,7 @@ function build_core_modules {
 		local cmd
 		script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 		cd "$script_dir" || { echo "failed to change directory to '$script_dir'" >&2; return 1; }
-		cmd="./build-module-${build_script_type}.bash \"$module\" --build-license=BSD-3-Clause --build-type=\"$build_type\" $build_mode $verbose_mode $prefix_params --core-module --no-upload --no-clean"
+		cmd="./build-module-${build_script_type}.bash \"$module\" \"$product_version\" \"$product_release\" --build-license=BSD-3-Clause --build-type=\"$build_type\" $build_mode $verbose_mode $prefix_params --core-module --no-upload --no-clean"
 		build_output=$(eval "$cmd" 2>&1)
 		if [ $? -ne 0 ]; then
 			cleanup_build "$module"

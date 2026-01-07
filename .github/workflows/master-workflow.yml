@@ -62,7 +62,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    if: ${{ github.event_name != 'push' || !contains(github.event.head_commit.message, '[no-build]') }}
+    if: ${{ !contains(github.event.head_commit.message || '', '[no-build]') }}
     env:
       TZ: Europe/Nicosia
       CI_CD_STABLE_BASE: https://github.com/webmin/webmin-ci-cd/releases/latest/download
@@ -133,12 +133,12 @@ jobs:
           should_force_rebuild=false
           [ "${{ inputs.rebuild-all-modules }}" = "true" ] && should_force_rebuild=true
           [ "${{ github.ref_type }}" = "tag" ] && should_force_rebuild=true
-          [ "${{ github.event_name }}" = "release" ] && should_force_rebuild=true
-          if [ "${{ github.event_name }}" = "push" ]; then
-            commit_msg="$COMMIT_MESSAGE"
-            [[ "$commit_msg" == *"[rebuild-all-modules]"* ]] && should_force_rebuild=true
-            [[ "$commit_msg" == *"version bump"* ]] && should_force_rebuild=true
-            [[ "$commit_msg" =~ ^v?[0-9]+\.[0-9]+(\.[0-9]+)*$ ]] && should_force_rebuild=true
+          [ "${{ inputs.is-release }}" = "true" ] && should_force_rebuild=true
+          commit_msg_lc=${COMMIT_MESSAGE,,}
+          if [[ -n "$commit_msg_lc" ]]; then
+            [[ "$commit_msg_lc" == *"[rebuild-all-modules]"* ]] && should_force_rebuild=true
+            [[ "$commit_msg_lc" == *"version bump"* ]] && should_force_rebuild=true
+            [[ "$commit_msg_lc" =~ ^v?[0-9]+\.[0-9]+(\.[0-9]+)*$ ]] && should_force_rebuild=true
           fi
           [ "$should_force_rebuild" = "true" ] && build_args+=(--rebuild-all-modules)
 

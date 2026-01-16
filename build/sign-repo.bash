@@ -902,6 +902,74 @@ function promote_files_to_stable {
 	shopt -u nullglob
 }
 
+# Invalidate CloudFront metadata cache based on whether the newest package is
+# RPM or DEB.
+invalidate_cloudfront_repo() {
+	local repo_dir="$1"
+	local map_file="$HOME/.config/cloudfront-distributions.txt"
+	local profile="${CLOUD_CF_PROFILE:-cf-invalidator}"
+
+	[[ -r "$map_file" ]] || return 0
+	command -v aws >/dev/null 2>&1 || return 0
+
+	local domain=""
+	if [[ "$repo_dir" =~ /domains/([^/]+)/public_html(/|$) ]]; then
+		domain="${BASH_REMATCH[1]}"
+	else
+		return 0
+	fi
+
+	local dist_id=""
+	dist_id=$(awk -F= -v d="$domain" '$1==d {print $2; exit}' "$map_file")
+	[[ -n "$dist_id" ]] || return 0
+
+	# Decide which metadata to invalidate based on newest package file:
+	# consider only RPM/DEB (ignore tar.gz and .sh)
+	shopt -s nullglob
+	local -a items=()
+	local f mt
+
+	for f in "$repo_dir"/*.rpm "$repo_dir"/*.deb; do
+		[[ -e "$f" ]] || continue
+		mt=$(stat -L -c %Y -- "$f" 2>/dev/null || echo 0)
+		items+=( "$mt|$f" )
+	done
+	shopt -u nullglob
+
+	# No rpm/deb packages found
+	[[ ${#items[@]} -gt 0 ]] || return 0
+
+	# Pick newest by mtime
+	local chosen
+	chosen=$(printf '%s\n' "${items[@]}" | sort -t'|' -nr -k1,1 | head -n1 | cut -d'|' -f2-)
+	[[ -n "$chosen" ]] || return 0
+
+	local -a paths=()
+	case "$chosen" in
+		*.rpm) paths+=( "/repodata/*" ) ;;
+		*.deb) paths+=( "/dists/*" ) ;;
+		*) return 0 ;;
+	esac
+
+	echo "Invalidating CloudFront cache:"
+	echo "  domain: $domain"
+	echo "   dist : $dist_id"
+	echo "  based: $(basename -- "$chosen")"
+	echo "  paths: ${paths[*]}"
+
+	{
+		flock 9
+		AWS_PAGER="" aws cloudfront create-invalidation \
+			--no-cli-pager \
+			--output json \
+			--distribution-id "$dist_id" \
+			--paths "${paths[@]}" \
+			--profile "$profile" >/dev/null 2>&1 || true
+	} 9>"$repo_dir/.cf_invalidate.lock"
+
+	echo
+}
+
 # Main script routine
 function main {
 	cd "$repo_dir" || exit 1
@@ -929,6 +997,9 @@ function main {
 	if [[ -n "$promote_stable" ]]; then
 		promote_to_stable "$repo_dir"
 	fi
+
+	# Invalidate CloudFront metadata caches
+	invalidate_cloudfront_repo "$repo_dir" || true
 }
 
 main

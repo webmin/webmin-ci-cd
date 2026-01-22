@@ -1962,8 +1962,9 @@ function build_core_modules {
 			return 1
 		fi
 		
-		# Copy all files from source to target
-		if ! copy_all_files "$source" "$target"; then
+		# Copy all files from the source to the target and follow symlinks
+		# while copying
+		if ! copy_all_files "$source" "$target" 1; then
 			cleanup_build "$module"
 			echo "failed to copy files from '$source' to '$target'" >&2
 			return 1

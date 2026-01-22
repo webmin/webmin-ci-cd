@@ -396,6 +396,9 @@ function resolve_symlinks {
 
 		if [ ! -e "$abs_target" ]; then
 			verbose_echo "symlink from '${link#"$base/"}' to '$target' is missing"
+			if [[ "$deref" -eq 1 ]]; then
+				eval "rm -f -- \"\$link\" $stdout"
+			fi
 			continue
 		fi
 
@@ -1911,8 +1914,8 @@ function build_core_modules {
 		return 1
 	fi
 
-	# Resolve all symlinks in the original directory
-	resolve_symlinks "$visible_dir"
+	# Resolve all symlinks in the original directory and dereference all links
+	resolve_symlinks "$visible_dir" 1
 	
 	# Temporarily rename visible directory to hidden to avoid potential
 	# conflict of the module with the product name
@@ -1962,9 +1965,9 @@ function build_core_modules {
 			return 1
 		fi
 		
-		# Copy all files from the source to the target and follow symlinks
-		# while copying
-		if ! copy_all_files "$source" "$target" 1; then
+		# Copy all files from source to target
+		remove_dir "$target"
+		if ! copy_all_files "$source" "$target"; then
 			cleanup_build "$module"
 			echo "failed to copy files from '$source' to '$target'" >&2
 			return 1

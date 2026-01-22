@@ -1088,12 +1088,15 @@ function cleanup_packages {
 
 	get_version() {
 		local filename="$1"
-		# Extract version number and release number
-		if [[ $filename =~ [^0-9]([0-9]+(\.[0-9]+[\.0-9]*)?)-([0-9]+) ]]; then
-			# Combine version and release with a dot for proper version comparison
-			echo "${BASH_REMATCH[1]}.${BASH_REMATCH[3]}"
-		elif [[ $filename =~ [^0-9]([0-9]+(\.[0-9]+[\.0-9]*)?)[^0-9] ]]; then
-			# If no release number, just use the version
+		# Extract version number and release number (dotted version preferred)
+		if [[ $filename =~ [^0-9]([0-9]+\.[0-9]+[\.0-9]*)-([0-9]+) ]]; then
+			echo "${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+		elif [[ $filename =~ [^0-9]([0-9]+\.[0-9]+[\.0-9]*)[^0-9] ]]; then
+			echo "${BASH_REMATCH[1]}"
+		# Fallback for undotted versions (e.g., package-8-1.rpm)
+		elif [[ $filename =~ [^0-9]([0-9]+)-([0-9]+)[^0-9] ]]; then
+			echo "${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+		elif [[ $filename =~ [^0-9]([0-9]+)[^0-9] ]]; then
 			echo "${BASH_REMATCH[1]}"
 		fi
 	}

@@ -931,7 +931,7 @@ invalidate_cloudfront_repo() {
 
 	for f in "$repo_dir"/*.rpm "$repo_dir"/*.deb; do
 		[[ -e "$f" ]] || continue
-		mt=$(stat -L -c %Y -- "$f" 2>/dev/null || echo 0)
+		mt=$(stat -c %Y -- "$f" 2>/dev/null || echo 0)
 		items+=( "$mt|$f" )
 	done
 	shopt -u nullglob

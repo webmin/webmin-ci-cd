@@ -361,10 +361,13 @@ function copy_all_files {
     return $rs
 }
 
-# For every symlink inside directory, replace the link with a copy of its target,
-# preserving the original name and permissions
+# For every symlink inside directory, replace the link with a copy of its
+# target, preserving the original name and permissions, optionally dereferencing
+# all links
 function resolve_symlinks {
 	local base=$1
+	local deref=${2:-0}
+
 	if [ ! -d "$base" ]; then
 		get_flag --verbose && \
 			echo "cannot resolve symlinks as base '$base' not a dir" >&2
@@ -377,6 +380,9 @@ function resolve_symlinks {
 	fi
 
 	verbose_echo() { get_flag --verbose && echo "$@" >&2; }
+
+	local cpflags="-a"
+	[[ "$deref" -eq 1 ]] && cpflags="-aL"
 
 	# Find all symlinks in the directory and process them
 	find "$base" -type l -print0 | while IFS= read -r -d '' link; do
@@ -399,9 +405,9 @@ function resolve_symlinks {
 
 		if [ -d "$abs_target" ]; then
 			eval "mkdir -p -- \"\$link\" $stdout"
-			eval "cp -a -- \"\$abs_target\"/. \"\$link\"/ $stdout"
+			eval "cp $cpflags -- \"\$abs_target\"/. \"\$link\"/ $stdout"
 		else
-			eval "cp -a -- \"\$abs_target\" \"\$link\" $stdout"
+			eval "cp $cpflags -- \"\$abs_target\" \"\$link\" $stdout"
 		fi
 	done
 }

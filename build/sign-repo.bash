@@ -927,10 +927,17 @@ invalidate_cloudfront_repo() {
 	# consider only RPM/DEB (ignore tar.gz and .sh)
 	shopt -s nullglob
 	local -a items=()
-	local f mt
+	local f b mt
 
 	for f in "$repo_dir"/*.rpm "$repo_dir"/*.deb; do
+		# Skip missing
 		[[ -e "$f" ]] || continue
+	
+		# Skip latest symlinks
+		b=$(basename -- "$f")
+		[[ $b =~ [-_]latest[._] ]] && continue
+
+		# Get mtime
 		mt=$(stat -c %Y -- "$f" 2>/dev/null || echo 0)
 		items+=( "$mt|$f" )
 	done

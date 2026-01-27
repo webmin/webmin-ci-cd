@@ -67,13 +67,18 @@ function cloud_upload {
 
 	# Print list of files base names to upload
 	echo "Listing built files for upload .."
+	local -a upload_basenames=()
 	local nofiles=0
 	if [[ -n ${1-} ]] && declare -p "$1" &>/dev/null; then
 	  local -n upl="$1"
 	  if ((${#upl[@]})); then
-		local u
+		local u bn
 		for u in "${upl[@]}"; do
-		  [[ -n $u ]] && printf '   - %s\n' "$(basename -- "$u")"
+		  if [[ -n $u ]]; then
+			bn=$(basename -- "$u")
+			printf '   - %s\n' "$bn"
+			upload_basenames+=( "$bn" )
+		  fi
 		done
 	  else
 		nofiles=1
@@ -147,6 +152,38 @@ function cloud_upload {
 		done
 		postcmd $err
 		echo
+
+		# Record upload list on server for precise cache invalidation
+		if [[ "$err" -eq 0 ]] && ((${#upload_basenames[@]})); then
+			echo "Recording upload list on server .."
+
+			local tmpfile bn remote_tmp cmd3 cmd4
+			tmpfile=$(mktemp)
+			for bn in "${upload_basenames[@]}"; do
+				printf '%s\n' "$bn" >>"$tmpfile"
+			done
+
+			remote_tmp=".uploaded_list.$$"
+			cmd3="scp -O $ssh_options \"$tmpfile\" "
+			cmd3+="$CLOUD_UPLOAD_SSH_USER@$host:$CLOUD_UPLOAD_SSH_DIR/$remote_tmp "
+			cmd3+="$VERBOSITY_LEVEL"
+			eval "$cmd3"
+			err=$?
+
+			rm -f "$tmpfile"
+
+			if [[ "$err" -eq 0 ]]; then
+				cmd4="ssh $ssh_options $CLOUD_UPLOAD_SSH_USER@$host "
+				cmd4+="\"cd '$CLOUD_UPLOAD_SSH_DIR' && "
+				cmd4+="{ flock 9; mv '$remote_tmp' .uploaded_list; } "
+				cmd4+="9>.uploaded_list.lock\""
+				eval "$cmd4"
+				err=$?
+			fi
+
+			postcmd $err
+			echo
+		fi
 
 		# Update promote hold state for release builds
 		if ((${#arr_upl[@]})) && get_flag --release; then

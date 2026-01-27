@@ -958,6 +958,12 @@ invalidate_cloudfront_repo() {
 		*) return 0 ;;
 	esac
 
+	# Always invalidate latest links for the package that triggered invalidation
+	local chosen_base pkg_base
+	chosen_base=$(basename -- "$chosen")
+	pkg_base=$(get_base_package_base "$chosen_base") || return 0
+	paths+=( "/${pkg_base}-latest*.rpm" "/${pkg_base}-latest*.deb" "/${pkg_base}-latest*.tar.gz" )
+
 	echo "Invalidating CloudFront cache:"
 	echo "  domain: $domain"
 	echo "   dist : $dist_id"

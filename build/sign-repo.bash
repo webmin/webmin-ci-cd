@@ -828,6 +828,15 @@ function promote_to_stable {
 		# Clean up broken symlinks at stable repo root
 		cleanup_broken_root_symlinks "$home_stable"
 
+		# Hand off uploaded-list to stable so its sign-repo run can invalidate
+		# CloudFront too
+		if [[ -s "$rc_home/.uploaded_list" ]]; then
+			{
+				flock 9
+				cp -f -- "$rc_home/.uploaded_list" "$home_stable/.uploaded_list"
+			} 9>"$rc_home/.uploaded_list.lock"
+		fi
+
 		# Re-run signing repo on the stable repo using specified GPG key if any
 		if [[ -n "$gpg_key_stable" ]]; then
 			GPG_KEY="$gpg_key_stable" \

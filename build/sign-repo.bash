@@ -902,9 +902,8 @@ function promote_files_to_stable {
 	shopt -u nullglob
 }
 
-# Invalidate CloudFront metadata cache based on whether the newest package is
-# RPM or DEB.
-invalidate_cloudfront_repo() {
+# Invalidate CloudFront objects based on what was uploaded
+function invalidate_cloudfront_repo {
 	local repo_dir="$1"
 	local map_file="$HOME/.config/cloudfront-distributions.txt"
 	local profile="${CLOUD_CF_PROFILE:-cf-invalidator}"
@@ -923,82 +922,86 @@ invalidate_cloudfront_repo() {
 	dist_id=$(awk -F= -v d="$domain" '$1==d {print $2; exit}' "$map_file")
 	[[ -n "$dist_id" ]] || return 0
 
-	# Decide which metadata to invalidate based on newest package file:
-	# consider only RPM/DEB (ignore tar.gz and .sh)
-	shopt -s nullglob
-	local -a items=()
-	local f b mt
+	local list="$repo_dir/.uploaded_list"
+	[[ -s "$list" ]] || return 0
 
-	for f in "$repo_dir"/*.rpm "$repo_dir"/*.deb; do
-		# Skip missing
-		[[ -e "$f" ]] || continue
-	
-		# Skip latest symlinks
-		b=$(basename -- "$f")
-		[[ $b =~ [-_]latest[._] ]] && continue
+	# Read list and clear it so we don't reuse it on next run
+	local -a uploaded=()
+	{
+		flock 9
+		mapfile -t uploaded <"$list" 2>/dev/null || true
+		rm -f -- "$list" 2>/dev/null || true
+	} 9>"$repo_dir/.uploaded_list.lock"
 
-		# Get mtime
-		mt=$(stat -L -c %Y -- "$f" 2>/dev/null || echo 0)
-		items+=( "$mt|$f" )
-	done
-	shopt -u nullglob
+	((${#uploaded[@]})) || return 0
 
-	# No rpm/deb packages found
-	[[ ${#items[@]} -gt 0 ]] || return 0
+	local need_rpm=0
+	local need_apt=0
 
-	# Pick newest by mtime
-	local chosen
-	chosen=$(printf '%s\n' "${items[@]}" | sort -t'|' -nr -k1,1 | head -n1 | cut -d'|' -f2-)
-	[[ -n "$chosen" ]] || return 0
-
+	declare -A seen_paths=()
 	local -a paths=()
-	case "$chosen" in
-		*.rpm) paths+=( "/repodata/*" ) ;;
-		*.deb) paths+=( "/dists/*" ) ;;
-		*) return 0 ;;
-	esac
 
-	# Always invalidate latest links for the package that triggered invalidation
-	local chosen_base pkg_base
-	chosen_base=$(basename -- "$chosen")
-	pkg_base=$(get_base_package_base "$chosen_base") || return 0
-	paths+=( "/${pkg_base}-latest*.rpm" "/${pkg_base}-latest*.deb" "/${pkg_base}-latest*.tar.gz" )
+	# Helper to add path if not already added
+	_add_path() {
+		local p="$1"
+		[[ -n "$p" ]] || return 0
+		[[ -z ${seen_paths["$p"]+x} ]] || return 0
+		seen_paths["$p"]=1
+		paths+=( "$p" )
+	}
 
-	# Always invalidate the newest shell script
-	local newest_sh="" newest_sh_mt=0
-	for f in "$repo_dir"/*.sh; do
-		[[ -e "$f" ]] || continue
-		b=$(basename -- "$f")
-		mt=$(stat -L -c %Y -- "$f" 2>/dev/null || echo 0)
-		if (( mt > newest_sh_mt )); then
-			newest_sh_mt=$mt
-			newest_sh=$b
-		fi
+	# Analyze uploaded files to determine which paths to invalidate
+	local bn pkg_base base
+	for bn in "${uploaded[@]}"; do
+		# Skip empty lines
+		[[ -n "$bn" ]] || continue
+
+		# Always invalidate the exact uploaded object path (repo root)
+		_add_path "/$bn"
+
+		case "$bn" in
+			*.rpm) need_rpm=1 ;;
+			*.deb) need_apt=1 ;;
+		esac
+
+		# Invalidate latest links for packages
+		case "$bn" in
+			*.rpm|*.deb|*.tar.gz)
+				pkg_base=$(get_base_package_base "$bn" 2>/dev/null || true)
+				if [[ -n "$pkg_base" ]]; then
+					_add_path "/${pkg_base}-latest*.rpm"
+					_add_path "/${pkg_base}-latest*.deb"
+					_add_path "/${pkg_base}-latest*.tar.gz"
+				fi
+				;;
+		esac
+
+		# Invalidate related installer URLs for install scripts
+		case "$bn" in
+			*.sh)
+				if [[ "$bn" =~ ^(.+?)(-[0-9].*)?\.sh$ ]]; then
+					base="${BASH_REMATCH[1]}"
+					_add_path "/${base}*"
+					if [[ "$base" == *-install ]]; then
+						_add_path "/install-script"
+						_add_path "/repository"
+					fi
+				fi
+				;;
+		esac
 	done
 
-	if [[ -n "$newest_sh" ]]; then
-		paths+=( "/$newest_sh" )
-		if [[ "$newest_sh" =~ ^(.+?)(-[0-9].*)?\.sh$ ]]; then
-			local base
-			base="${BASH_REMATCH[1]}"
-			paths+=( "/${base}*" )
-			if [[ "$base" == *-install ]]; then
-				paths+=( "/install-script" "/repository" )
-			fi
-		fi
-	fi
+	# Add metadata invalidations only when that metadata could have changed
+	(( need_rpm )) && _add_path "/repodata/*"
+	(( need_apt )) && _add_path "/dists/*"
 
-	# If no paths to invalidate, exit
-	if ((${#paths[@]} == 0)); then
-		return 0
-	fi
+	((${#paths[@]})) || return 0
 
-	# Perform invalidation with locking to avoid concurrent runs
 	echo "Invalidating CloudFront cache:"
 	echo "  domain: $domain"
 	echo "   dist : $dist_id"
-	echo "  based: $(basename -- "$chosen")"
-	echo "  paths: ${paths[*]}"
+	echo "  files : ${#uploaded[@]}"
+	echo "  paths : ${#paths[@]}"
 
 	{
 		flock 9

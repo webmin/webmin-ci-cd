@@ -938,7 +938,7 @@ invalidate_cloudfront_repo() {
 		[[ $b =~ [-_]latest[._] ]] && continue
 
 		# Get mtime
-		mt=$(stat -c %Y -- "$f" 2>/dev/null || echo 0)
+		mt=$(stat -L -c %Y -- "$f" 2>/dev/null || echo 0)
 		items+=( "$mt|$f" )
 	done
 	shopt -u nullglob

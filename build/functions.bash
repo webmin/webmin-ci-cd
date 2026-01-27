@@ -157,35 +157,23 @@ function cloud_upload {
 		if [[ "$err" -eq 0 ]] && ((${#upload_basenames[@]})); then
 			echo "Recording upload list on server .."
 
-			local tmpfile bn remote_tmp cmd3 cmd4
-			remote_tmp=".uploaded_list.$$"
-
-			tmpfile="$(mktemp -t uploaded_list.XXXXXX)"
-			mv -- "$tmpfile" "${tmpfile%/*}/$remote_tmp"
-			tmpfile="${tmpfile%/*}/$remote_tmp"
+			local tmpdir tmpfile bn cmd3
+			tmpdir="$(mktemp -d)"
+			tmpfile="$tmpdir/.uploaded_list"
 
 			for bn in "${upload_basenames[@]}"; do
 				printf '%s\n' "$bn" >>"$tmpfile"
 			done
 
+			# Upload as a normal file upload into the repo dir
 			cmd3="scp -O $ssh_options \"$tmpfile\" $CLOUD_UPLOAD_SSH_USER@"
 			cmd3+="$host:$CLOUD_UPLOAD_SSH_DIR/ $VERBOSITY_LEVEL"
 			eval "$cmd3"
 			err=$?
-
-			rm -f -- "$tmpfile"
-
-			if [[ "$err" -eq 0 ]]; then
-				cmd4="ssh $ssh_options $CLOUD_UPLOAD_SSH_USER@$host "
-				cmd4+="\"cd '$CLOUD_UPLOAD_SSH_DIR' && "
-				cmd4+="{ flock 9; mv '$remote_tmp' .uploaded_list; } "
-				cmd4+="9>.uploaded_list.lock\""
-				eval "$cmd4"
-				err=$?
-			fi
-
 			postcmd $err
 			echo
+
+			rm -rf -- "$tmpdir"
 		fi
 
 		# Update promote hold state for release builds

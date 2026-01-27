@@ -158,19 +158,22 @@ function cloud_upload {
 			echo "Recording upload list on server .."
 
 			local tmpfile bn remote_tmp cmd3 cmd4
-			tmpfile=$(mktemp)
+			remote_tmp=".uploaded_list.$$"
+
+			tmpfile="$(mktemp -t uploaded_list.XXXXXX)"
+			mv -- "$tmpfile" "${tmpfile%/*}/$remote_tmp"
+			tmpfile="${tmpfile%/*}/$remote_tmp"
+
 			for bn in "${upload_basenames[@]}"; do
 				printf '%s\n' "$bn" >>"$tmpfile"
 			done
 
-			remote_tmp=".uploaded_list.$$"
-			cmd3="scp -O $ssh_options \"$tmpfile\" "
-			cmd3+="$CLOUD_UPLOAD_SSH_USER@$host:$CLOUD_UPLOAD_SSH_DIR/$remote_tmp "
-			cmd3+="$VERBOSITY_LEVEL"
+			cmd3="scp -O $ssh_options \"$tmpfile\" $CLOUD_UPLOAD_SSH_USER@"
+			cmd3+="$host:$CLOUD_UPLOAD_SSH_DIR/ $VERBOSITY_LEVEL"
 			eval "$cmd3"
 			err=$?
 
-			rm -f "$tmpfile"
+			rm -f -- "$tmpfile"
 
 			if [[ "$err" -eq 0 ]]; then
 				cmd4="ssh $ssh_options $CLOUD_UPLOAD_SSH_USER@$host "

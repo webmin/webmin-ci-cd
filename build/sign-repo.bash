@@ -982,6 +982,9 @@ invalidate_cloudfront_repo() {
 			local base
 			base="${BASH_REMATCH[1]}"
 			paths+=( "/${base}*" )
+			if [[ "$base" == *-install ]]; then
+				paths+=( "/install-script" "/repository" )
+			fi
 		fi
 	fi
 

@@ -1025,6 +1025,7 @@ function get_base_package {
 	local edition=""
 	if [[ $filename =~ [._-]([A-Za-z][A-Za-z0-9_]*)$ ]]; then
 		edition="${BASH_REMATCH[1]}"
+		# shellcheck disable=SC2295
 		filename=${filename%[._-]$edition}
 	fi
 

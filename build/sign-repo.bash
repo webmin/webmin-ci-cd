@@ -964,6 +964,33 @@ invalidate_cloudfront_repo() {
 	pkg_base=$(get_base_package_base "$chosen_base") || return 0
 	paths+=( "/${pkg_base}-latest*.rpm" "/${pkg_base}-latest*.deb" "/${pkg_base}-latest*.tar.gz" )
 
+	# Always invalidate the newest shell script
+	local newest_sh="" newest_sh_mt=0
+	for f in "$repo_dir"/*.sh; do
+		[[ -e "$f" ]] || continue
+		b=$(basename -- "$f")
+		mt=$(stat -L -c %Y -- "$f" 2>/dev/null || echo 0)
+		if (( mt > newest_sh_mt )); then
+			newest_sh_mt=$mt
+			newest_sh=$b
+		fi
+	done
+
+	if [[ -n "$newest_sh" ]]; then
+		paths+=( "/$newest_sh" )
+		if [[ "$newest_sh" =~ ^(.+?)(-[0-9].*)?\.sh$ ]]; then
+			local base
+			base="${BASH_REMATCH[1]}"
+			paths+=( "/${base}*.sh" )
+		fi
+	fi
+
+	# If no paths to invalidate, exit
+	if ((${#paths[@]} == 0)); then
+		return 0
+	fi
+
+	# Perform invalidation with locking to avoid concurrent runs
 	echo "Invalidating CloudFront cache:"
 	echo "  domain: $domain"
 	echo "   dist : $dist_id"

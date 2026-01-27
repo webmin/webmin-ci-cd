@@ -897,6 +897,12 @@ function promote_files_to_stable {
 		target="$dst_home/$base"
 
 		if [[ $f == *.rpm ]]; then
+			# Never overwrite an existing stable RPM with the same filename from
+			# RC (RC has a different signature), otherwise cached clients fetch
+			# the old RPM while repodata expects the new checksum.
+			if [[ -e "$target" && ! -L "$target" ]]; then
+				continue
+			fi
 			# Copy RPMs, so stable can have its own signature
 			if [[ -e "$target" || -L "$target" ]]; then
 				cp -pf -- "$f" "$target"

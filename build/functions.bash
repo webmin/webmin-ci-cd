@@ -443,30 +443,45 @@ function resolve_symlinks {
 	done
 }
 
-function get_remote_repo_tag {
+# Get the latest tag from remote repo
+function get_remote_repo_latest_tag {
 	local repo_url="$1"
+	local tag=""
 
-	# Fetch tags and extract the latest version
-	git ls-remote --tags "$repo_url" 2>/dev/null | \
-		awk -F/ '{print $3}' | \
-		sed 's/\^{}//g' | \
-		sort -V | \
-		tail -n1 || {
-			echo "Error: Failed to fetch tags from $repo_url." >&2
-			return 1
-		}
+	tag=$(
+		git ls-remote --tags --refs --sort="-v:refname" "$repo_url" 2>/dev/null | \
+			awk '{print $2}' | sed 's|^refs/tags/||' | \
+			awk 'NF && $0 !~ /^v\./ { print; exit }'
+	) || true
+
+	[[ -n "$tag" ]] || {
+		echo "Error: Failed to fetch tags from $repo_url." >&2
+		return 1
+	}
+
+	echo "$tag"
 }
 
-# Get latest tag version
-function get_current_repo_tag {
-	# shellcheck disable=SC2153
+# Get latest version from repo tags
+function get_repo_latest_tag_version {
 	local root_prod="$1"
 	(
 		cd "$root_prod" || exit 1
-		ds=$(git ls-remote --tags --refs --sort="v:refname" origin | tail -n1 | \
-			 awk '{print $2}' | sed 's|refs/tags/||')
-		ds="${ds/v/}"
-		echo "$ds"
+
+		local tag=""
+		tag=$(
+			git ls-remote --tags --refs --sort="-v:refname" origin 2>/dev/null | \
+				awk '{print $2}' | sed 's|^refs/tags/||' | \
+				awk 'NF && $0 !~ /^v\./ { print; exit }'
+		) || true
+
+		[[ -n "$tag" ]] || {
+			echo "Error: No version tags found in $root_prod" >&2
+			exit 1
+		}
+
+		tag=${tag#v}
+		echo "$tag"
 	)
 }
 
@@ -478,7 +493,7 @@ function get_product_version {
     if [[ -f "$version_file" ]]; then
         awk 'NF {print; exit}' "$version_file"
     else
-        get_current_repo_tag "$root_prod"
+        get_repo_latest_tag_version "$root_prod"
     fi
 }
 
@@ -494,9 +509,9 @@ function get_module_version {
 		version=$(echo "$version" | sed -E 's/^([0-9]+\.[0-9]+(\.[0-9]+)?).*/\1/')
 	fi
 
-	# Fallback to get_current_repo_tag if no version found
+	# Fallback to get_repo_latest_tag_version if no version found
 	if [ -z "${version-}" ]; then
-		version=$(get_current_repo_tag "$module_root")
+		version=$(get_repo_latest_tag_version "$module_root")
 	fi
 	
 	# Return version (assumes version is always found)
@@ -592,7 +607,7 @@ function get_product_latest_commit_timestamp {
 }
 
 # Generate git clone command based on build type
-generate_git_clone_cmd() {
+function generate_git_clone_cmd {
 	local repo_url="$1"
 	local target_dir="$2"
 	local tag_cmd
@@ -601,7 +616,7 @@ generate_git_clone_cmd() {
 	if ! get_flag --testing; then
 		# Get the tag for this repo
 		local tag
-		tag=$(get_remote_repo_tag "$repo_url")
+		tag=$(get_remote_repo_latest_tag "$repo_url")
 		
 		# If we got a valid tag, use it
 		if [ -n "$tag" ]; then

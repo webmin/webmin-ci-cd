@@ -95,7 +95,7 @@ function build {
 		if get_flag --testing; then
 			ver=$(get_product_version "$root_prod")
 		else
-			ver=$(get_current_repo_tag "$root_prod")
+			ver=$(get_repo_latest_tag_version "$root_prod")
 		fi
 	fi
 	if get_flag --testing; then

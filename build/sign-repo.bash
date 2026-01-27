@@ -981,7 +981,7 @@ invalidate_cloudfront_repo() {
 		if [[ "$newest_sh" =~ ^(.+?)(-[0-9].*)?\.sh$ ]]; then
 			local base
 			base="${BASH_REMATCH[1]}"
-			paths+=( "/${base}*.sh" )
+			paths+=( "/${base}*" )
 		fi
 	fi
 

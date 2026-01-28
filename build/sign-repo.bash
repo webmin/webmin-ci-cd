@@ -971,28 +971,25 @@ function invalidate_cloudfront_repo {
 		# Skip empty lines
 		[[ -n "$bn" ]] || continue
 
-		# Always invalidate the exact uploaded object path (repo root)
-		_add_path "/$bn"
-
+		# Invalidate latest links
 		case "$bn" in
-			*.rpm) need_rpm=1 ;;
-			*.deb) need_apt=1 ;;
-		esac
-
-		# Invalidate latest links for packages
-		case "$bn" in
-			*.rpm|*.deb|*.tar.gz)
+			*.rpm)
+				need_rpm=1
 				pkg_base=$(get_base_package_base "$bn" 2>/dev/null || true)
-				if [[ -n "$pkg_base" ]]; then
-					_add_path "/${pkg_base}-latest*.rpm"
-					_add_path "/${pkg_base}-latest*.deb"
-					_add_path "/${pkg_base}-latest*.tar.gz"
-				fi
+				[[ -n "$pkg_base" ]] && _add_path "/${pkg_base}-latest*.rpm"
 				;;
-		esac
 
-		# Invalidate related installer URLs for install scripts
-		case "$bn" in
+			*.deb)
+				need_apt=1
+				pkg_base=$(get_base_package_base "$bn" 2>/dev/null || true)
+				[[ -n "$pkg_base" ]] && _add_path "/${pkg_base}-latest*.deb"
+				;;
+
+			*.tar.gz)
+				pkg_base=$(get_base_package_base "$bn" 2>/dev/null || true)
+				[[ -n "$pkg_base" ]] && _add_path "/${pkg_base}-latest*.tar.gz"
+				;;
+
 			*.sh)
 				if [[ "$bn" =~ ^(.+?)(-[0-9].*)?\.sh$ ]]; then
 					base="${BASH_REMATCH[1]}"

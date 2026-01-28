@@ -976,18 +976,20 @@ function invalidate_cloudfront_repo {
 			*.rpm)
 				need_rpm=1
 				pkg_base=$(get_base_package_base "$bn" 2>/dev/null || true)
-				[[ -n "$pkg_base" ]] && _add_path "/${pkg_base}-latest*.rpm"
+				[[ -n "$pkg_base" ]] && _add_path "/${pkg_base}*latest*.rpm"
 				;;
 
 			*.deb)
 				need_apt=1
 				pkg_base=$(get_base_package_base "$bn" 2>/dev/null || true)
-				[[ -n "$pkg_base" ]] && _add_path "/${pkg_base}-latest*.deb"
+				pkg_base=${pkg_base%-gpl_all}
+				pkg_base=${pkg_base%-pro_all}
+				[[ -n "$pkg_base" ]] && _add_path "/${pkg_base}*latest*.deb"
 				;;
 
 			*.tar.gz)
 				pkg_base=$(get_base_package_base "$bn" 2>/dev/null || true)
-				[[ -n "$pkg_base" ]] && _add_path "/${pkg_base}-latest*.tar.gz"
+				[[ -n "$pkg_base" ]] && _add_path "/${pkg_base}*latest*.tar.gz"
 				;;
 
 			*.sh)

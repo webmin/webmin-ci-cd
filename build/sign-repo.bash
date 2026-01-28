@@ -973,12 +973,13 @@ function invalidate_cloudfront_repo {
 
 		# Invalidate latest links
 		case "$bn" in
+			# Invalidate latest rpm links
 			*.rpm)
 				need_rpm=1
 				pkg_base=$(get_base_package_base "$bn" 2>/dev/null || true)
 				[[ -n "$pkg_base" ]] && _add_path "/${pkg_base}*latest*.rpm"
 				;;
-
+			# Invalidate latest deb links
 			*.deb)
 				need_apt=1
 				pkg_base=$(get_base_package_base "$bn" 2>/dev/null || true)
@@ -986,20 +987,22 @@ function invalidate_cloudfront_repo {
 				pkg_base=${pkg_base%-pro_all}
 				[[ -n "$pkg_base" ]] && _add_path "/${pkg_base}*latest*.deb"
 				;;
-
+			# Invalidate latest tar.gz links
 			*.tar.gz)
 				pkg_base=$(get_base_package_base "$bn" 2>/dev/null || true)
 				[[ -n "$pkg_base" ]] && _add_path "/${pkg_base}*latest*.tar.gz"
 				;;
 
+			# Invalidate shell scripts (entrypoints only)
 			*.sh)
-				if [[ "$bn" =~ ^(.+?)(-[0-9].*)?\.sh$ ]]; then
-					base="${BASH_REMATCH[1]}"
-					_add_path "/${base}*"
-					if [[ "$base" == *-install ]]; then
-						_add_path "/install-script"
-						_add_path "/repository"
-					fi
+				base=$(get_base_package_base "$bn" 2>/dev/null || true)
+				[[ -n "$base" ]] || continue
+			
+				_add_path "/${base}*"
+			
+				if [[ "$base" == *-install ]]; then
+					_add_path "/install-script"
+					_add_path "/repository"
 				fi
 				;;
 		esac

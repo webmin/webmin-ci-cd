@@ -965,7 +965,7 @@ function invalidate_cloudfront_repo {
 		paths+=( "$p" )
 	}
 
-	# Analyze uploaded files to determine which paths to invalidate
+	# From uploaded files, decide what we need to invalidate
 	local bn pkg_base base
 	for bn in "${uploaded[@]}"; do
 		# Skip empty lines

@@ -1039,9 +1039,26 @@ function invalidate_cloudfront_repo {
 		esac
 	done
 
-	# Add metadata invalidations only when that metadata could have changed
-	(( need_rpm )) && _add_path "/repodata/*"
-	(( need_apt )) && _add_path "/dists/*"
+	# Invalidate RPM repo metadata entrypoints
+	if (( need_rpm )); then
+		_add_path "/repodata/repomd.xml"
+		_add_path "/repodata/repomd.xml.asc"
+	fi
+
+	# Invalidate APT repo metadata entrypoints
+	if (( need_apt )); then
+		local apt_origin apt_description apt_codename
+		get_apt_repo_metadata apt_origin apt_description apt_codename
+
+		_add_path "/dists/${apt_codename}/InRelease"
+		_add_path "/dists/${apt_codename}/Release"
+
+		local arch
+		for arch in "${apt_architectures[@]}"; do
+			_add_path "/dists/${apt_codename}/${apt_component}/binary-${arch}/Packages"
+			_add_path "/dists/${apt_codename}/${apt_component}/binary-${arch}/Packages.gz"
+		done
+	fi
 
 	((${#paths[@]})) || return 0
 

@@ -377,23 +377,24 @@ function create_dnf_repo {
 	local -a groups
 	IFS=' ' read -r -a groups <<< "$(make_dnf_groups_param)"
 
-	# Write metadata into temp repodata dir
+	# Write metadata into temp repo
 	createrepo_c "${groups[@]}" -o "$tmp_repo" "$repo_dir"
 
-	# Sign the repomd inside temp dir
+	# Sign the repomd inside temp repodata dir
 	gpg --batch --yes --default-key "$gpg_key" --digest-algo SHA512 -abs -o \
-		"$tmp_repo/repomd.xml.asc" "$tmp_repo/repomd.xml"
+		"$tmp_repo/repodata/repomd.xml.asc" \
+		"$tmp_repo/repodata/repomd.xml"
 
 	# Move payload files first, then repomd signature, repomd last
 	shopt -s nullglob
 	local f
-	for f in "$tmp_repo"/*; do
+	for f in "$tmp_repo/repodata/"*; do
 		[[ ${f##*/} == repomd.xml || ${f##*/} == repomd.xml.asc ]] && continue
 		mv -f -- "$f" "$rpm_repo/"
 	done
 
-	mv -f -- "$tmp_repo/repomd.xml.asc" "$rpm_repo/repomd.xml.asc"
-	mv -f -- "$tmp_repo/repomd.xml"     "$rpm_repo/repomd.xml"
+	mv -f -- "$tmp_repo/repodata/repomd.xml.asc" "$rpm_repo/repomd.xml.asc"
+	mv -f -- "$tmp_repo/repodata/repomd.xml"     "$rpm_repo/repomd.xml"
 	shopt -u nullglob
 
 	# Clean up temp repo

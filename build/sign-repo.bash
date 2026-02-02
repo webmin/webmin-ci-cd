@@ -152,8 +152,12 @@ function create_apt_arch_metadata {
 		mkdir -p "$arch_dir"
 
 		echo "Generating Packages and Packages.gz for $arch"
-		dpkg-scanpackages --multiversion "$apt_pool_component_dir" > "$packages_file"
-		gzip -1 < "$packages_file" > "$packages_gz"
+		local packages_tmp="$packages_file.$$"
+		local packages_gz_tmp="$packages_gz.$$"
+		dpkg-scanpackages --multiversion "$apt_pool_component_dir" > "$packages_tmp"
+		mv -f -- "$packages_tmp" "$packages_file"
+		gzip -1 < "$packages_file" > "$packages_gz_tmp"
+		mv -f -- "$packages_gz_tmp" "$packages_gz"
 
 		# Generate hash entries
 		sha256_ref+=" $(sha256sum "$packages_file" | awk '{print $1}') $(wc -c < "$packages_file") $apt_component/binary-$arch/Packages"$'\n'
@@ -198,7 +202,8 @@ function create_apt_release_files {
 	IFS='|' read -r label suite <<< "$build_info"
 
 	# Create Release file
-	cat > "$release_file" <<EOF
+	local release_tmp="$release_file.$$"
+	cat > "$release_tmp" <<EOF
 Origin: $origin
 Label: $label
 Suite: $suite
@@ -213,11 +218,13 @@ $sha256_entries
 SHA512:
 $sha512_entries
 EOF
+	mv -f -- "$release_tmp" "$release_file"
 
 	# Sign release files
-	rm -f "$dists_dir/InRelease"
+	local inrel_tmp="$dists_dir/InRelease.$$"
 	gpg --batch --yes --default-key "$gpg_key" --digest-algo SHA512 \
-		--clearsign -o "$dists_dir/InRelease" "$release_file"
+		--clearsign -o "$inrel_tmp" "$release_file"
+	mv -f -- "$inrel_tmp" "$dists_dir/InRelease"
 }
 
 # Make DNF groups parameter
@@ -350,9 +357,6 @@ function create_dnf_repo {
 	mkdir -p "$rpm_repo"
 	local checksum_cache="$rpm_repo/.known_checksums"
 	touch "$checksum_cache"
-	
-	# Clean existing repo files
-	find "$rpm_repo" -type f ! -name '.known_checksums' -delete
 
 	# Process RPM files
 	local rpm_repo_cache_update
@@ -365,12 +369,39 @@ function create_dnf_repo {
 	[ -n "${rpm_repo_cache_update-}" ] && mv "$checksum_cache.$$" "$checksum_cache"
 	rm -f "$checksum_cache.$$" 2>/dev/null || true
 
-	# Create and sign repository
+	# Build new repodata in a temp dir inside the same repo
+	local tmp_repo
+	tmp_repo=$(mktemp -d -p "$repo_dir" repodata.XXXXXX)
+
+	# Get DNF groups parameter
 	local -a groups
 	IFS=' ' read -r -a groups <<< "$(make_dnf_groups_param)"
-	createrepo_c "${groups[@]}" "$repo_dir"
+
+	# Write metadata into temp repodata dir
+	createrepo_c "${groups[@]}" -o "$tmp_repo" "$repo_dir"
+
+	# Sign the repomd inside temp dir
 	gpg --batch --yes --default-key "$gpg_key" --digest-algo SHA512 -abs -o \
-		"$repo_dir/repodata/repomd.xml.asc" "$repo_dir/repodata/repomd.xml"
+		"$tmp_repo/repomd.xml.asc" "$tmp_repo/repomd.xml"
+
+	# Move payload files first, then repomd signature, repomd last
+	shopt -s nullglob
+	local f
+	for f in "$tmp_repo"/*; do
+		[[ ${f##*/} == repomd.xml || ${f##*/} == repomd.xml.asc ]] && continue
+		mv -f -- "$f" "$rpm_repo/"
+	done
+
+	mv -f -- "$tmp_repo/repomd.xml.asc" "$rpm_repo/repomd.xml.asc"
+	mv -f -- "$tmp_repo/repomd.xml"     "$rpm_repo/repomd.xml"
+	shopt -u nullglob
+
+	# Clean up temp repo
+	rm -rf -- "$tmp_repo" 2>/dev/null || true
+
+	# Clean existing repo files older than 7 days
+	find "$rpm_repo" -type f -mtime +7 ! -name '.known_checksums' -delete \
+		2>/dev/null || true
 }
 
 # Remove each package latest symlinks

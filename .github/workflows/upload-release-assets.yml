@@ -26,6 +26,7 @@ jobs:
           mkdir -p assets
 
           cp -a install-ci-cd-repo.sh assets/
+          cp -a migrate-modular.sh assets/
 
           while IFS= read -r -d '' f; do
             cp -a "$f" "assets/$(basename "$f")"

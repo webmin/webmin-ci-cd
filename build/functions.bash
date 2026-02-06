@@ -1153,6 +1153,7 @@ function cleanup_packages {
 		local files="$1"
 		local latest_ver="0"
 		local latest_file=""
+		local version=""
 		
 		# Convert string to array
 		IFS=' ' read -r -a file_array <<< "$files"

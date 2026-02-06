@@ -1124,12 +1124,34 @@ function cleanup_packages {
 		return 1
 	fi
 
+	# Check if a filename indicates it's the latest symlink
 	is_latest() {
 		local filename="$1"
 		[[ $filename =~ [-_]latest[._] ]] && return 0
 		return 1
 	}
 
+	# Get file modification time in epoch seconds, trying stat with different
+	# options for compatibility
+	mtime_epoch() {
+		local p="$1"
+		local t=""
+		t=$(stat -Lc %Y -- "$p" 2>/dev/null) || true
+		if [[ -n "$t" ]]; then echo "$t"; return 0; fi
+		t=$(stat -c %Y -- "$p" 2>/dev/null) || true
+		echo "${t:-0}"
+	}
+
+	# Is the latest pkg file fresh enough to warrant keeping older siblings?
+	is_pkg_fresh() {
+		local file="$1"
+		local mtime cutoff
+		mtime=$(mtime_epoch "$file")
+		cutoff=$(( $(date +%s) - 194400 )) # 54 hours (DNF max 48h + 6h buffer)
+		(( mtime > cutoff ))
+	}
+
+	# Extract version from filename
 	get_version() {
 		local filename="$1"
 		# Extract version number and release number (dotted version preferred)
@@ -1145,10 +1167,12 @@ function cleanup_packages {
 		fi
 	}
 
+	# Compare two version strings
 	version_gt() {
 		test "$(printf '%s\n' "$@" | sort -V | head -n 1)" != "$1"
 	}
 
+	# Process a group of files with the same base package name and extension
 	process_group() {
 		local files="$1"
 		local latest_ver="0"
@@ -1177,15 +1201,23 @@ function cleanup_packages {
 				fi
 			fi
 		done
+
+		# Nothing to keep selected
+		[[ -z "$latest_file" ]] && return 0
 		
-		# Remove older versions
+		# Remove older versions but keep during 54-hour (48h + 6h) grace period
+		local skip_cleanup=false
+		if is_pkg_fresh "$latest_file"; then
+			skip_cleanup=true
+		fi
 		for file in "${file_array[@]}"; do
 			[[ -z "${file-}" ]] && continue
-			if [ "$file" != "$latest_file" ]; then
-				if [ -f "$file" ]; then
-					rm "$file" 2>/dev/null || true
-				fi
+			[[ "$file" == "$latest_file" ]] && continue
+			[[ -f "$file" ]] || continue
+			if $skip_cleanup; then
+				continue
 			fi
+			rm -- "$file" 2>/dev/null || true
 		done
 	}
 
@@ -1196,7 +1228,7 @@ function cleanup_packages {
 		pushd "$dir" >/dev/null || continue
 
 		# Initialize extensions array
-		declare -A extensions
+		declare -A extensions=()
 
 		if [ -n "${extensions_arg-}" ]; then
 			# Use provided extensions
@@ -1213,7 +1245,7 @@ function cleanup_packages {
 		fi
 
 		# Group files by base package name and extension
-		declare -A package_groups
+		declare -A package_groups=()
 
 		# Read all files with detected extensions
 		for ext in "${!extensions[@]}"; do

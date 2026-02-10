@@ -1205,16 +1205,13 @@ function cleanup_packages {
 		# Nothing to keep selected
 		[[ -z "$latest_file" ]] && return 0
 		
-		# Remove older versions but keep during 54-hour (48h + 6h) grace period
-		local skip_cleanup=false
-		if is_pkg_fresh "$latest_file"; then
-			skip_cleanup=true
-		fi
+		# Remove older versions once each older file passes 54-hour (48h + 6h)
+		# grace period
 		for file in "${file_array[@]}"; do
 			[[ -z "${file-}" ]] && continue
 			[[ "$file" == "$latest_file" ]] && continue
 			[[ -f "$file" ]] || continue
-			if $skip_cleanup; then
+			if is_pkg_fresh "$file"; then
 				continue
 			fi
 			rm -- "$file" 2>/dev/null || true

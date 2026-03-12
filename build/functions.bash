@@ -717,10 +717,10 @@ function clone_module_repo {
 	local core_module="$3"
 
 	# Resolve module info mapping
-	local names repo_name dir_name ver_pref deps_repo sub_dir 
+	local names repo_name dir_name ver_pref deps_repo sub_dir lic_id
 	local cmd_clone_main cmd_clone_deps err
 	names=$(resolve_module_info "$module")
-	read -r repo_name dir_name ver_pref deps_repo sub_dir lic_id <<< "$names"
+	IFS=',' read -r repo_name dir_name ver_pref deps_repo sub_dir lic_id <<< "$names"
 
 	# Use the module if it's a core module with a valid directory or
 	# if it's marked as non-deletable (e.g. for local debugging)
@@ -935,7 +935,7 @@ function resolve_module_info {
 	
 	# Check if mapping file exists
 	if [[ ! -f "$mapping_file" ]]; then
-		echo "$module_name $module_name"
+		printf '%s,%s,,,,\n' "$module_name" "$module_name"
 		return 0
 	fi
 	
@@ -948,13 +948,14 @@ function resolve_module_info {
 		if [[ "$source_name" == "$module_name" ]]; then
 			# Split comma-separated values into array
 			IFS=',' read -r dir_name ver_pref deps_repo sub_dir lic_id <<< "$target_info"
-			echo "$source_name $dir_name $ver_pref $deps_repo $sub_dir $lic_id"
+			printf '%s,%s,%s,%s,%s,%s\n' \
+				"$source_name" "$dir_name" "$ver_pref" "$deps_repo" "$sub_dir" "$lic_id"
 			return 0
 		fi
 	done <<< "$content"
 
 	# Return original name with empty optional values
-	echo "$module_name $module_name"
+	printf '%s,%s,,,,\n' "$module_name" "$module_name"
 }
 
 # Gets module build flags from file

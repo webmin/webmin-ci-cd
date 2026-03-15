@@ -43,6 +43,7 @@ virtualmin_repos=(
 	"virtualmin/virtualmin-stack-meta"
 	"virtualmin/virtualmin-yum-groups"
 	"virtualmin/virtualmin-wp-workbench"
+	"virtualmin/virtualmin-podman"
 	"virtualmin/slib"
 	"virtualmin/virtualmin-install"
 )

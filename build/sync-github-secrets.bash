@@ -37,6 +37,7 @@ virtualmin_repos=(
 	"virtualmin/ruby-gems"
 	"virtualmin/jailkit"
 	"virtualmin/webmin-jailkit"
+	"virtualmin/php-pear"
 	"virtualmin/procmail-wrapper"
 	"virtualmin/Virtualmin-Config"
 	"virtualmin/virtualmin-core-meta"

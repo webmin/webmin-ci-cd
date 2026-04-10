@@ -62,7 +62,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    if: ${{ !contains(github.event.head_commit.message || '', '[no-build]') }}
+    # Only allow canonical repositories under our owners to invoke builds
+    if: ${{ !contains(github.event.head_commit.message || '', '[no-build]') && (github.repository_owner == 'webmin' || github.repository_owner == 'virtualmin') }}
     env:
       TZ: Europe/Nicosia
       CI_CD_STABLE_BASE: https://github.com/webmin/webmin-ci-cd/releases/latest/download

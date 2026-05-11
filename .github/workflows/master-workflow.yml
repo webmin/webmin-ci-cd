@@ -76,6 +76,12 @@ jobs:
           path: actions-checkout
           fetch-depth: 1
 
+      - name: Reject release demotion
+        if: ${{ github.event_name == 'release' && github.event.action == 'prereleased' && github.event.release.published_at != github.event.release.updated_at }}
+        run: |
+          echo "::error::Release-to-pre-release transitions are not supported."
+          exit 1
+
       - uses: awalsh128/cache-apt-pkgs-action@latest
         with: 
           packages: git tar gzip openssl curl openssh-client rpm perl libjson-pp-perl libdigest-sha-perl liblist-moreutils-perl libencode-detect-perl zstd

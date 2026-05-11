@@ -1002,18 +1002,24 @@ function invalidate_cloudfront_repo {
 	for bn in "${uploaded[@]}"; do
 		# Skip empty lines
 		[[ -n "$bn" ]] || continue
+		[[ "$bn" == */* ]] && continue
 
-		# Invalidate latest links
+		# Invalidate the exact uploaded versioned objects as well as latest
+		# links. APT fetches DEBs from pool/main, while RPM/YUM metadata points
+		# at repository-root RPM objects.
 		case "$bn" in
 			# Invalidate latest rpm links
 			*.rpm)
 				need_rpm=1
+				_add_path "/${bn}"
 				pkg_base=$(get_base_package_base "$bn" 2>/dev/null || true)
 				[[ -n "$pkg_base" ]] && _add_path "/${pkg_base}*latest*.rpm"
 				;;
 			# Invalidate latest deb links
 			*.deb)
 				need_apt=1
+				_add_path "/${bn}"
+				_add_path "/${apt_pool_component_dir}/${bn}"
 				pkg_base=$(get_base_package_base "$bn" 2>/dev/null || true)
 				pkg_base=${pkg_base%-gpl_all}
 				pkg_base=${pkg_base%-pro_all}
@@ -1021,12 +1027,14 @@ function invalidate_cloudfront_repo {
 				;;
 			# Invalidate latest tar.gz links
 			*.tar.gz)
+				_add_path "/${bn}"
 				pkg_base=$(get_base_package_base "$bn" 2>/dev/null || true)
 				[[ -n "$pkg_base" ]] && _add_path "/${pkg_base}*latest*.tar.gz"
 				;;
 
 			# Invalidate shell scripts (entrypoints only)
 			*.sh)
+				_add_path "/${bn}"
 				base=$(get_base_package_base "$bn" 2>/dev/null || true)
 				[[ -n "$base" ]] || continue
 			

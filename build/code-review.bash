@@ -263,6 +263,7 @@ fi
 if [[ ! "$http_code" =~ ^2 ]]; then
 	echo "::error::Code review API returned HTTP $http_code."
 	perl -MJSON::PP -0777 -e '
+		binmode STDOUT, ":encoding(UTF-8)";
 		my $raw = <STDIN>;
 		my $decoded = eval { JSON::PP::decode_json($raw) };
 		if ($decoded && ref($decoded) eq "HASH" && ref($decoded->{error}) eq "HASH") {
@@ -285,6 +286,8 @@ use strict;
 use warnings;
 use JSON::PP qw(decode_json);
 
+binmode STDOUT, ':encoding(UTF-8)';
+
 my ($response_path) = @ARGV;
 open my $fh, '<', $response_path or die "open $response_path: $!";
 my $raw = do { local $/; <$fh> };
@@ -302,6 +305,8 @@ perl -MJSON::PP - "$review_file" <<'PERL'
 use strict;
 use warnings;
 use JSON::PP qw(decode_json);
+
+binmode STDOUT, ':encoding(UTF-8)';
 
 my ($review_path) = @ARGV;
 open my $fh, '<', $review_path or die "open $review_path: $!";

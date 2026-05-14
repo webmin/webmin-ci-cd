@@ -26,6 +26,11 @@ on:
         required: false
         type: boolean
         default: false
+      run-claude-code-review:
+        description: 'Whether to review submitted code with Claude when an API key is available'
+        required: false
+        type: boolean
+        default: true
       module-build-type:
         required: false
         type: string
@@ -58,6 +63,8 @@ on:
         required: true
       DEV_CHILD_GITHUB_TOKEN:
         required: false
+      ANTHROPIC_API_KEY:
+        required: false
 
 jobs:
   build:
@@ -70,11 +77,11 @@ jobs:
       CI_CD_UNSTABLE_BASE: https://raw.githubusercontent.com/webmin/webmin-ci-cd/main/build
     steps:
       - name: Checkout code
-        if: ${{ inputs.is-checkout }}
+        if: ${{ inputs.is-checkout || github.event_name == 'push' }}
         uses: actions/checkout@v4
         with:
           path: actions-checkout
-          fetch-depth: 1
+          fetch-depth: ${{ github.event_name == 'push' && '0' || '1' }}
 
       - name: Reject release demotion
         if: ${{ github.event_name == 'release' && github.event.action == 'prereleased' && github.event.release.published_at != github.event.release.updated_at }}
@@ -88,6 +95,8 @@ jobs:
           version: 1.0
 
       - name: Fetch dependencies
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           set -euo pipefail
           if [ "${{ inputs.is-release }}" = "true" ] && [ "${{ inputs.is-prerelease }}" != "true" ]; then
@@ -100,6 +109,29 @@ jobs:
           echo "BUILD_BOOTSTRAP_URL=$base" >> "$GITHUB_ENV"
           curl -fsSLo bootstrap.bash "$base/bootstrap.bash"
           chmod +x bootstrap.bash
+          if [ -n "${ANTHROPIC_API_KEY:-}" ] &&
+             [ "${{ inputs.run-claude-code-review }}" = "true" ] &&
+             [ "${{ github.event_name }}" = "push" ]; then
+            review_url="${CI_CD_UNSTABLE_BASE}/claude-code-review.bash"
+            curl -fsSLo claude-code-review.bash "$review_url"
+            chmod +x claude-code-review.bash
+          fi
+
+      - name: Code review
+        if: ${{ inputs.run-claude-code-review && github.event_name == 'push' }}
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_MODEL: ${{ vars.CLAUDE_CODE_REVIEW_MODEL }}
+          BASE_SHA: ${{ github.event.before || '' }}
+          HEAD_SHA: ${{ github.sha }}
+          BEFORE_SHA: ${{ github.event.before || '' }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+            echo "No ANTHROPIC_API_KEY was provided; skipping Claude code review."
+            exit 0
+          fi
+          bash claude-code-review.bash actions-checkout
 
       - name: Set timezone
         run: sudo timedatectl set-timezone ${{ env.TZ }}

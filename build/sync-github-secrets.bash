@@ -66,6 +66,7 @@ secrets=(
 	"DEV_SSH_PRV_KEY"
 	"PRERELEASE_UPLOAD_SSH_DIR"
 	"ALL_GPG_PH2"
+	"ANTHROPIC_API_KEY"
 )
 
 # Cleanup function

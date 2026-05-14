@@ -307,13 +307,35 @@ my ($review_path) = @ARGV;
 open my $fh, '<', $review_path or die "open $review_path: $!";
 my $text = do { local $/; <$fh> };
 
-$text =~ s/\A\s*```(?:json)?\s*//i;
-$text =~ s/\s*```\s*\z//;
-if ($text !~ /\A\s*\{.*\}\s*\z/s && $text =~ /(\{.*\})/s) {
-	$text = $1;
+sub trim {
+	my ($value) = @_;
+	$value =~ s/\A\s+//;
+	$value =~ s/\s+\z//;
+	return $value;
 }
 
-my $review = eval { decode_json($text) };
+sub decode_review_json {
+	my ($raw) = @_;
+	my @candidates = (trim($raw));
+	while ($raw =~ /```(?:json)?[ \t]*\r?\n(.*?)\r?\n```/gis) {
+		unshift(@candidates, trim($1));
+	}
+	for my $candidate (@candidates) {
+		my $review = eval { decode_json($candidate) };
+		return $review if $review && ref($review) eq 'HASH';
+	}
+	while ($raw =~ /\{/g) {
+		my $start = pos($raw) - 1;
+		my $end = length($raw);
+		while (($end = rindex($raw, '}', $end - 1)) >= $start) {
+			my $review = eval { decode_json(substr($raw, $start, $end - $start + 1)) };
+			return $review if $review && ref($review) eq 'HASH';
+		}
+	}
+	return undef;
+}
+
+my $review = decode_review_json($text);
 if (!$review || ref($review) ne 'HASH') {
 	print "::error::Code review returned non-JSON output.\n";
 	print $text;

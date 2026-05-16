@@ -20,7 +20,7 @@ api_version=""
 api_version_header=""
 model="gpt-5.5"
 reasoning_effort="medium"
-max_output_tokens="2048"
+max_output_tokens="4096"
 max_bytes="200000"
 context_lines="20"
 fail_on_api_error="true"
@@ -365,21 +365,24 @@ for my $item (@{ $response->{output} || [] }) {
 	next unless ref($item) eq 'HASH';
 	for my $part (@{ $item->{content} || [] }) {
 		next unless ref($part) eq 'HASH';
-		push @text, $part->{text} if ($part->{type} || '') eq 'output_text';
+		my $type = $part->{type} || '';
+		push @text, $part->{text}
+			if defined $part->{text} && !ref($part->{text}) &&
+			   ($type eq 'output_text' || $type eq 'text');
 	}
 }
 print join("", @text);
 PERL
 
 # Parse the review JSON and convert findings into GitHub annotations.
-perl -MJSON::PP - "$review_file" <<'PERL'
+perl -MJSON::PP - "$review_file" "$response_file" <<'PERL'
 use strict;
 use warnings;
 use JSON::PP qw(decode_json);
 
 binmode STDOUT, ':encoding(UTF-8)';
 
-my ($review_path) = @ARGV;
+my ($review_path, $response_path) = @ARGV;
 open my $fh, '<', $review_path or die "open $review_path: $!";
 my $text = do { local $/; <$fh> };
 
@@ -411,11 +414,54 @@ sub decode_review_json {
 	return undef;
 }
 
+sub response_summary {
+	my ($path) = @_;
+	open my $rfh, '<', $path or return "raw API response was unavailable: $!\n";
+	my $raw = do { local $/; <$rfh> };
+	my $response = eval { decode_json($raw) };
+	if (!$response || ref($response) ne 'HASH') {
+		return substr($raw, 0, 4000) . "\n";
+	}
+
+	my @lines;
+	push @lines, "API status: $response->{status}"
+		if defined $response->{status} && !ref($response->{status});
+	if (ref($response->{incomplete_details}) eq 'HASH' &&
+	    defined $response->{incomplete_details}->{reason}) {
+		push @lines, "Incomplete reason: " .
+			$response->{incomplete_details}->{reason};
+	}
+	if (ref($response->{error}) eq 'HASH' &&
+	    defined $response->{error}->{message}) {
+		push @lines, "API error: " . $response->{error}->{message};
+	}
+
+	my @types;
+	for my $item (@{ $response->{output} || [] }) {
+		next unless ref($item) eq 'HASH';
+		push @types, $item->{type}
+			if defined $item->{type} && !ref($item->{type});
+		for my $part (@{ $item->{content} || [] }) {
+			next unless ref($part) eq 'HASH';
+			push @types, "content:" . $part->{type}
+				if defined $part->{type} && !ref($part->{type});
+			push @lines, "Refusal: " . $part->{refusal}
+				if defined $part->{refusal} && !ref($part->{refusal});
+		}
+	}
+	push @lines, "Output types: " . join(", ", @types) if @types;
+	return @lines ? join("\n", @lines) . "\n" : substr($raw, 0, 4000) . "\n";
+}
+
 my $review = decode_review_json($text);
 if (!$review || ref($review) ne 'HASH') {
-	print "::error::Code review returned non-JSON output.\n";
-	print $text;
-	print "\n";
+	print "::error::Code review returned no parseable JSON output.\n";
+	if (length trim($text)) {
+		print trim($text), "\n";
+	}
+	else {
+		print response_summary($response_path);
+	}
 	exit 1;
 }
 

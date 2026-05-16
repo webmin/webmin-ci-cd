@@ -215,7 +215,13 @@ Review this submitted code diff.
 Return exactly one JSON object with this shape:
 {
   "status": "pass" or "fail",
-  "summary": "short summary",
+  "summary": "one specific sentence about the reviewed change",
+  "reviewed": [
+    "short description of a file or area reviewed"
+  ],
+  "passed_checks": [
+    "short description of a concrete check that looked safe"
+  ],
   "findings": [
     {
       "severity": "fatal" or "attention",
@@ -228,6 +234,7 @@ Return exactly one JSON object with this shape:
 }
 
 Use "fail" only when there is at least one fatal issue introduced by this diff. Use "pass" when there are no fatal issues, even if there are attention findings. If a line number is unknown, use null.
+For passing reviews, make the summary specific to the changed files or behavior; do not use a generic summary like "No fatal issues found". Include 1-3 reviewed items and 1-3 passed_checks items. Do not claim that tests, linters, or commands ran; describe only what is visible from the diff.
 
 Changed files:
 $files
@@ -253,7 +260,7 @@ print encode_json({
 			schema => {
 				type => 'object',
 				additionalProperties => JSON::PP::false(),
-				required => [ qw(status summary findings) ],
+				required => [ qw(status summary reviewed passed_checks findings) ],
 				properties => {
 					status => {
 						type => 'string',
@@ -261,6 +268,18 @@ print encode_json({
 					},
 					summary => {
 						type => 'string',
+					},
+					reviewed => {
+						type => 'array',
+						items => {
+							type => 'string',
+						},
+					},
+					passed_checks => {
+						type => 'array',
+						items => {
+							type => 'string',
+						},
 					},
 					findings => {
 						type => 'array',
@@ -482,8 +501,30 @@ sub escape_property {
 	return $value;
 }
 
+sub log_text {
+	my ($value) = @_;
+	$value = '' unless defined $value;
+	$value =~ s/[\r\n]+/ /g;
+	$value =~ s/\s+/ /g;
+	return trim($value);
+}
+
+sub print_review_notes {
+	my ($label, $items) = @_;
+	return unless ref($items) eq 'ARRAY';
+	my $printed = 0;
+	for my $item (@$items) {
+		$item = log_text($item);
+		next if !length($item);
+		print "$label:\n" if !$printed;
+		print "- $item\n";
+		$printed++;
+		last if $printed >= 3;
+	}
+}
+
 my $status = lc($review->{status} || '');
-my $summary = $review->{summary} || '';
+my $summary = log_text($review->{summary});
 my $findings = $review->{findings};
 $findings = [] unless ref($findings) eq 'ARRAY';
 my $blocking_findings = 0;
@@ -525,6 +566,8 @@ if ($status eq 'pass' || $status eq 'fail') {
 	print "Code review passed";
 	print ": $summary" if length $summary;
 	print "\n";
+	print_review_notes("Reviewed", $review->{reviewed});
+	print_review_notes("Passed checks", $review->{passed_checks});
 	exit 0;
 }
 

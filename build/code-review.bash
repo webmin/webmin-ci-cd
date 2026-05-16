@@ -244,7 +244,6 @@ print encode_json({
 	reasoning => {
 		effort => $reasoning_effort,
 	},
-	temperature => 0,
 	store => JSON::PP::false(),
 	text => {
 		format => {

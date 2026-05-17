@@ -686,14 +686,18 @@ sub html_inline_code {
 	my $code_style = 'font-family:ui-monospace,SFMono-Regular,Consolas,monospace;' .
 			 'font-size:85%;background:#f6f8fa;border:1px solid #d0d7de;' .
 			 'border-radius:4px;padding:1px 4px;color:#24292f;';
+	my $code = sub {
+		return '<code class="cr-code" style="' . $code_style . '">' .
+		       $_[0] . '</code>';
+	};
 	$value = html_escape($value);
-	$value =~ s/`([^`]+)`/'<code class="cr-code" style="' . $code_style . '">' . $1 . '<\/code>'/ge;
+	$value =~ s/`([^`]+)`/$code->($1)/ge;
 	$value =~ s/(?<![A-Za-z0-9_>])(\$[A-Za-z_][A-Za-z0-9_]*(?:\{[^<>{}]+\})+)/
-		   '<code class="cr-code" style="' . $code_style . '">' . $1 . '<\/code>'/gex;
+		   $code->($1)/gex;
 	$value =~ s/(?<![A-Za-z0-9_>])(%[A-Za-z_][A-Za-z0-9_]*)/
-		   '<code class="cr-code" style="' . $code_style . '">' . $1 . '<\/code>'/gex;
+		   $code->($1)/gex;
 	$value =~ s{(?<![A-Za-z0-9_>/.-])([A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+:\d+)}
-		   {'<code class="cr-code" style="' . $code_style . '">' . $1 . '<\/code>'}gex;
+		   { my $ref = $1; $ref =~ s/:/&#8203;:/; $code->($ref) }gex;
 	return $value;
 }
 

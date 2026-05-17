@@ -65,6 +65,8 @@ on:
         required: false
       CODE_REVIEW_API_KEY:
         required: false
+      CODE_REVIEW_SMTP_PASSWORD:
+        required: false
 
 jobs:
   build:
@@ -121,6 +123,7 @@ jobs:
         if: ${{ inputs.run-code-review && github.event_name == 'push' }}
         env:
           CODE_REVIEW_API_KEY: ${{ secrets.CODE_REVIEW_API_KEY }}
+          CODE_REVIEW_SMTP_PASSWORD: ${{ secrets.CODE_REVIEW_SMTP_PASSWORD }}
           BASE_SHA: ${{ github.event.before || '' }}
           HEAD_SHA: ${{ github.sha }}
           BEFORE_SHA: ${{ github.event.before || '' }}

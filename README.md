@@ -46,7 +46,7 @@ Each product repository includes a child workflow that reuses the master workflo
 
 In some cases, fine-grained tokens are required for builds involving private repositories. For instance, if changes in a public repository rely on a private one, GitHub's permission model prevents workflows from accessing the private repository unless an additional token with the necessary permissions is provided for cloning the private repository. Conversely, when a workflow is triggered directly by a private repository, GitHub automatically provides an authentication token, making it easy to clone the repository without any additional steps.
 
-When a child workflow passes `CODE_REVIEW_API_KEY`, the master workflow also runs a diff review on submitted push code before building. The check is skipped when no key is passed, and callers can disable it with the `run-code-review: false` input.
+When a child workflow passes `CODE_REVIEW_API_KEY`, the master workflow also runs a diff review on submitted push code before building. The check is skipped when no key is passed, and callers can disable it with the `run-code-review: false` input. If `CODE_REVIEW_SMTP_PASSWORD` is also passed as a multiline SMTP username/password/from/BCC secret, review findings are emailed to the head commit author; clean reviews do not send email.
 
 ## Architecture
 This is a quick overview of the key files involved in the build process, highlighting their roles, functionality, and purpose.

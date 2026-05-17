@@ -67,6 +67,7 @@ secrets=(
 	"PRERELEASE_UPLOAD_SSH_DIR"
 	"ALL_GPG_PH2"
 	"CODE_REVIEW_API_KEY"
+	"CODE_REVIEW_SMTP_PASSWORD"
 )
 
 # Cleanup function

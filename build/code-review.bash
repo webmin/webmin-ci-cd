@@ -727,9 +727,12 @@ sub markdown_link {
 	return '[' . markdown_text($label) . '](' . $url . ')';
 }
 
-sub markdown_text {
-	my ($value) = @_;
-	$value = log_text($value);
+sub markdown_escape {
+	my ($value, $trim_edges) = @_;
+	$value = '' unless defined $value;
+	$value =~ s/[\r\n]+/ /g;
+	$value =~ s/\s+/ /g;
+	$value = trim($value) if $trim_edges;
 	$value =~ s/\\/\\\\/g;
 	$value =~ s/&/&amp;/g;
 	$value =~ s/</&lt;/g;
@@ -739,12 +742,53 @@ sub markdown_text {
 	return $value;
 }
 
+sub markdown_text {
+	return markdown_escape($_[0], 1);
+}
+
+# Wrap common code references in Markdown code spans while escaping all other
+# review text, so PR comments stay readable without trusting model Markdown.
+sub markdown_code_span {
+	my ($value) = @_;
+	$value = log_text($value);
+	$value =~ s/\s+/ /g;
+	my $ticks = '`';
+	while ($value =~ /\Q$ticks\E/) {
+		$ticks .= '`';
+	}
+	return $ticks . $value . $ticks;
+}
+
+sub markdown_inline_code {
+	my ($value) = @_;
+	$value = log_text($value);
+	my $out = '';
+	my $pos = 0;
+	while ($value =~ m{
+		`([^`\r\n]+)`
+		|(\$[A-Za-z_][A-Za-z0-9_]*(?:\{[^<>{}\r\n]+\})+)
+		|(?<![A-Za-z0-9_>])(%[A-Za-z_][A-Za-z0-9_]*)
+		|(?<![A-Za-z0-9_>])(text(?:\{[^<>{}\r\n]+\})+)
+		|(?<![A-Za-z0-9_>/.-])([A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+:\d+)
+	}gx) {
+		$out .= markdown_escape(substr($value, $pos, $-[0] - $pos), 0);
+		my $code = defined($1) ? $1 :
+			   defined($2) ? $2 :
+			   defined($3) ? $3 :
+			   defined($4) ? $4 : $5;
+		$out .= markdown_code_span($code);
+		$pos = $+[0];
+	}
+	$out .= markdown_escape(substr($value, $pos), 0);
+	return $out;
+}
+
 sub markdown_section {
 	my ($fh, $heading, @items) = @_;
 	return if !@items;
 	print {$fh} "\n### " . markdown_text($heading) . "\n\n";
 	for my $item (@items) {
-		print {$fh} "- " . markdown_text($item) . "\n";
+		print {$fh} "- " . markdown_inline_code($item) . "\n";
 	}
 }
 
@@ -756,8 +800,6 @@ sub write_markdown_report {
 		or die "open $markdown_path: $!";
 	my $result_label = $fatal_count ? 'failed' :
 			   $attention_count ? 'needs attention' : 'passed';
-	my $submitted_by = log_text($commit_author_name);
-	$submitted_by .= " <" . log_text($email_to) . ">" if length(log_text($email_to));
 	my @links;
 	push @links, markdown_link('Commit', $commit_url);
 	push @links, markdown_link('Reviewed diff', $review_diff_url);
@@ -769,11 +811,7 @@ sub write_markdown_report {
 	print {$mfh} "## Code review $result_label\n\n";
 	print {$mfh} "**Repository:** `" . markdown_text($repo_label) . "`  \n";
 	print {$mfh} "**Commit:** `" . markdown_text($short_head_sha) . "`  \n";
-	print {$mfh} "**Submitted by:** " . markdown_text($submitted_by) . "  \n"
-		if length($submitted_by);
-	print {$mfh} "**Committed at:** " . markdown_text($commit_time) . "  \n"
-		if length(log_text($commit_time));
-	print {$mfh} "\n" . markdown_text($review->{summary}) . "\n\n";
+	print {$mfh} "\n" . markdown_inline_code($review->{summary}) . "\n\n";
 	print {$mfh} "| Fatal | Attention |\n";
 	print {$mfh} "| ---: | ---: |\n";
 	print {$mfh} "| $fatal_count | $attention_count |\n";

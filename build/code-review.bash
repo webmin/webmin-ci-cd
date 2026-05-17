@@ -665,7 +665,64 @@ sub email_line {
 	print {$fh} $value . "\r\n";
 }
 
-# Build the plain-text email only when findings should notify someone.
+# Escape untrusted review text before placing it in the HTML email part.
+sub html_escape {
+	my ($value) = @_;
+	$value = log_text($value);
+	$value =~ s/&/&amp;/g;
+	$value =~ s/</&lt;/g;
+	$value =~ s/>/&gt;/g;
+	$value =~ s/"/&quot;/g;
+	return $value;
+}
+
+# Return compact, display-safe list items for text and HTML email sections.
+sub clean_list_items {
+	my ($items, $limit) = @_;
+	return () unless ref($items) eq 'ARRAY';
+	my @clean;
+	for my $item (@$items) {
+		next if ref($item);
+		$item = log_text($item);
+		next if !length($item);
+		push @clean, $item;
+		last if @clean >= $limit;
+	}
+	return @clean;
+}
+
+sub email_text_section {
+	my ($fh, $heading, @items) = @_;
+	return if !@items;
+	email_line($fh, "");
+	email_line($fh, "$heading:");
+	for my $item (@items) {
+		email_line($fh, "- $item");
+	}
+}
+
+sub email_html_section {
+	my ($fh, $heading, @items) = @_;
+	return if !@items;
+	email_line($fh, '<h2 style="font-size:16px;margin:22px 0 8px;color:#24292f;">' .
+			 html_escape($heading) . '</h2>');
+	email_line($fh, '<ul style="margin:0;padding-left:20px;color:#24292f;">');
+	for my $item (@items) {
+		email_line($fh, '<li style="margin:6px 0;">' . html_escape($item) . '</li>');
+	}
+	email_line($fh, '</ul>');
+}
+
+sub email_html_link {
+	my ($label, $url) = @_;
+	$url = log_text($url);
+	return '' if !length($url);
+	return '<a href="' . html_escape($url) .
+	       '" style="color:#0969da;text-decoration:none;">' .
+	       html_escape($label) . '</a>';
+}
+
+# Build the review email only when findings should notify someone.
 sub write_email_report {
 	my ($fatal_count, $attention_count, $email_findings, $review) = @_;
 	my $send_attention = lc($email_on_attention || '') eq 'true' ||
@@ -676,53 +733,90 @@ sub write_email_report {
 	open my $efh, '>:encoding(UTF-8)', $email_path
 		or die "open $email_path: $!";
 	my $result = $fatal_count ? 'failed' : 'needs attention';
+	my $result_label = $fatal_count ? 'Failed' : 'Needs attention';
 	my $subject = "Code review $result for " .
 		      log_text($repo_label) . '@' . log_text($short_head_sha);
 	my $from = log_text($email_from_address);
 	if (length(log_text($email_from_name))) {
 		$from = log_text($email_from_name) . " <$from>";
 	}
+	my @links;
+	push @links, [ 'Commit', $commit_url ] if length(log_text($commit_url));
+	push @links, [ 'Reviewed diff', $review_diff_url ] if length(log_text($review_diff_url));
+	push @links, [ 'Patch', $review_patch_url ] if length(log_text($review_patch_url));
+	push @links, [ 'GitHub run', $run_url ] if length(log_text($run_url));
+	my @findings = clean_list_items($email_findings, 20);
+	my @reviewed = clean_list_items($review->{reviewed}, 5);
+	my @passed_checks = clean_list_items($review->{passed_checks}, 5);
+	my $boundary = 'code-review-' . log_text($short_head_sha) . '-mime';
 
 	email_line($efh, "From: $from");
 	email_line($efh, "To: " . log_text($email_to));
 	email_line($efh, "Subject: $subject");
 	email_line($efh, "MIME-Version: 1.0");
+	email_line($efh, "Content-Type: multipart/alternative; boundary=\"$boundary\"");
+	email_line($efh, "");
+	email_line($efh, "--$boundary");
 	email_line($efh, "Content-Type: text/plain; charset=UTF-8");
+	email_line($efh, "Content-Transfer-Encoding: 8bit");
 	email_line($efh, "");
-	email_line($efh, "Code review $result for " . log_text($repo_label) .
-			 " at " . log_text($short_head_sha) . ".");
+	email_line($efh, "Code review $result_label");
 	email_line($efh, "");
-	email_line($efh, "Summary: " . log_text($review->{summary}));
+	email_line($efh, "Repository: " . log_text($repo_label));
+	email_line($efh, "Commit: " . log_text($short_head_sha));
 	email_line($efh, "Fatal findings: $fatal_count");
 	email_line($efh, "Attention findings: $attention_count");
-	email_line($efh, "Commit: " . log_text($commit_url)) if length(log_text($commit_url));
-	email_line($efh, "Reviewed diff: " . log_text($review_diff_url)) if length(log_text($review_diff_url));
-	email_line($efh, "Patch: " . log_text($review_patch_url)) if length(log_text($review_patch_url));
-	email_line($efh, "GitHub run: " . log_text($run_url)) if length(log_text($run_url));
 	email_line($efh, "");
-
-	print {$efh} "Findings:\r\n";
-	for my $finding (@$email_findings) {
-		email_line($efh, "- " . log_text($finding));
-	}
-
-	if (ref($review->{reviewed}) eq 'ARRAY' && @{ $review->{reviewed} }) {
+	email_line($efh, "Summary:");
+	email_line($efh, log_text($review->{summary}));
+	if (@links) {
 		email_line($efh, "");
-		print {$efh} "Reviewed:\r\n";
-		for my $item (@{ $review->{reviewed} }) {
-			next if ref($item);
-			email_line($efh, "- " . log_text($item));
+		email_line($efh, "Links:");
+		for my $link (@links) {
+			email_line($efh, "- $link->[0]: " . log_text($link->[1]));
 		}
 	}
+	email_text_section($efh, 'Findings', @findings);
+	email_text_section($efh, 'Reviewed', @reviewed);
+	email_text_section($efh, 'Passed checks', @passed_checks);
 
-	if (ref($review->{passed_checks}) eq 'ARRAY' && @{ $review->{passed_checks} }) {
-		email_line($efh, "");
-		print {$efh} "Passed checks:\r\n";
-		for my $item (@{ $review->{passed_checks} }) {
-			next if ref($item);
-			email_line($efh, "- " . log_text($item));
+	email_line($efh, "");
+	email_line($efh, "--$boundary");
+	email_line($efh, "Content-Type: text/html; charset=UTF-8");
+	email_line($efh, "Content-Transfer-Encoding: 8bit");
+	email_line($efh, "");
+	email_line($efh, '<!doctype html>');
+	email_line($efh, '<html><body style="margin:0;padding:0;background:#f6f8fa;color:#24292f;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;">');
+	email_line($efh, '<div style="max-width:760px;margin:0 auto;padding:24px;">');
+	email_line($efh, '<div style="background:#ffffff;border:1px solid #d0d7de;border-radius:8px;overflow:hidden;">');
+	email_line($efh, '<div style="padding:20px 24px;border-bottom:1px solid #d0d7de;">');
+	email_line($efh, '<div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#57606a;">Code review</div>');
+	email_line($efh, '<h1 style="font-size:22px;line-height:1.3;margin:6px 0 4px;color:#24292f;">' . html_escape($result_label) . '</h1>');
+	email_line($efh, '<div style="font-size:14px;color:#57606a;">' . html_escape($repo_label) . ' @ ' . html_escape($short_head_sha) . '</div>');
+	email_line($efh, '</div>');
+	email_line($efh, '<div style="padding:20px 24px;">');
+	email_line($efh, '<p style="font-size:15px;line-height:1.55;margin:0 0 16px;">' . html_escape($review->{summary}) . '</p>');
+	email_line($efh, '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 18px;"><tr>');
+	email_line($efh, '<td style="padding:10px 14px;border:1px solid #d0d7de;border-radius:6px;background:#fff5f5;"><div style="font-size:12px;color:#57606a;">Fatal</div><div style="font-size:22px;font-weight:700;color:#cf222e;">' . html_escape($fatal_count) . '</div></td>');
+	email_line($efh, '<td style="width:10px;"></td>');
+	email_line($efh, '<td style="padding:10px 14px;border:1px solid #d0d7de;border-radius:6px;background:#fff8c5;"><div style="font-size:12px;color:#57606a;">Attention</div><div style="font-size:22px;font-weight:700;color:#9a6700;">' . html_escape($attention_count) . '</div></td>');
+	email_line($efh, '</tr></table>');
+	if (@links) {
+		email_line($efh, '<div style="margin:0 0 18px;">');
+		for my $link (@links) {
+			my $html_link = email_html_link($link->[0], $link->[1]);
+			next if !length($html_link);
+			email_line($efh, '<span style="display:inline-block;margin:0 8px 8px 0;padding:6px 10px;border:1px solid #d0d7de;border-radius:6px;background:#f6f8fa;font-size:14px;">' . $html_link . '</span>');
 		}
+		email_line($efh, '</div>');
 	}
+	email_html_section($efh, 'Findings', @findings);
+	email_html_section($efh, 'Reviewed', @reviewed);
+	email_html_section($efh, 'Passed checks', @passed_checks);
+	email_line($efh, '</div></div></div>');
+	email_line($efh, '</body></html>');
+	email_line($efh, "");
+	email_line($efh, "--$boundary--");
 	close $efh;
 }
 

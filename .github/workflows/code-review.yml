@@ -47,11 +47,13 @@ jobs:
         env:
           BASE_REPO_URL: ${{ github.event.pull_request.base.repo.clone_url }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          git -c "http.extraheader=AUTHORIZATION: bearer ${GITHUB_TOKEN}" \
-            fetch --no-tags --depth=1 "$BASE_REPO_URL" "$BASE_SHA"
+          if git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            echo "Base commit already exists in checkout."
+            exit 0
+          fi
+          git fetch --no-tags --depth=1 "$BASE_REPO_URL" "$BASE_SHA"
 
       - name: Code review
         if: ${{ env.CODE_REVIEW_AVAILABLE == 'true' }}
@@ -122,4 +124,9 @@ jobs:
 
       - name: Fail on code review errors
         if: ${{ always() && env.CODE_REVIEW_AVAILABLE == 'true' }}
-        run: exit "${CODE_REVIEW_EXIT:-1}"
+        run: |
+          set -euo pipefail
+          if [ -n "${CODE_REVIEW_EXIT:-}" ]; then
+            exit "$CODE_REVIEW_EXIT"
+          fi
+          echo "Code review did not run; preserving earlier job failure."

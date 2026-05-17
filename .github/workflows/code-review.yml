@@ -1,0 +1,125 @@
+name: Code Review
+
+on:
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_call:
+    secrets:
+      CODE_REVIEW_API_KEY:
+        required: false
+      # Accepted for callers that pass the same review secrets as push builds;
+      # PR review reports through checks/comments and does not send email.
+      CODE_REVIEW_SMTP_PASSWORD:
+        required: false
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  code-review:
+    name: Code review
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'pull_request' && (github.repository_owner == 'webmin' || github.repository_owner == 'virtualmin') }}
+    env:
+      CODE_REVIEW_AVAILABLE: ${{ secrets.CODE_REVIEW_API_KEY != '' }}
+      CODE_REVIEW_SCRIPT_URL: https://raw.githubusercontent.com/webmin/webmin-ci-cd/main/build/code-review.bash
+
+    steps:
+      - name: Skip code review
+        if: ${{ env.CODE_REVIEW_AVAILABLE != 'true' }}
+        run: echo "No CODE_REVIEW_API_KEY was provided; skipping code review."
+
+      - name: Checkout PR code
+        if: ${{ env.CODE_REVIEW_AVAILABLE == 'true' }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fetch base commit
+        if: ${{ env.CODE_REVIEW_AVAILABLE == 'true' }}
+        env:
+          BASE_REPO_URL: ${{ github.event.pull_request.base.repo.clone_url }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git -c "http.extraheader=AUTHORIZATION: bearer ${GITHUB_TOKEN}" \
+            fetch --no-tags --depth=1 "$BASE_REPO_URL" "$BASE_SHA"
+
+      - name: Code review
+        if: ${{ env.CODE_REVIEW_AVAILABLE == 'true' }}
+        env:
+          CODE_REVIEW_API_KEY: ${{ secrets.CODE_REVIEW_API_KEY }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BEFORE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          review_script="${RUNNER_TEMP}/code-review.bash"
+          review_markdown="${RUNNER_TEMP}/code-review.md"
+          review_log="${RUNNER_TEMP}/code-review.log"
+          curl -fsSLo "$review_script" "$CODE_REVIEW_SCRIPT_URL"
+          chmod +x "$review_script"
+          set +e
+          CODE_REVIEW_MARKDOWN_FILE="$review_markdown" \
+            bash "$review_script" "$GITHUB_WORKSPACE" 2>&1 | tee "$review_log"
+          review_exit=${PIPESTATUS[0]}
+          set -e
+          echo "CODE_REVIEW_EXIT=$review_exit" >> "$GITHUB_ENV"
+          echo "CODE_REVIEW_MARKDOWN_FILE=$review_markdown" >> "$GITHUB_ENV"
+          if [ ! -s "$review_markdown" ]; then
+            {
+              echo "<!-- webmin-code-review -->"
+              echo "## Code review"
+              echo
+              echo '```text'
+              tail -n 120 "$review_log"
+              echo '```'
+            } > "$review_markdown"
+          fi
+
+      - name: Publish PR review
+        if: ${{ always() && env.CODE_REVIEW_AVAILABLE == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          body_file="${CODE_REVIEW_MARKDOWN_FILE:-}"
+          if [ ! -s "$body_file" ]; then
+            body_file="${RUNNER_TEMP}/code-review.md"
+            {
+              echo "<!-- webmin-code-review -->"
+              echo "## Code review"
+              echo
+              echo "Code review did not produce a report. Check the workflow logs."
+            } > "$body_file"
+          fi
+          comment_id="$(
+            gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+              --paginate \
+              --jq '.[] | select(.user.type == "Bot" and (.body | contains("<!-- webmin-code-review -->"))) | .id' |
+              tail -n 1
+          )"
+          payload="${RUNNER_TEMP}/code-review-comment.json"
+          jq -n --rawfile body "$body_file" '{body: $body}' > "$payload"
+          if [ -n "$comment_id" ]; then
+            gh api --method PATCH \
+              "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" \
+              --input "$payload" >/dev/null
+          else
+            gh api --method POST \
+              "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+              --input "$payload" >/dev/null
+          fi
+
+      - name: Fail on code review errors
+        if: ${{ always() && env.CODE_REVIEW_AVAILABLE == 'true' }}
+        run: exit "${CODE_REVIEW_EXIT:-1}"

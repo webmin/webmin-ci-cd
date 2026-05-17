@@ -233,6 +233,7 @@ request_file="$tmp_dir/request.json"
 response_file="$tmp_dir/response.json"
 review_file="$tmp_dir/review.txt"
 email_file="$tmp_dir/code-review-email.txt"
+markdown_file="${CODE_REVIEW_MARKDOWN_FILE:-}"
 
 # Collect commit and GitHub URLs used in review annotations and email reports.
 commit_author_name="$(git log -1 --format=%an "$head_sha" 2>/dev/null || true)"
@@ -524,7 +525,7 @@ PERL
 # Parse the review JSON, convert findings into GitHub annotations, and prepare
 # an optional email report for findings.
 review_exit=0
-perl -MJSON::PP - "$review_file" "$response_file" "$email_file" \
+perl -MJSON::PP - "$review_file" "$response_file" "$email_file" "$markdown_file" \
 	"$commit_author_email" "$commit_author_name" "$commit_time" \
 	"$email_from_address" "$email_from_name" "$repo_label" "$short_head_sha" "$run_url" \
 	"$commit_url" "$review_diff_url" "$review_patch_url" \
@@ -535,7 +536,7 @@ use JSON::PP qw(decode_json);
 
 binmode STDOUT, ':encoding(UTF-8)';
 
-my ($review_path, $response_path, $email_path, $email_to,
+my ($review_path, $response_path, $email_path, $markdown_path, $email_to,
     $commit_author_name, $commit_time, $email_from_address, $email_from_name, $repo_label,
     $short_head_sha, $run_url, $commit_url, $review_diff_url,
     $review_patch_url, $email_on_attention) = @ARGV;
@@ -714,6 +715,74 @@ sub clean_list_items {
 		last if @clean >= $limit;
 	}
 	return @clean;
+}
+
+sub markdown_link {
+	my ($label, $url) = @_;
+	$url = log_text($url);
+	return '' if !length($url);
+	return '[' . markdown_text($label) . '](' . $url . ')';
+}
+
+sub markdown_text {
+	my ($value) = @_;
+	$value = log_text($value);
+	$value =~ s/\\/\\\\/g;
+	$value =~ s/&/&amp;/g;
+	$value =~ s/</&lt;/g;
+	$value =~ s/>/&gt;/g;
+	$value =~ s/@/@&#8203;/g;
+	$value =~ s/([`\*_{}\[\]\(\)\|])/\\$1/g;
+	return $value;
+}
+
+sub markdown_section {
+	my ($fh, $heading, @items) = @_;
+	return if !@items;
+	print {$fh} "\n### " . markdown_text($heading) . "\n\n";
+	for my $item (@items) {
+		print {$fh} "- " . markdown_text($item) . "\n";
+	}
+}
+
+sub write_markdown_report {
+	my ($fatal_count, $attention_count, $email_findings, $review) = @_;
+	return if !defined($markdown_path) || !length($markdown_path);
+
+	open my $mfh, '>:encoding(UTF-8)', $markdown_path
+		or die "open $markdown_path: $!";
+	my $result_label = $fatal_count ? 'failed' :
+			   $attention_count ? 'needs attention' : 'passed';
+	my $submitted_by = log_text($commit_author_name);
+	$submitted_by .= " <" . log_text($email_to) . ">" if length(log_text($email_to));
+	my @links;
+	push @links, markdown_link('Commit', $commit_url);
+	push @links, markdown_link('Reviewed diff', $review_diff_url);
+	push @links, markdown_link('Patch', $review_patch_url);
+	push @links, markdown_link('GitHub run', $run_url);
+	@links = grep { length($_) } @links;
+
+	print {$mfh} "<!-- webmin-code-review -->\n";
+	print {$mfh} "## Code review $result_label\n\n";
+	print {$mfh} "**Repository:** `" . markdown_text($repo_label) . "`  \n";
+	print {$mfh} "**Commit:** `" . markdown_text($short_head_sha) . "`  \n";
+	print {$mfh} "**Submitted by:** " . markdown_text($submitted_by) . "  \n"
+		if length($submitted_by);
+	print {$mfh} "**Committed at:** " . markdown_text($commit_time) . "  \n"
+		if length(log_text($commit_time));
+	print {$mfh} "\n" . markdown_text($review->{summary}) . "\n\n";
+	print {$mfh} "| Fatal | Attention |\n";
+	print {$mfh} "| ---: | ---: |\n";
+	print {$mfh} "| $fatal_count | $attention_count |\n";
+	print {$mfh} "\n" . join(' | ', @links) . "\n" if @links;
+
+	my @findings = clean_list_items($email_findings, 20);
+	my @reviewed = clean_list_items($review->{reviewed}, 5);
+	my @passed_checks = clean_list_items($review->{passed_checks}, 5);
+	markdown_section($mfh, 'Findings', @findings);
+	markdown_section($mfh, 'Reviewed', @reviewed);
+	markdown_section($mfh, 'Passed checks', @passed_checks);
+	close $mfh;
 }
 
 sub email_text_section {
@@ -914,6 +983,9 @@ for my $finding (@$findings) {
 	print ' ' . join(',', @props) if @props;
 	print '::' . escape_data($annotation) . "\n";
 }
+
+write_markdown_report($blocking_findings, $attention_findings,
+		      \@email_findings, $review);
 
 write_email_report($blocking_findings, $attention_findings,
 		   \@email_findings, $review);

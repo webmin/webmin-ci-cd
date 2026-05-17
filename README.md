@@ -46,7 +46,7 @@ Each product repository includes a child workflow that reuses the master workflo
 
 In some cases, fine-grained tokens are required for builds involving private repositories. For instance, if changes in a public repository rely on a private one, GitHub's permission model prevents workflows from accessing the private repository unless an additional token with the necessary permissions is provided for cloning the private repository. Conversely, when a workflow is triggered directly by a private repository, GitHub automatically provides an authentication token, making it easy to clone the repository without any additional steps.
 
-When a child workflow passes `CODE_REVIEW_API_KEY`, the master workflow also runs a diff review on submitted push code before building. The check is skipped when no key is passed, and callers can disable it with the `run-code-review: false` input. If `CODE_REVIEW_SMTP_PASSWORD` is also passed as a multiline SMTP username/password/from/BCC secret, review findings are emailed to the head commit author; clean reviews do not send email.
+Push code review remains part of the master build workflow so submitted code is checked before packages are built. Pull request code review is handled by a separate reusable workflow, letting child repositories review PRs without coupling that review to package build or publish jobs. PR reviews report through GitHub checks and comments; email notifications remain limited to push reviews.
 
 ## Architecture
 This is a quick overview of the key files involved in the build process, highlighting their roles, functionality, and purpose.
@@ -58,6 +58,8 @@ This is a quick overview of the key files involved in the build process, highlig
 - **functions.bash** — this script includes all the functions used throughout the build process, with over two dozen functions.
 
 - **build-product-deb.bash**, **build-product-rpm.bash**, **build-module-deb.bash**, **build-module-rpm.bash** — these scripts are designed specifically to handle builds for either a product (e.g., Webmin or Usermin) or a plugin (e.g., Virtualmin GPL, Virtualmin Nginx, Virtualmin AWStats, etc.). They are called directly from the workflow and manage the build process for the respective product or plugin.
+
+- **code-review.yml** — this reusable GitHub Actions workflow runs code review on pull requests without coupling review to package build or publish jobs.
 
 - **code-review.bash** — this script reviews submitted source, workflow, config, and documentation diffs when a child workflow passes a code review API key. It fails CI only on concrete findings and ignores unsupported/generated assets by default.
 

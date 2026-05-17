@@ -686,11 +686,11 @@ sub html_inline_code {
 			 'font-size:85%;background:#f6f8fa;border:1px solid #d0d7de;' .
 			 'border-radius:4px;padding:1px 4px;color:#24292f;';
 	$value = html_escape($value);
-	$value =~ s/`([^`]+)`/'<code style="' . $code_style . '">' . $1 . '<\/code>'/ge;
+	$value =~ s/`([^`]+)`/'<code class="cr-code" style="' . $code_style . '">' . $1 . '<\/code>'/ge;
 	$value =~ s/(?<![A-Za-z0-9_>])(\$[A-Za-z_][A-Za-z0-9_]*(?:\{[^<>{}]+\})+)/
-		   '<code style="' . $code_style . '">' . $1 . '<\/code>'/gex;
+		   '<code class="cr-code" style="' . $code_style . '">' . $1 . '<\/code>'/gex;
 	$value =~ s/(?<![A-Za-z0-9_>])(%[A-Za-z_][A-Za-z0-9_]*)/
-		   '<code style="' . $code_style . '">' . $1 . '<\/code>'/gex;
+		   '<code class="cr-code" style="' . $code_style . '">' . $1 . '<\/code>'/gex;
 	return $value;
 }
 
@@ -722,11 +722,11 @@ sub email_text_section {
 sub email_html_section {
 	my ($fh, $heading, @items) = @_;
 	return if !@items;
-	email_line($fh, '<h2 style="font-size:16px;margin:22px 0 8px;color:#24292f;">' .
+	email_line($fh, '<h2 class="cr-heading" style="font-size:16px;margin:22px 0 8px;color:#24292f;">' .
 			 html_escape($heading) . '</h2>');
-	email_line($fh, '<ul style="margin:0;padding-left:20px;color:#24292f;">');
+	email_line($fh, '<ul class="cr-list" style="margin:0;padding-left:20px;color:#24292f;">');
 	for my $item (@items) {
-		email_line($fh, '<li style="margin:6px 0;">' . html_inline_code($item) . '</li>');
+		email_line($fh, '<li class="cr-text" style="margin:6px 0;">' . html_inline_code($item) . '</li>');
 	}
 	email_line($fh, '</ul>');
 }
@@ -735,8 +735,8 @@ sub email_html_link {
 	my ($label, $url) = @_;
 	$url = log_text($url);
 	return '' if !length($url);
-	return '<a href="' . html_escape($url) .
-	       '" style="color:#0969da;text-decoration:none;">' .
+	return '<a class="cr-link" href="' . html_escape($url) .
+	       '" style="color:#164a82;text-decoration:none;">' .
 	       html_escape($label) . '</a>';
 }
 
@@ -760,9 +760,9 @@ sub write_email_report {
 	}
 	my @links;
 	push @links, [ 'Commit', $commit_url ] if length(log_text($commit_url));
-	push @links, [ 'Reviewed diff', $review_diff_url ] if length(log_text($review_diff_url));
+	push @links, [ 'Reviewed Diff', $review_diff_url ] if length(log_text($review_diff_url));
 	push @links, [ 'Patch', $review_patch_url ] if length(log_text($review_patch_url));
-	push @links, [ 'GitHub run', $run_url ] if length(log_text($run_url));
+	push @links, [ 'GitHub Run', $run_url ] if length(log_text($run_url));
 	my @findings = clean_list_items($email_findings, 20);
 	my @reviewed = clean_list_items($review->{reviewed}, 5);
 	my @passed_checks = clean_list_items($review->{passed_checks}, 5);
@@ -808,33 +808,54 @@ sub write_email_report {
 	email_line($efh, "Content-Transfer-Encoding: 8bit");
 	email_line($efh, "");
 	email_line($efh, '<!doctype html>');
-	email_line($efh, '<html><body style="margin:0;padding:0;background:#f6f8fa;color:#24292f;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;">');
+	email_line($efh, '<html><head>');
+	email_line($efh, '<meta name="color-scheme" content="light dark">');
+	email_line($efh, '<meta name="supported-color-schemes" content="light dark">');
+	email_line($efh, '<style>');
+	email_line($efh, ':root { color-scheme: light dark; supported-color-schemes: light dark; }');
+	email_line($efh, '@media (prefers-color-scheme: dark) {');
+	email_line($efh, 'body, .cr-body { background:#161719 !important; color:#d8d9da !important; }');
+	email_line($efh, '.cr-card { background:#202124 !important; border-color:#34373b !important; }');
+	email_line($efh, '.cr-header { border-color:#34373b !important; }');
+	email_line($efh, '.cr-title, .cr-heading, .cr-text, .cr-list { color:#d8d9da !important; }');
+	email_line($efh, '.cr-muted { color:#aeb3b8 !important; }');
+	email_line($efh, '.cr-code { background:#2a2d31 !important; border-color:#45494f !important; color:#e7e8ea !important; }');
+	email_line($efh, '.cr-fatal { background:#302326 !important; border-color:#7c3938 !important; }');
+	email_line($efh, '.cr-fatal-label, .cr-fatal-value { color:#ff7b72 !important; }');
+	email_line($efh, '.cr-attention { background:#302a1f !important; border-color:#6b552b !important; }');
+	email_line($efh, '.cr-attention-label, .cr-attention-value { color:#f0ad4e !important; }');
+	email_line($efh, '.cr-button { background:#202124 !important; border-color:#008fe6 !important; }');
+	email_line($efh, '.cr-button .cr-link { color:#d8d9da !important; }');
+	email_line($efh, '.cr-link { color:#4aa3ff !important; }');
+	email_line($efh, '}');
+	email_line($efh, '</style>');
+	email_line($efh, '</head><body class="cr-body" style="margin:0;padding:0;background:#f6f8fa;color:#24292f;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;">');
 	email_line($efh, '<div style="max-width:760px;margin:0 auto;padding:24px;">');
-	email_line($efh, '<div style="background:#ffffff;border:1px solid #d0d7de;border-radius:8px;overflow:hidden;">');
-	email_line($efh, '<div style="padding:20px 24px;border-bottom:1px solid #d0d7de;">');
-	email_line($efh, '<div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#57606a;">Code review</div>');
-	email_line($efh, '<h1 style="font-size:22px;line-height:1.3;margin:6px 0 4px;color:#24292f;">' . html_escape($result_label) . '</h1>');
-	email_line($efh, '<div style="font-size:14px;color:#57606a;">' . html_escape($repo_label) . ' @ ' . html_escape($short_head_sha) . '</div>');
+	email_line($efh, '<div class="cr-card" style="background:#ffffff;border:1px solid #d0d7de;border-radius:8px;overflow:hidden;">');
+	email_line($efh, '<div class="cr-header" style="padding:20px 24px;border-bottom:1px solid #d0d7de;">');
+	email_line($efh, '<div class="cr-muted" style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0;color:#57606a;">Code review</div>');
+	email_line($efh, '<h1 class="cr-title" style="font-size:22px;line-height:1.3;margin:6px 0 4px;color:#24292f;">' . html_escape($result_label) . '</h1>');
+	email_line($efh, '<div class="cr-muted" style="font-size:14px;color:#57606a;">' . html_escape($repo_label) . ' @ ' . html_escape($short_head_sha) . '</div>');
 	if (length($submitted_by) || length(log_text($commit_time))) {
-		email_line($efh, '<div style="font-size:13px;color:#57606a;margin-top:8px;">');
+		email_line($efh, '<div class="cr-muted" style="font-size:13px;color:#57606a;margin-top:8px;">');
 		email_line($efh, 'Submitted by ' . html_escape($submitted_by)) if length($submitted_by);
 		email_line($efh, '<br>Committed at ' . html_escape($commit_time)) if length(log_text($commit_time));
 		email_line($efh, '</div>');
 	}
 	email_line($efh, '</div>');
 	email_line($efh, '<div style="padding:20px 24px;">');
-	email_line($efh, '<p style="font-size:15px;line-height:1.55;margin:0 0 16px;">' . html_inline_code($review->{summary}) . '</p>');
+	email_line($efh, '<p class="cr-text" style="font-size:15px;line-height:1.55;margin:0 0 16px;">' . html_inline_code($review->{summary}) . '</p>');
 	email_line($efh, '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 18px;"><tr>');
-	email_line($efh, '<td style="padding:10px 14px;border:1px solid #ffb3b8;border-radius:6px;background:#fff1f2;"><div style="font-size:12px;color:#57606a;">Fatal</div><div style="font-size:22px;font-weight:700;color:#cf222e;">' . html_escape($fatal_count) . '</div></td>');
+	email_line($efh, '<td class="cr-fatal" style="padding:10px 14px;border:1px solid #ebccd1;border-radius:6px;background:#f2dede;"><div class="cr-fatal-label" style="font-size:12px;color:#a94442;">Fatal</div><div class="cr-fatal-value" style="font-size:22px;font-weight:700;color:#a94442;">' . html_escape($fatal_count) . '</div></td>');
 	email_line($efh, '<td style="width:10px;"></td>');
-	email_line($efh, '<td style="padding:10px 14px;border:1px solid #f0c36d;border-radius:6px;background:#fff8c5;"><div style="font-size:12px;color:#57606a;">Attention</div><div style="font-size:22px;font-weight:700;color:#9a6700;">' . html_escape($attention_count) . '</div></td>');
+	email_line($efh, '<td class="cr-attention" style="padding:10px 14px;border:1px solid #faebcc;border-radius:6px;background:#fcf8e3;"><div class="cr-attention-label" style="font-size:12px;color:#8a6d3b;">Attention</div><div class="cr-attention-value" style="font-size:22px;font-weight:700;color:#8a6d3b;">' . html_escape($attention_count) . '</div></td>');
 	email_line($efh, '</tr></table>');
 	if (@links) {
 		email_line($efh, '<div style="margin:0 0 18px;">');
 		for my $link (@links) {
 			my $html_link = email_html_link($link->[0], $link->[1]);
 			next if !length($html_link);
-			email_line($efh, '<span style="display:inline-block;margin:0 8px 8px 0;padding:6px 10px;border:1px solid #8cbbf7;border-radius:6px;background:#eef6ff;font-size:14px;">' . $html_link . '</span>');
+			email_line($efh, '<span class="cr-button" style="display:inline-block;margin:0 8px 8px 0;padding:6px 10px;border:1px solid #337ab7;border-radius:0;background:#f7fbff;font-size:14px;">' . $html_link . '</span>');
 		}
 		email_line($efh, '</div>');
 	}

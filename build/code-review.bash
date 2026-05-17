@@ -235,7 +235,10 @@ review_file="$tmp_dir/review.txt"
 email_file="$tmp_dir/code-review-email.txt"
 
 # Collect commit and GitHub URLs used in review annotations and email reports.
+commit_author_name="$(git log -1 --format=%an "$head_sha" 2>/dev/null || true)"
 commit_author_email="$(git log -1 --format=%ae "$head_sha" 2>/dev/null || true)"
+commit_time="$(TZ=UTC git log -1 --date=format-local:'%Y-%m-%d %H:%M UTC' \
+	--format=%cd "$head_sha" 2>/dev/null || true)"
 short_head_sha="$(git rev-parse --short "$head_sha" 2>/dev/null || printf '%s' "$head_sha")"
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 repo_label="${GITHUB_REPOSITORY:-$(basename "$repo_root")}"
@@ -522,8 +525,8 @@ PERL
 # an optional email report for findings.
 review_exit=0
 perl -MJSON::PP - "$review_file" "$response_file" "$email_file" \
-	"$commit_author_email" "$email_from_address" "$email_from_name" \
-	"$repo_label" "$short_head_sha" "$run_url" \
+	"$commit_author_email" "$commit_author_name" "$commit_time" \
+	"$email_from_address" "$email_from_name" "$repo_label" "$short_head_sha" "$run_url" \
 	"$commit_url" "$review_diff_url" "$review_patch_url" \
 	"$email_on_attention" <<'PERL' || review_exit=$?
 use strict;
@@ -533,7 +536,7 @@ use JSON::PP qw(decode_json);
 binmode STDOUT, ':encoding(UTF-8)';
 
 my ($review_path, $response_path, $email_path, $email_to,
-    $email_from_address, $email_from_name, $repo_label,
+    $commit_author_name, $commit_time, $email_from_address, $email_from_name, $repo_label,
     $short_head_sha, $run_url, $commit_url, $review_diff_url,
     $review_patch_url, $email_on_attention) = @ARGV;
 open my $fh, '<', $review_path or die "open $review_path: $!";
@@ -763,6 +766,8 @@ sub write_email_report {
 	my @findings = clean_list_items($email_findings, 20);
 	my @reviewed = clean_list_items($review->{reviewed}, 5);
 	my @passed_checks = clean_list_items($review->{passed_checks}, 5);
+	my $submitted_by = log_text($commit_author_name);
+	$submitted_by .= " <" . log_text($email_to) . ">" if length(log_text($email_to));
 	my $boundary = 'code-review-' . log_text($short_head_sha) . '-mime';
 
 	email_line($efh, "From: $from");
@@ -779,6 +784,8 @@ sub write_email_report {
 	email_line($efh, "");
 	email_line($efh, "Repository: " . log_text($repo_label));
 	email_line($efh, "Commit: " . log_text($short_head_sha));
+	email_line($efh, "Submitted by: $submitted_by") if length($submitted_by);
+	email_line($efh, "Committed at: " . log_text($commit_time)) if length(log_text($commit_time));
 	email_line($efh, "Fatal findings: $fatal_count");
 	email_line($efh, "Attention findings: $attention_count");
 	email_line($efh, "");
@@ -808,6 +815,12 @@ sub write_email_report {
 	email_line($efh, '<div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#57606a;">Code review</div>');
 	email_line($efh, '<h1 style="font-size:22px;line-height:1.3;margin:6px 0 4px;color:#24292f;">' . html_escape($result_label) . '</h1>');
 	email_line($efh, '<div style="font-size:14px;color:#57606a;">' . html_escape($repo_label) . ' @ ' . html_escape($short_head_sha) . '</div>');
+	if (length($submitted_by) || length(log_text($commit_time))) {
+		email_line($efh, '<div style="font-size:13px;color:#57606a;margin-top:8px;">');
+		email_line($efh, 'Submitted by ' . html_escape($submitted_by)) if length($submitted_by);
+		email_line($efh, '<br>Committed at ' . html_escape($commit_time)) if length(log_text($commit_time));
+		email_line($efh, '</div>');
+	}
 	email_line($efh, '</div>');
 	email_line($efh, '<div style="padding:20px 24px;">');
 	email_line($efh, '<p style="font-size:15px;line-height:1.55;margin:0 0 16px;">' . html_inline_code($review->{summary}) . '</p>');

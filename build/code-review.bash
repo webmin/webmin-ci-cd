@@ -106,6 +106,9 @@ function send_code_review_email {
 	if [[ ! -s "$email_path" ]]; then
 		return 0
 	fi
+	if [[ -z "$email_smtp_secret" ]]; then
+		return 0
+	fi
 	if ! is_email_address "$recipient"; then
 		echo "::warning::Code review email not sent; commit author email is not usable."
 		return 0

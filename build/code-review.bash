@@ -679,7 +679,8 @@ sub html_escape {
 	return $value;
 }
 
-# Render common inline code snippets with a subtle background in HTML email.
+# Render common inline code snippets and file:line refs with a subtle
+# background, which also prevents mail clients from making bogus links.
 sub html_inline_code {
 	my ($value) = @_;
 	my $code_style = 'font-family:ui-monospace,SFMono-Regular,Consolas,monospace;' .
@@ -691,6 +692,8 @@ sub html_inline_code {
 		   '<code class="cr-code" style="' . $code_style . '">' . $1 . '<\/code>'/gex;
 	$value =~ s/(?<![A-Za-z0-9_>])(%[A-Za-z_][A-Za-z0-9_]*)/
 		   '<code class="cr-code" style="' . $code_style . '">' . $1 . '<\/code>'/gex;
+	$value =~ s{(?<![A-Za-z0-9_>/.-])([A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+:\d+)}
+		   {'<code class="cr-code" style="' . $code_style . '">' . $1 . '<\/code>'}gex;
 	return $value;
 }
 
@@ -846,9 +849,9 @@ sub write_email_report {
 	email_line($efh, '<div style="padding:20px 24px;">');
 	email_line($efh, '<p class="cr-text" style="font-size:15px;line-height:1.55;margin:0 0 16px;">' . html_inline_code($review->{summary}) . '</p>');
 	email_line($efh, '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 18px;"><tr>');
-	email_line($efh, '<td class="cr-fatal" style="padding:10px 14px;border:1px solid #ebccd1;border-radius:6px;background:#f2dede;"><div class="cr-fatal-label" style="font-size:12px;color:#a94442;">Fatal</div><div class="cr-fatal-value" style="font-size:22px;font-weight:700;color:#a94442;">' . html_escape($fatal_count) . '</div></td>');
+	email_line($efh, '<td class="cr-fatal" style="padding:10px 14px;border:1px solid #dca7a7;border-radius:6px;background:#f2dede;"><div class="cr-fatal-label" style="font-size:12px;color:#a94442;">Fatal</div><div class="cr-fatal-value" style="font-size:22px;font-weight:700;color:#a94442;">' . html_escape($fatal_count) . '</div></td>');
 	email_line($efh, '<td style="width:10px;"></td>');
-	email_line($efh, '<td class="cr-attention" style="padding:10px 14px;border:1px solid #faebcc;border-radius:6px;background:#fcf8e3;"><div class="cr-attention-label" style="font-size:12px;color:#8a6d3b;">Attention</div><div class="cr-attention-value" style="font-size:22px;font-weight:700;color:#8a6d3b;">' . html_escape($attention_count) . '</div></td>');
+	email_line($efh, '<td class="cr-attention" style="padding:10px 14px;border:1px solid #e6cf8b;border-radius:6px;background:#fcf8e3;"><div class="cr-attention-label" style="font-size:12px;color:#8a6d3b;">Attention</div><div class="cr-attention-value" style="font-size:22px;font-weight:700;color:#8a6d3b;">' . html_escape($attention_count) . '</div></td>');
 	email_line($efh, '</tr></table>');
 	if (@links) {
 		email_line($efh, '<div style="margin:0 0 18px;">');

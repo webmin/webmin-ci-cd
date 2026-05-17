@@ -676,6 +676,21 @@ sub html_escape {
 	return $value;
 }
 
+# Render common inline code snippets with a subtle background in HTML email.
+sub html_inline_code {
+	my ($value) = @_;
+	my $code_style = 'font-family:ui-monospace,SFMono-Regular,Consolas,monospace;' .
+			 'font-size:85%;background:#f6f8fa;border:1px solid #d0d7de;' .
+			 'border-radius:4px;padding:1px 4px;color:#24292f;';
+	$value = html_escape($value);
+	$value =~ s/`([^`]+)`/'<code style="' . $code_style . '">' . $1 . '<\/code>'/ge;
+	$value =~ s/(?<![A-Za-z0-9_>])(\$[A-Za-z_][A-Za-z0-9_]*(?:\{[^<>{}]+\})+)/
+		   '<code style="' . $code_style . '">' . $1 . '<\/code>'/gex;
+	$value =~ s/(?<![A-Za-z0-9_>])(%[A-Za-z_][A-Za-z0-9_]*)/
+		   '<code style="' . $code_style . '">' . $1 . '<\/code>'/gex;
+	return $value;
+}
+
 # Return compact, display-safe list items for text and HTML email sections.
 sub clean_list_items {
 	my ($items, $limit) = @_;
@@ -708,7 +723,7 @@ sub email_html_section {
 			 html_escape($heading) . '</h2>');
 	email_line($fh, '<ul style="margin:0;padding-left:20px;color:#24292f;">');
 	for my $item (@items) {
-		email_line($fh, '<li style="margin:6px 0;">' . html_escape($item) . '</li>');
+		email_line($fh, '<li style="margin:6px 0;">' . html_inline_code($item) . '</li>');
 	}
 	email_line($fh, '</ul>');
 }
@@ -795,18 +810,18 @@ sub write_email_report {
 	email_line($efh, '<div style="font-size:14px;color:#57606a;">' . html_escape($repo_label) . ' @ ' . html_escape($short_head_sha) . '</div>');
 	email_line($efh, '</div>');
 	email_line($efh, '<div style="padding:20px 24px;">');
-	email_line($efh, '<p style="font-size:15px;line-height:1.55;margin:0 0 16px;">' . html_escape($review->{summary}) . '</p>');
+	email_line($efh, '<p style="font-size:15px;line-height:1.55;margin:0 0 16px;">' . html_inline_code($review->{summary}) . '</p>');
 	email_line($efh, '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 18px;"><tr>');
-	email_line($efh, '<td style="padding:10px 14px;border:1px solid #d0d7de;border-radius:6px;background:#fff5f5;"><div style="font-size:12px;color:#57606a;">Fatal</div><div style="font-size:22px;font-weight:700;color:#cf222e;">' . html_escape($fatal_count) . '</div></td>');
+	email_line($efh, '<td style="padding:10px 14px;border:1px solid #ffb3b8;border-radius:6px;background:#fff1f2;"><div style="font-size:12px;color:#57606a;">Fatal</div><div style="font-size:22px;font-weight:700;color:#cf222e;">' . html_escape($fatal_count) . '</div></td>');
 	email_line($efh, '<td style="width:10px;"></td>');
-	email_line($efh, '<td style="padding:10px 14px;border:1px solid #d0d7de;border-radius:6px;background:#fff8c5;"><div style="font-size:12px;color:#57606a;">Attention</div><div style="font-size:22px;font-weight:700;color:#9a6700;">' . html_escape($attention_count) . '</div></td>');
+	email_line($efh, '<td style="padding:10px 14px;border:1px solid #f0c36d;border-radius:6px;background:#fff8c5;"><div style="font-size:12px;color:#57606a;">Attention</div><div style="font-size:22px;font-weight:700;color:#9a6700;">' . html_escape($attention_count) . '</div></td>');
 	email_line($efh, '</tr></table>');
 	if (@links) {
 		email_line($efh, '<div style="margin:0 0 18px;">');
 		for my $link (@links) {
 			my $html_link = email_html_link($link->[0], $link->[1]);
 			next if !length($html_link);
-			email_line($efh, '<span style="display:inline-block;margin:0 8px 8px 0;padding:6px 10px;border:1px solid #d0d7de;border-radius:6px;background:#f6f8fa;font-size:14px;">' . $html_link . '</span>');
+			email_line($efh, '<span style="display:inline-block;margin:0 8px 8px 0;padding:6px 10px;border:1px solid #8cbbf7;border-radius:6px;background:#eef6ff;font-size:14px;">' . $html_link . '</span>');
 		}
 		email_line($efh, '</div>');
 	}

@@ -735,7 +735,7 @@ sub html_inline_code {
 	$value =~ s/`([^`]+)`/$code_or_same->($1)/ge;
 	$value =~ s{(?<![A-Za-z0-9_>\$\@%])([A-Za-z_][A-Za-z0-9_]*\([^()\r\n]{1,180}\))}
 		   {$code_or_same->($1)}gex;
-	$value =~ s/(?<![A-Za-z0-9_>])(\$[A-Za-z_][A-Za-z0-9_]*(?:\{[^<>{}]+\})+)/
+	$value =~ s/(?<![A-Za-z0-9_>\$\@%])(\$(?:\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)(?:\{[^<>{}]+\})*)/
 		   $code_or_same->($1)/gex;
 	$value =~ s/(?<![A-Za-z0-9_>])(\@[A-Za-z_][A-Za-z0-9_]*)/
 		   $code_or_same->($1)/gex;
@@ -822,7 +822,7 @@ sub markdown_inline_code {
 	while ($value =~ m{
 		`([^`\r\n]+)`
 		|(?<![A-Za-z0-9_>\$\@%])([A-Za-z_][A-Za-z0-9_]*\([^()\r\n]{1,180}\))
-		|(\$[A-Za-z_][A-Za-z0-9_]*(?:\{[^<>{}\r\n]+\})+)
+		|(?<![A-Za-z0-9_>\$\@%])(\$(?:\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)(?:\{[^<>{}\r\n]+\})*)
 		|(?<![A-Za-z0-9_>])(\@[A-Za-z_][A-Za-z0-9_]*)
 		|(?<![A-Za-z0-9_>])(%[A-Za-z_][A-Za-z0-9_]*)
 		|(?<![A-Za-z0-9_>])(text(?:\{[^<>{}\r\n]+\})+)

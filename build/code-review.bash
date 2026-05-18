@@ -145,7 +145,7 @@ function send_code_review_email {
 	curl_args+=(--upload-file "$email_path")
 
 	if curl "${curl_args[@]}"; then
-		echo "Code review email sent to $recipient."
+		echo "Code review email sent."
 	else
 		echo "::warning::Code review email failed to send."
 	fi

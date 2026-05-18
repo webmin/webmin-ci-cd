@@ -743,6 +743,8 @@ sub html_inline_code {
 		   $code_or_same->($1)/gex;
 	$value =~ s{(?<![A-Za-z0-9_>/.-])((?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.(?:bash|cgi|conf|ctl|json|md|pl|pm|sh|xml|ya?ml):\d+)}
 		   { my $ref = $1; $ref =~ s/:/&#8203;:/; $code_or_same->($ref) }gex;
+	$value =~ s{(?<![A-Za-z0-9_>/.-])((?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+\.(?:bash|cgi|conf|ctl|json|md|pl|pm|sh|xml|ya?ml))(?![A-Za-z0-9])}
+		   {$code_or_same->($1)}gex;
 	$value =~ s{(?<![A-Za-z0-9_>\$\@%])([A-Za-z_][A-Za-z0-9_]*_[A-Za-z0-9_]*(?:\(\))?)}
 		   {
 			$code_or_same->($1);
@@ -827,6 +829,7 @@ sub markdown_inline_code {
 		|(?<![A-Za-z0-9_>])(%[A-Za-z_][A-Za-z0-9_]*)
 		|(?<![A-Za-z0-9_>])(text(?:\{[^<>{}\r\n]+\})+)
 		|(?<![A-Za-z0-9_>/.-])((?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.(?:bash|cgi|conf|ctl|json|md|pl|pm|sh|xml|ya?ml):\d+)
+		|(?<![A-Za-z0-9_>/.-])((?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+\.(?:bash|cgi|conf|ctl|json|md|pl|pm|sh|xml|ya?ml))(?![A-Za-z0-9])
 		|(?<![A-Za-z0-9_>\$\@%])([A-Za-z_][A-Za-z0-9_]*_[A-Za-z0-9_]*(?:\(\))?)
 	}gx) {
 		$out .= markdown_escape(substr($value, $pos, $-[0] - $pos), 0);
@@ -836,7 +839,8 @@ sub markdown_inline_code {
 			   defined($4) ? $4 :
 			   defined($5) ? $5 :
 			   defined($6) ? $6 :
-			   defined($7) ? $7 : $8;
+			   defined($7) ? $7 :
+			   defined($8) ? $8 : $9;
 		$out .= markdown_code_span($code);
 		$pos = $+[0];
 	}

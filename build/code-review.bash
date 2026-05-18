@@ -708,7 +708,9 @@ sub html_inline_code {
 sub html_review_text {
 	my ($value) = @_;
 	my $html = html_inline_code($value);
-	$html =~ s/\b(Suggested fix:)/<strong>$1<\/strong>/g;
+	$html =~ s{\s*\b(Suggested fix:)}
+		   {<div style="margin-top:8px;"><strong>$1</strong>}g;
+	$html .= '</div>' if $html =~ /<div style="margin-top:8px;">/;
 	$html =~ s{^(\[(?:fatal|attention)\]\s*(?:<code\b[^>]*>.*?</code>)?)}{<strong>$1</strong>}i;
 	return $html;
 }

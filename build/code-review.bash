@@ -22,7 +22,7 @@ model="gpt-5.5"
 reasoning_effort="low"
 max_output_tokens="8192"
 max_bytes="200000"
-context_lines="0"
+context_lines="10"
 fail_on_api_error="true"
 
 # Optional SES SMTP email notification settings. CODE_REVIEW_SMTP_PASSWORD is a

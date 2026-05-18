@@ -725,10 +725,19 @@ sub html_inline_code {
 	$value =~ s/`([^`]+)`/$code->($1)/ge;
 	$value =~ s/(?<![A-Za-z0-9_>])(\$[A-Za-z_][A-Za-z0-9_]*(?:\{[^<>{}]+\})+)/
 		   $code->($1)/gex;
+	$value =~ s/(?<![A-Za-z0-9_>])(\@[A-Za-z_][A-Za-z0-9_]*)/
+		   $code->($1)/gex;
 	$value =~ s/(?<![A-Za-z0-9_>])(%[A-Za-z_][A-Za-z0-9_]*)/
 		   $code->($1)/gex;
 	$value =~ s{(?<![A-Za-z0-9_>/.-])((?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.(?:bash|cgi|conf|ctl|json|md|pl|pm|sh|xml|ya?ml):\d+)}
 		   { my $ref = $1; $ref =~ s/:/&#8203;:/; $code->($ref) }gex;
+	$value =~ s{(?<![A-Za-z0-9_>])([A-Za-z_][A-Za-z0-9_]*_[A-Za-z0-9_]*(?:\(\))?)}
+		   {
+			my $before = substr($value, 0, $-[0]);
+			($before =~ /<[^>]*$/ ||
+			 rindex($before, '<code') > rindex($before, '</code>')) ?
+				$1 : $code->($1);
+		   }gex;
 	return $value;
 }
 
@@ -804,15 +813,19 @@ sub markdown_inline_code {
 	while ($value =~ m{
 		`([^`\r\n]+)`
 		|(\$[A-Za-z_][A-Za-z0-9_]*(?:\{[^<>{}\r\n]+\})+)
+		|(?<![A-Za-z0-9_>])(\@[A-Za-z_][A-Za-z0-9_]*)
 		|(?<![A-Za-z0-9_>])(%[A-Za-z_][A-Za-z0-9_]*)
 		|(?<![A-Za-z0-9_>])(text(?:\{[^<>{}\r\n]+\})+)
 		|(?<![A-Za-z0-9_>/.-])((?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.(?:bash|cgi|conf|ctl|json|md|pl|pm|sh|xml|ya?ml):\d+)
+		|(?<![A-Za-z0-9_>])([A-Za-z_][A-Za-z0-9_]*_[A-Za-z0-9_]*(?:\(\))?)
 	}gx) {
 		$out .= markdown_escape(substr($value, $pos, $-[0] - $pos), 0);
 		my $code = defined($1) ? $1 :
 			   defined($2) ? $2 :
 			   defined($3) ? $3 :
-			   defined($4) ? $4 : $5;
+			   defined($4) ? $4 :
+			   defined($5) ? $5 :
+			   defined($6) ? $6 : $7;
 		$out .= markdown_code_span($code);
 		$pos = $+[0];
 	}

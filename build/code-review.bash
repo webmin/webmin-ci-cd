@@ -186,6 +186,8 @@ head_sha="${HEAD_SHA:-${GITHUB_SHA:-HEAD}}"
 base_sha="${BASE_SHA:-}"
 before_sha="${BEFORE_SHA:-}"
 base_ref="${GITHUB_BASE_REF:-}"
+default_branch="${DEFAULT_BRANCH:-}"
+current_ref="${GITHUB_REF_NAME:-}"
 
 if ! git cat-file -e "$head_sha^{commit}" 2>/dev/null; then
 	echo "Warning: head commit '$head_sha' was not found; using HEAD."
@@ -218,6 +220,21 @@ if [[ -z "$base_sha" && -n "$base_ref" ]] &&
 	base_sha="$(git merge-base "$head_sha" "origin/$base_ref")"
 fi
 
+if [[ -z "$base_sha" && -n "$default_branch" &&
+      "$current_ref" != "$default_branch" ]]; then
+	default_ref="origin/$default_branch"
+	if ! git cat-file -e "$default_ref^{commit}" 2>/dev/null; then
+		git fetch --no-tags --depth=100 origin \
+			"$default_branch:refs/remotes/origin/$default_branch" >/dev/null 2>&1 || true
+	fi
+	if git cat-file -e "$default_ref^{commit}" 2>/dev/null; then
+		merge_base="$(git merge-base "$head_sha" "$default_ref" 2>/dev/null || true)"
+		if [[ -n "$merge_base" && "$merge_base" != "$head_sha" ]]; then
+			base_sha="$merge_base"
+		fi
+	fi
+fi
+
 if [[ -z "$base_sha" ]]; then
 	if git rev-parse --verify "$head_sha^" >/dev/null 2>&1; then
 		base_sha="$(git rev-parse "$head_sha^")"
@@ -244,6 +261,7 @@ commit_author_email="$(git log -1 --format=%ae "$head_sha" 2>/dev/null || true)"
 commit_time="$(TZ=UTC git log -1 --date=format-local:'%Y-%m-%d %H:%M UTC' \
 	--format=%cd "$head_sha" 2>/dev/null || true)"
 short_head_sha="$(git rev-parse --short "$head_sha" 2>/dev/null || printf '%s' "$head_sha")"
+short_base_sha="$(git rev-parse --short "$base_sha" 2>/dev/null || printf '%s' "$base_sha")"
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 repo_label="${GITHUB_REPOSITORY:-$(basename "$repo_root")}"
 run_url=""
@@ -263,6 +281,8 @@ if [[ -n "${GITHUB_SERVER_URL:-}" && -n "${GITHUB_REPOSITORY:-}" ]]; then
 		review_patch_url="${review_diff_url}.patch"
 	fi
 fi
+
+echo "Reviewing commit range ${short_base_sha}..${short_head_sha}"
 
 # Review only hand-maintained text/code files; skip minified generated assets.
 review_pathspecs=(

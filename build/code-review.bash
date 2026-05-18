@@ -20,7 +20,7 @@ api_version=""
 api_version_header=""
 model="gpt-5.5"
 reasoning_effort="medium"
-max_output_tokens="4096"
+max_output_tokens="3072"
 max_bytes="200000"
 context_lines="20"
 fail_on_api_error="true"
@@ -700,9 +700,17 @@ sub html_inline_code {
 		   $code->($1)/gex;
 	$value =~ s/(?<![A-Za-z0-9_>])(%[A-Za-z_][A-Za-z0-9_]*)/
 		   $code->($1)/gex;
-	$value =~ s{(?<![A-Za-z0-9_>/.-])([A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+:\d+)}
+	$value =~ s{(?<![A-Za-z0-9_>/.-])((?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.(?:bash|cgi|conf|ctl|json|md|pl|pm|sh|xml|ya?ml):\d+)}
 		   { my $ref = $1; $ref =~ s/:/&#8203;:/; $code->($ref) }gex;
 	return $value;
+}
+
+sub html_review_text {
+	my ($value) = @_;
+	my $html = html_inline_code($value);
+	$html =~ s/\b(Suggested fix:)/<strong>$1<\/strong>/g;
+	$html =~ s{^(\[(?:fatal|attention)\]\s*(?:<code\b[^>]*>.*?</code>)?)}{<strong>$1</strong>}i;
+	return $html;
 }
 
 # Return compact, display-safe list items for text and HTML email sections.
@@ -769,7 +777,7 @@ sub markdown_inline_code {
 		|(\$[A-Za-z_][A-Za-z0-9_]*(?:\{[^<>{}\r\n]+\})+)
 		|(?<![A-Za-z0-9_>])(%[A-Za-z_][A-Za-z0-9_]*)
 		|(?<![A-Za-z0-9_>])(text(?:\{[^<>{}\r\n]+\})+)
-		|(?<![A-Za-z0-9_>/.-])([A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+:\d+)
+		|(?<![A-Za-z0-9_>/.-])((?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.(?:bash|cgi|conf|ctl|json|md|pl|pm|sh|xml|ya?ml):\d+)
 	}gx) {
 		$out .= markdown_escape(substr($value, $pos, $-[0] - $pos), 0);
 		my $code = defined($1) ? $1 :
@@ -843,7 +851,7 @@ sub email_html_section {
 			 html_escape($heading) . '</h2>');
 	email_line($fh, '<ul class="cr-list" style="margin:0;padding-left:20px;color:#24292f;">');
 	for my $item (@items) {
-		email_line($fh, '<li class="cr-text" style="margin:6px 0;">' . html_inline_code($item) . '</li>');
+		email_line($fh, '<li class="cr-text" style="margin:6px 0;">' . html_review_text($item) . '</li>');
 	}
 	email_line($fh, '</ul>');
 }

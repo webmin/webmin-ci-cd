@@ -181,7 +181,9 @@ esac
 
 cd "$repo_dir"
 
-# Resolve the pushed commit range, falling back to the previous commit.
+# Resolve the reviewed commit range. PR callers pass a base SHA directly; push
+# callers usually pass github.event.before, with extra fallbacks below for new
+# branches or incomplete push metadata.
 head_sha="${HEAD_SHA:-${GITHUB_SHA:-HEAD}}"
 base_sha="${BASE_SHA:-}"
 before_sha="${BEFORE_SHA:-}"
@@ -220,6 +222,9 @@ if [[ -z "$base_sha" && -n "$base_ref" ]] &&
 	base_sha="$(git merge-base "$head_sha" "origin/$base_ref")"
 fi
 
+# Brand-new branch pushes can have an all-zero or missing before SHA. In that
+# case, review everything since the branch diverged from the default branch
+# instead of silently narrowing the review to only HEAD^..HEAD.
 if [[ -z "$base_sha" && -n "$default_branch" &&
       "$current_ref" != "$default_branch" ]]; then
 	default_ref="origin/$default_branch"
@@ -235,6 +240,8 @@ if [[ -z "$base_sha" && -n "$default_branch" &&
 	fi
 fi
 
+# Last-resort local fallback for detached/manual runs where no branch base is
+# available.
 if [[ -z "$base_sha" ]]; then
 	if git rev-parse --verify "$head_sha^" >/dev/null 2>&1; then
 		base_sha="$(git rev-parse "$head_sha^")"

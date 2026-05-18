@@ -723,22 +723,29 @@ sub html_inline_code {
 		return '<code class="cr-code" style="' . $code_style . '">' .
 		       $_[0] . '</code>';
 	};
+	# Later substitutions can hit text we already wrapped; keep those stable.
+	my $code_or_same = sub {
+		my ($snippet) = @_;
+		my $before = substr($value, 0, $-[0]);
+		return ($before =~ /<[^>]*$/ ||
+			rindex($before, '<code') > rindex($before, '</code>')) ?
+				$snippet : $code->($snippet);
+	};
 	$value = html_escape($value);
-	$value =~ s/`([^`]+)`/$code->($1)/ge;
+	$value =~ s/`([^`]+)`/$code_or_same->($1)/ge;
+	$value =~ s{(?<![A-Za-z0-9_>\$\@%])([A-Za-z_][A-Za-z0-9_]*\([^()\r\n]{1,180}\))}
+		   {$code_or_same->($1)}gex;
 	$value =~ s/(?<![A-Za-z0-9_>])(\$[A-Za-z_][A-Za-z0-9_]*(?:\{[^<>{}]+\})+)/
-		   $code->($1)/gex;
+		   $code_or_same->($1)/gex;
 	$value =~ s/(?<![A-Za-z0-9_>])(\@[A-Za-z_][A-Za-z0-9_]*)/
-		   $code->($1)/gex;
+		   $code_or_same->($1)/gex;
 	$value =~ s/(?<![A-Za-z0-9_>])(%[A-Za-z_][A-Za-z0-9_]*)/
-		   $code->($1)/gex;
+		   $code_or_same->($1)/gex;
 	$value =~ s{(?<![A-Za-z0-9_>/.-])((?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.(?:bash|cgi|conf|ctl|json|md|pl|pm|sh|xml|ya?ml):\d+)}
-		   { my $ref = $1; $ref =~ s/:/&#8203;:/; $code->($ref) }gex;
-	$value =~ s{(?<![A-Za-z0-9_>])([A-Za-z_][A-Za-z0-9_]*_[A-Za-z0-9_]*(?:\(\))?)}
+		   { my $ref = $1; $ref =~ s/:/&#8203;:/; $code_or_same->($ref) }gex;
+	$value =~ s{(?<![A-Za-z0-9_>\$\@%])([A-Za-z_][A-Za-z0-9_]*_[A-Za-z0-9_]*(?:\(\))?)}
 		   {
-			my $before = substr($value, 0, $-[0]);
-			($before =~ /<[^>]*$/ ||
-			 rindex($before, '<code') > rindex($before, '</code>')) ?
-				$1 : $code->($1);
+			$code_or_same->($1);
 		   }gex;
 	return $value;
 }
@@ -814,12 +821,13 @@ sub markdown_inline_code {
 	my $pos = 0;
 	while ($value =~ m{
 		`([^`\r\n]+)`
+		|(?<![A-Za-z0-9_>\$\@%])([A-Za-z_][A-Za-z0-9_]*\([^()\r\n]{1,180}\))
 		|(\$[A-Za-z_][A-Za-z0-9_]*(?:\{[^<>{}\r\n]+\})+)
 		|(?<![A-Za-z0-9_>])(\@[A-Za-z_][A-Za-z0-9_]*)
 		|(?<![A-Za-z0-9_>])(%[A-Za-z_][A-Za-z0-9_]*)
 		|(?<![A-Za-z0-9_>])(text(?:\{[^<>{}\r\n]+\})+)
 		|(?<![A-Za-z0-9_>/.-])((?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.(?:bash|cgi|conf|ctl|json|md|pl|pm|sh|xml|ya?ml):\d+)
-		|(?<![A-Za-z0-9_>])([A-Za-z_][A-Za-z0-9_]*_[A-Za-z0-9_]*(?:\(\))?)
+		|(?<![A-Za-z0-9_>\$\@%])([A-Za-z_][A-Za-z0-9_]*_[A-Za-z0-9_]*(?:\(\))?)
 	}gx) {
 		$out .= markdown_escape(substr($value, $pos, $-[0] - $pos), 0);
 		my $code = defined($1) ? $1 :
@@ -827,7 +835,8 @@ sub markdown_inline_code {
 			   defined($3) ? $3 :
 			   defined($4) ? $4 :
 			   defined($5) ? $5 :
-			   defined($6) ? $6 : $7;
+			   defined($6) ? $6 :
+			   defined($7) ? $7 : $8;
 		$out .= markdown_code_span($code);
 		$pos = $+[0];
 	}

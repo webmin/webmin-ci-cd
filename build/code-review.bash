@@ -1016,7 +1016,7 @@ sub write_email_report {
 	email_line($efh, '<h1 class="cr-title" style="font-size:22px;line-height:1.3;margin:6px 0 4px;color:#24292f;">' . html_escape($result_label) . '</h1>');
 	email_line($efh, '<div class="cr-title" style="font-size:15px;line-height:1.4;margin-top:8px;color:#24292f;">' . html_inline_code($commit_subject) . '</div>')
 		if length(log_text($commit_subject));
-	email_line($efh, '<div class="cr-muted" style="font-size:14px;color:#57606a;margin-top:1px;">' . html_escape($repo_label) . ' @ ' . html_escape($short_head_sha) . '</div>');
+	email_line($efh, '<div class="cr-muted" style="font-size:14px;color:#57606a;margin-top:-1px;">' . html_escape($repo_label) . '@' . html_escape($short_head_sha) . '</div>');
 	if (length($submitted_by) || length(log_text($commit_time))) {
 		email_line($efh, '<div class="cr-muted" style="font-size:13px;color:#57606a;margin-top:8px;">');
 		email_line($efh, 'Submitted by ' . html_escape($submitted_by)) if length($submitted_by);

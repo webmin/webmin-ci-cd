@@ -1,0 +1,67 @@
+name: Close inactive
+
+on:
+  workflow_call:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  close-inactive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Close inactive issues and pull requests
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MAX_CLOSES: 1000
+        run: |
+          set -euo pipefail
+
+          cutoff="$(date -u -d '3 months ago' '+%Y-%m-%dT%H:%M:%SZ')"
+          echo "Closing open issues and pull requests not updated since $cutoff"
+
+          mapfile -t items < <(
+            gh api --paginate \
+              "repos/${GITHUB_REPOSITORY}/issues?state=open&per_page=100" \
+              --jq ".[] | select(.updated_at < \"$cutoff\") | [.number, (.pull_request != null)] | @tsv"
+          )
+
+          if [ "${#items[@]}" -eq 0 ]; then
+            echo "No inactive issues or pull requests to close."
+            exit 0
+          fi
+
+          closed=0
+          for item in "${items[@]}"; do
+            if [ "$closed" -ge "$MAX_CLOSES" ]; then
+              echo "Reached MAX_CLOSES=$MAX_CLOSES; stopping."
+              break
+            fi
+
+            IFS=$'\t' read -r number is_pr <<< "$item"
+            if [ "$is_pr" = "true" ]; then
+              gh api --method POST \
+                "repos/${GITHUB_REPOSITORY}/issues/${number}/comments" \
+                -f body="Closing this pull request automatically because there has been no follow-up for 3 months." >/dev/null
+              sleep 1
+              gh api --method PATCH \
+                "repos/${GITHUB_REPOSITORY}/pulls/${number}" \
+                -f state=closed >/dev/null
+              echo "Closed pull request #$number"
+            else
+              gh api --method POST \
+                "repos/${GITHUB_REPOSITORY}/issues/${number}/comments" \
+                -f body="Closing this issue automatically because there has been no follow-up for 3 months." >/dev/null
+              sleep 1
+              gh api --method PATCH \
+                "repos/${GITHUB_REPOSITORY}/issues/${number}" \
+                -f state=closed \
+                -f state_reason=not_planned >/dev/null
+              echo "Closed issue #$number"
+            fi
+            closed=$((closed + 1))
+            sleep 1
+          done
+
+          echo "Closed $closed inactive issue(s) and pull request(s)."

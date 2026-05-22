@@ -26,6 +26,7 @@ jobs:
     if: ${{ github.event_name == 'pull_request' && (github.repository_owner == 'webmin' || github.repository_owner == 'virtualmin') }}
     env:
       CODE_REVIEW_AVAILABLE: ${{ secrets.CODE_REVIEW_API_KEY != '' }}
+      CODE_REVIEW_SKIP: ${{ contains(github.event.pull_request.title || '', '[no-review]') || contains(github.event.pull_request.body || '', '[no-review]') }}
       CODE_REVIEW_SCRIPT_URL: https://raw.githubusercontent.com/webmin/webmin-ci-cd/main/build/code-review.bash
 
     steps:
@@ -33,8 +34,12 @@ jobs:
         if: ${{ env.CODE_REVIEW_AVAILABLE != 'true' }}
         run: echo "No CODE_REVIEW_API_KEY was provided; skipping code review."
 
+      - name: Skip code review by marker
+        if: ${{ env.CODE_REVIEW_AVAILABLE == 'true' && env.CODE_REVIEW_SKIP == 'true' }}
+        run: echo "[no-review] marker found; skipping code review."
+
       - name: Checkout PR code
-        if: ${{ env.CODE_REVIEW_AVAILABLE == 'true' }}
+        if: ${{ env.CODE_REVIEW_AVAILABLE == 'true' && env.CODE_REVIEW_SKIP != 'true' }}
         uses: actions/checkout@v4
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -43,7 +48,7 @@ jobs:
           persist-credentials: false
 
       - name: Fetch base commit
-        if: ${{ env.CODE_REVIEW_AVAILABLE == 'true' }}
+        if: ${{ env.CODE_REVIEW_AVAILABLE == 'true' && env.CODE_REVIEW_SKIP != 'true' }}
         env:
           BASE_REPO_URL: ${{ github.event.pull_request.base.repo.clone_url }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -56,7 +61,7 @@ jobs:
           git fetch --no-tags --depth=1 "$BASE_REPO_URL" "$BASE_SHA"
 
       - name: Code review
-        if: ${{ env.CODE_REVIEW_AVAILABLE == 'true' }}
+        if: ${{ env.CODE_REVIEW_AVAILABLE == 'true' && env.CODE_REVIEW_SKIP != 'true' }}
         env:
           CODE_REVIEW_API_KEY: ${{ secrets.CODE_REVIEW_API_KEY }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -88,7 +93,7 @@ jobs:
           fi
 
       - name: Publish PR review
-        if: ${{ always() && env.CODE_REVIEW_AVAILABLE == 'true' }}
+        if: ${{ always() && env.CODE_REVIEW_AVAILABLE == 'true' && env.CODE_REVIEW_SKIP != 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -123,7 +128,7 @@ jobs:
           fi
 
       - name: Fail on code review errors
-        if: ${{ always() && env.CODE_REVIEW_AVAILABLE == 'true' }}
+        if: ${{ always() && env.CODE_REVIEW_AVAILABLE == 'true' && env.CODE_REVIEW_SKIP != 'true' }}
         run: |
           set -euo pipefail
           if [ -n "${CODE_REVIEW_EXIT:-}" ]; then

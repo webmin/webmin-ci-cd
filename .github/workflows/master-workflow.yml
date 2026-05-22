@@ -77,6 +77,7 @@ jobs:
       TZ: Europe/Nicosia
       CI_CD_STABLE_BASE: https://github.com/webmin/webmin-ci-cd/releases/latest/download
       CI_CD_UNSTABLE_BASE: https://raw.githubusercontent.com/webmin/webmin-ci-cd/main/build
+      CODE_REVIEW_SKIP: ${{ github.event_name == 'push' && (contains(toJson(github.event.commits.*.message), '[no-review]') || contains(github.event.head_commit.message || '', '[no-review]')) }}
     steps:
       - name: Checkout code
         if: ${{ inputs.is-checkout || github.event_name == 'push' }}
@@ -113,14 +114,19 @@ jobs:
           chmod +x bootstrap.bash
           if [ -n "${CODE_REVIEW_API_KEY:-}" ] &&
              [ "${{ inputs.run-code-review }}" = "true" ] &&
-             [ "${{ github.event_name }}" = "push" ]; then
+             [ "${{ github.event_name }}" = "push" ] &&
+             [ "${CODE_REVIEW_SKIP}" != "true" ]; then
             review_url="${CI_CD_UNSTABLE_BASE}/code-review.bash"
             curl -fsSLo code-review.bash "$review_url"
             chmod +x code-review.bash
           fi
 
+      - name: Skip code review by marker
+        if: ${{ inputs.run-code-review && github.event_name == 'push' && env.CODE_REVIEW_SKIP == 'true' }}
+        run: echo "[no-review] marker found; skipping code review."
+
       - name: Code review
-        if: ${{ inputs.run-code-review && github.event_name == 'push' }}
+        if: ${{ inputs.run-code-review && github.event_name == 'push' && env.CODE_REVIEW_SKIP != 'true' }}
         env:
           CODE_REVIEW_API_KEY: ${{ secrets.CODE_REVIEW_API_KEY }}
           CODE_REVIEW_SMTP_PASSWORD: ${{ secrets.CODE_REVIEW_SMTP_PASSWORD }}

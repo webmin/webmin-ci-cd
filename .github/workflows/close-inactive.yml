@@ -2,36 +2,755 @@ name: Close inactive
 
 on:
   workflow_call:
+    inputs:
+      dry-run:
+        required: false
+        type: boolean
+        default: false
+      max-actions:
+        required: false
+        type: number
+        default: 100
 
 permissions:
+  contents: read
   issues: write
   pull-requests: write
 
+concurrency:
+  group: close-inactive-${{ github.repository }}
+  cancel-in-progress: false
+
 jobs:
-  stale:
+  close-inactive:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/stale@v10
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          operations-per-run: 1000
+      - name: Review inactive issues and pull requests
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ inputs['dry-run'] }}
+          MAX_ACTIONS: ${{ inputs['max-actions'] }}
+        run: |
+          set -euo pipefail
 
-          days-before-issue-stale: 21
-          days-before-issue-close: 7
-          stale-issue-label: "Stale"
-          exempt-issue-labels: "needs work,needs more work"
-          stale-issue-message: >
-            This issue has been inactive for 3 weeks. It will be closed in 1 week
-            if there is no follow-up.
-          close-issue-message: >
-            Closing this issue because there has been no follow-up for 4 weeks.
+          # Policy knobs. Activity means human comments only; bot comments and
+          # label edits are deliberately ignored so reminders do not reset time.
+          issue_triage_days=90
+          issue_stale_days=180
+          issue_warning_days=1795
+          issue_close_days=1825
+          pr_stale_days=180
+          pr_warning_days=335
+          pr_close_days=365
+          close_warning_wait_days=30
 
-          days-before-pr-stale: 21
-          days-before-pr-close: 7
-          stale-pr-label: "Stale"
-          exempt-pr-labels: "needs work,needs more work"
-          stale-pr-message: >
-            This pull request has been inactive for 3 weeks. It will be closed in
-            1 week if there is no follow-up.
-          close-pr-message: >
-            Closing this pull request because there has been no follow-up for 4 weeks.
+          # Public labels stay simple. Hidden comment markers make the workflow
+          # idempotent without exposing implementation details in the issue list.
+          needs_work_label="Needs Work"
+          needs_more_work_label="Needs More Work"
+          needs_triage_label="Needs Triage"
+          stale_label="Stale"
+
+          now_epoch="$(date -u '+%s')"
+          action_count=0
+          labels_added=0
+          labels_removed=0
+          comments_posted=0
+          issues_closed=0
+          prs_closed=0
+          items_checked=0
+          hit_max=false
+
+          function log {
+            printf '%s\n' "$*"
+          }
+
+          function warn {
+            printf 'Warning: %s\n' "$*" >&2
+          }
+
+          function run_or_log {
+            if [[ "$DRY_RUN" == "true" ]]; then
+              log "DRY RUN: $*"
+              return 0
+            fi
+            "$@"
+          }
+
+          function run_quiet_or_log {
+            if [[ "$DRY_RUN" == "true" ]]; then
+              run_or_log "$@"
+              return 0
+            fi
+            "$@" >/dev/null
+          }
+
+          function can_act {
+            [[ "$action_count" -lt "$MAX_ACTIONS" ]]
+          }
+
+          function did_action {
+            action_count=$((action_count + 1))
+            [[ "$DRY_RUN" == "true" ]] || sleep 1
+          }
+
+          function to_epoch {
+            date -u -d "$1" '+%s'
+          }
+
+          function days_since_epoch {
+            local epoch="$1"
+            echo $(( (now_epoch - epoch) / 86400 ))
+          }
+
+          function normalize_label {
+            tr '[:upper:]' '[:lower:]'
+          }
+
+          function has_label {
+            local labels_json="$1"
+            local wanted
+            wanted="$(printf '%s' "$2" | normalize_label)"
+            jq -e --arg wanted "$wanted" \
+              'map(.name | ascii_downcase) | index($wanted) != null' \
+              <<<"$labels_json" >/dev/null
+          }
+
+          function ensure_label {
+            local name="$1"
+            local color="$2"
+            local description="$3"
+            if [[ "$DRY_RUN" == "true" ]]; then
+              run_or_log gh label create "$name" \
+                --repo "$GITHUB_REPOSITORY" \
+                --color "$color" \
+                --description "$description" \
+                --force
+              return 0
+            fi
+            if ! gh label create "$name" \
+                 --repo "$GITHUB_REPOSITORY" \
+                 --color "$color" \
+                 --description "$description" \
+                 --force >/dev/null; then
+              warn "Could not create or update label '$name'."
+            fi
+          }
+
+          function api_array {
+            local url="$1"
+            local out
+            if out="$(gh api --paginate --slurp "$url" | jq 'add')" &&
+               [[ -n "$out" && "$out" != "null" ]]; then
+              printf '%s\n' "$out"
+            else
+              warn "Could not load $url; treating it as empty."
+              echo '[]'
+            fi
+          }
+
+          function api_array_required {
+            local url="$1"
+            local out
+            if out="$(gh api --paginate --slurp "$url" | jq 'add')" &&
+               [[ -n "$out" && "$out" != "null" ]]; then
+              printf '%s\n' "$out"
+            else
+              warn "Could not load required API signal $url."
+              return 1
+            fi
+          }
+
+          function encode_uri {
+            printf '%s' "$1" | jq -sRr @uri
+          }
+
+          function add_label_if_missing {
+            local number="$1"
+            local labels_json="$2"
+            local label="$3"
+            if has_label "$labels_json" "$label"; then
+              return 0
+            fi
+            if ! can_act; then
+              hit_max=true
+              log "Reached MAX_ACTIONS=$MAX_ACTIONS; skipping label '$label' on #$number."
+              return 1
+            fi
+            log "Adding label '$label' to #$number"
+            if run_quiet_or_log gh api --method POST \
+                 "repos/${GITHUB_REPOSITORY}/issues/${number}/labels" \
+                 -f "labels[]=$label"; then
+              did_action
+              labels_added=$((labels_added + 1))
+            else
+              warn "Could not add label '$label' to #$number."
+              return 1
+            fi
+          }
+
+          function remove_label_if_present {
+            local number="$1"
+            local labels_json="$2"
+            local label="$3"
+            if ! has_label "$labels_json" "$label"; then
+              return 0
+            fi
+            if ! can_act; then
+              hit_max=true
+              log "Reached MAX_ACTIONS=$MAX_ACTIONS; skipping removal of label '$label' on #$number."
+              return 1
+            fi
+            log "Removing label '$label' from #$number"
+            if run_quiet_or_log gh api --method DELETE \
+                 "repos/${GITHUB_REPOSITORY}/issues/${number}/labels/$(encode_uri "$label")"; then
+              did_action
+              labels_removed=$((labels_removed + 1))
+            else
+              warn "Could not remove label '$label' from #$number."
+              return 1
+            fi
+          }
+
+          function load_comments {
+            local number="$1"
+            api_array "repos/${GITHUB_REPOSITORY}/issues/${number}/comments?per_page=100"
+          }
+
+          function last_meaningful_epoch {
+            local created_at="$1"
+            local comments_json="$2"
+            local last_comment_at
+            last_comment_at="$(
+              jq -r '
+                [
+                  .[] |
+                  select((.user.login != "github-actions[bot]") and
+                         (.user.type != "Bot")) |
+                  .created_at
+                ] | max // empty
+              ' <<<"$comments_json"
+            )"
+            if [[ -n "$last_comment_at" ]]; then
+              to_epoch "$last_comment_at"
+            else
+              to_epoch "$created_at"
+            fi
+          }
+
+          function marker_date {
+            local comments_json="$1"
+            local marker="$2"
+            jq -r --arg marker "$marker" \
+              '[
+                 .[] |
+                 select((.user.login == "github-actions[bot]") and
+                        (.body | contains($marker))) |
+                 .created_at
+               ] | max // empty' \
+              <<<"$comments_json"
+          }
+
+          function has_marker {
+            local comments_json="$1"
+            local marker="$2"
+            [[ -n "$(marker_date "$comments_json" "$marker")" ]]
+          }
+
+          function marker_epoch_after_activity {
+            local comments_json="$1"
+            local marker="$2"
+            local last_epoch="$3"
+            local marked_at
+            marked_at="$(marker_date "$comments_json" "$marker")"
+            if [[ -z "$marked_at" ]]; then
+              return 1
+            fi
+            [[ "$(to_epoch "$marked_at")" -ge "$last_epoch" ]]
+          }
+
+          function has_release_marker {
+            local comments_json="$1"
+            jq -e '
+              any(.[]; (.user.login == "github-actions[bot]") and
+                       (.body | contains("<!-- close-inactive:release:")))
+            ' <<<"$comments_json" >/dev/null
+          }
+
+          function comment_issue {
+            local number="$1"
+            local body="$2"
+            if ! can_act; then
+              hit_max=true
+              log "Reached MAX_ACTIONS=$MAX_ACTIONS; skipping comment on #$number."
+              return 1
+            fi
+            log "Commenting on #$number"
+            if run_or_log gh issue comment "$number" --repo "$GITHUB_REPOSITORY" --body "$body"; then
+              did_action
+              comments_posted=$((comments_posted + 1))
+            else
+              warn "Could not comment on #$number."
+              return 1
+            fi
+          }
+
+          function close_issue {
+            local number="$1"
+            local body="$2"
+            if ! can_act; then
+              hit_max=true
+              log "Reached MAX_ACTIONS=$MAX_ACTIONS; skipping close for issue #$number."
+              return 1
+            fi
+            log "Closing issue #$number"
+            if run_or_log gh issue close "$number" \
+                 --repo "$GITHUB_REPOSITORY" \
+                 --reason "not planned" \
+                 --comment "$body"; then
+              did_action
+              issues_closed=$((issues_closed + 1))
+            else
+              warn "Could not close issue #$number."
+              return 1
+            fi
+          }
+
+          function close_pr {
+            local number="$1"
+            local body="$2"
+            if ! can_act; then
+              hit_max=true
+              log "Reached MAX_ACTIONS=$MAX_ACTIONS; skipping close for PR #$number."
+              return 1
+            fi
+            log "Closing pull request #$number"
+            if run_or_log gh pr close "$number" --repo "$GITHUB_REPOSITORY" --comment "$body"; then
+              did_action
+              prs_closed=$((prs_closed + 1))
+            else
+              warn "Could not close pull request #$number."
+              return 1
+            fi
+          }
+
+          function extract_version {
+            local tag="$1"
+            local version
+            version="$(printf '%s\n' "$tag" | grep -Eo '[0-9]+([._-][0-9A-Za-z]+)*' | head -n 1 || true)"
+            if [[ -n "$version" ]]; then
+              printf '%s\n' "${version//_/.}"
+            fi
+            return 0
+          }
+
+          function latest_release_info {
+            local release_json
+            local tag_json
+            local tag_commit_url
+            local commit_json
+            local tag_item
+            local tag_name
+            local tag_date
+            local tag_epoch
+            local newest_epoch=0
+            if release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" 2>/dev/null)"; then
+              latest_tag="$(jq -r '.tag_name // empty' <<<"$release_json")"
+              latest_date="$(jq -r '.published_at // .created_at // empty' <<<"$release_json")"
+              return 0
+            fi
+            if tag_json="$(api_array "repos/${GITHUB_REPOSITORY}/tags?per_page=30")" &&
+               [[ "$(jq 'length' <<<"$tag_json")" -gt 0 ]]; then
+              while IFS= read -r tag_item; do
+                tag_name="$(jq -r '.name // empty' <<<"$tag_item")"
+                tag_commit_url="$(jq -r '.commit.url // empty' <<<"$tag_item")"
+                if [[ -z "$tag_name" || -z "$tag_commit_url" ]]; then
+                  continue
+                fi
+                if ! commit_json="$(gh api "$tag_commit_url" 2>/dev/null)"; then
+                  warn "Could not load commit metadata for tag '$tag_name'."
+                  continue
+                fi
+                tag_date="$(jq -r '.commit.committer.date // .commit.author.date // empty' <<<"$commit_json")"
+                if [[ -z "$tag_date" ]]; then
+                  continue
+                fi
+                tag_epoch="$(to_epoch "$tag_date")"
+                if [[ "$tag_epoch" -gt "$newest_epoch" ]]; then
+                  newest_epoch="$tag_epoch"
+                  latest_tag="$tag_name"
+                  latest_date="$tag_date"
+                fi
+              done < <(jq -c '.[]' <<<"$tag_json")
+            fi
+            if [[ -z "$latest_tag" || -z "$latest_date" ]]; then
+              latest_tag=""
+              latest_date=""
+            fi
+          }
+
+          function body_issue_triage {
+            cat <<'EOF'
+          <!-- close-inactive:needs-triage -->
+          This issue has been quiet for a while and needs a fresh look.
+
+          If you are still seeing it, a short update with the current version and any new details would help. Maintainers can add the Needs Work label if it should stay on the active backlog.
+          EOF
+          }
+
+          function body_issue_release {
+            local version="$1"
+            local marker="$2"
+            cat <<EOF
+          <!-- close-inactive:release:${marker} -->
+          A newer version appears to be available: ${version}.
+
+          If you have a moment, please check whether this still happens there. A short update helps us keep it moving; if it is already fixed or no longer relevant, closing it would help keep the tracker tidy. Maintainers can add the Needs Work label if this should stay on the active backlog.
+          EOF
+          }
+
+          function body_issue_stale {
+            cat <<'EOF'
+          <!-- close-inactive:stale -->
+          This issue is now marked as stale because there has not been recent follow-up.
+
+          It is not being closed now. Please help us choose the next step: add updated details if it still matters, close it if resolved, or add Needs Work if it should remain on the active backlog.
+          EOF
+          }
+
+          function body_issue_warning {
+            cat <<EOF
+          <!-- close-inactive:close-warning -->
+          This issue has had no meaningful follow-up for an extended period.
+
+          It may be closed in approximately ${close_warning_wait_days} days unless someone adds updated details or a maintainer marks it as Needs Work.
+          EOF
+          }
+
+          function body_issue_close {
+            cat <<'EOF'
+          <!-- close-inactive:closed -->
+          Closing this issue because there has been no meaningful follow-up for an extended period after a prior warning.
+
+          If this is still relevant, feel free to reopen it with updated details.
+          EOF
+          }
+
+          function body_pr_stale {
+            cat <<'EOF'
+          <!-- close-inactive:pr-stale -->
+          This pull request has been quiet for a while and is now marked as stale.
+
+          Please update it if it is still intended for merge, or close it if it has been superseded. Maintainers can add the Needs Work label if this should stay open.
+          EOF
+          }
+
+          function body_pr_warning {
+            cat <<EOF
+          <!-- close-inactive:pr-close-warning -->
+          This pull request has had no meaningful follow-up for an extended period.
+
+          It may be closed in approximately ${close_warning_wait_days} days unless someone updates it or a maintainer marks it as Needs Work.
+          EOF
+          }
+
+          function body_pr_close {
+            cat <<'EOF'
+          <!-- close-inactive:pr-closed -->
+          Closing this pull request because there has been no meaningful follow-up for an extended period after a prior warning.
+
+          Feel free to reopen it or submit a fresh pull request if this is still relevant.
+          EOF
+          }
+
+          function date_to_epoch_or_zero {
+            local date="$1"
+            if [[ -n "$date" ]]; then
+              to_epoch "$date"
+            else
+              echo 0
+            fi
+          }
+
+          function max_epoch {
+            local left="$1"
+            local right="$2"
+            if [[ "$right" -gt "$left" ]]; then
+              echo "$right"
+            else
+              echo "$left"
+            fi
+          }
+
+          function last_pr_activity_epoch {
+            local number="$1"
+            local commits_json
+            local review_comments_json
+            local reviews_json
+            local commit_date
+            local review_comment_date
+            local review_date
+            local epoch=0
+            commits_json="$(api_array_required "repos/${GITHUB_REPOSITORY}/pulls/${number}/commits?per_page=100")" ||
+              return 1
+            review_comments_json="$(api_array_required "repos/${GITHUB_REPOSITORY}/pulls/${number}/comments?per_page=100")" ||
+              return 1
+            reviews_json="$(api_array_required "repos/${GITHUB_REPOSITORY}/pulls/${number}/reviews?per_page=100")" ||
+              return 1
+
+            commit_date="$(jq -r '
+              [
+                .[] |
+                select(((.author.login // "") | endswith("[bot]")) | not) |
+                .commit.committer.date // .commit.author.date
+              ] | max // empty
+            ' <<<"$commits_json")"
+            review_comment_date="$(jq -r '
+              [
+                .[] |
+                select(((.user.login // "") | endswith("[bot]")) | not) |
+                .created_at
+              ] | max // empty
+            ' <<<"$review_comments_json")"
+            review_date="$(jq -r '
+              [
+                .[] |
+                select(((.user.login // "") | endswith("[bot]")) | not) |
+                .submitted_at // empty
+              ] | max // empty
+            ' <<<"$reviews_json")"
+            epoch="$(max_epoch "$epoch" "$(date_to_epoch_or_zero "$commit_date")")"
+            epoch="$(max_epoch "$epoch" "$(date_to_epoch_or_zero "$review_comment_date")")"
+            epoch="$(max_epoch "$epoch" "$(date_to_epoch_or_zero "$review_date")")"
+            echo "$epoch"
+          }
+
+          function process_issue {
+            local number="$1"
+            local created_at="$2"
+            local labels_json="$3"
+            local comments_json="$4"
+            local last_epoch="$5"
+            local inactive_days="$6"
+
+            if has_label "$labels_json" "$needs_work_label" ||
+               has_label "$labels_json" "$needs_more_work_label"; then
+              log "Skipping issue #$number; active-work label is present."
+              return 0
+            fi
+
+            if [[ "$inactive_days" -lt "$issue_stale_days" ]] &&
+               has_label "$labels_json" "$stale_label" &&
+               has_marker "$comments_json" "<!-- close-inactive:stale -->" &&
+               ! marker_epoch_after_activity "$comments_json" "<!-- close-inactive:stale -->" "$last_epoch"; then
+              remove_label_if_present "$number" "$labels_json" "$stale_label" || true
+              labels_json="$(jq -c --arg label "$stale_label" \
+                'map(select((.name | ascii_downcase) != ($label | ascii_downcase)))' \
+                <<<"$labels_json")"
+            fi
+
+            local warning_at
+            local warning_active=false
+            warning_at="$(marker_date "$comments_json" "<!-- close-inactive:close-warning -->")"
+            if marker_epoch_after_activity "$comments_json" "<!-- close-inactive:close-warning -->" "$last_epoch"; then
+              warning_active=true
+            fi
+
+            if [[ "$inactive_days" -ge "$issue_close_days" && "$warning_active" == "true" ]]; then
+              local warning_epoch
+              warning_epoch="$(to_epoch "$warning_at")"
+              if [[ "$(( (now_epoch - warning_epoch) / 86400 ))" -ge "$close_warning_wait_days" ]]; then
+                close_issue "$number" "$(body_issue_close)" || true
+                return 0
+              fi
+            fi
+
+            if [[ "$inactive_days" -ge "$issue_warning_days" ]] &&
+               [[ "$warning_active" != "true" ]]; then
+              comment_issue "$number" "$(body_issue_warning)" || true
+              return 0
+            fi
+
+            if [[ "$warning_active" == "true" ]]; then
+              log "Issue #$number already has an active close warning."
+              return 0
+            fi
+
+            if [[ "$inactive_days" -ge "$issue_stale_days" ]]; then
+              add_label_if_missing "$number" "$labels_json" "$stale_label" || true
+              if ! has_marker "$comments_json" "<!-- close-inactive:stale -->"; then
+                comment_issue "$number" "$(body_issue_stale)" || true
+              fi
+              return 0
+            fi
+
+            if [[ -n "$latest_tag" && -n "$latest_date" && "$inactive_days" -ge "$issue_triage_days" ]]; then
+              local release_epoch
+              release_epoch="$(to_epoch "$latest_date")"
+              if [[ "$release_epoch" -gt "$last_epoch" ]] &&
+                 ! has_marker "$comments_json" "<!-- close-inactive:release:${latest_marker} -->"; then
+                add_label_if_missing "$number" "$labels_json" "$needs_triage_label" || true
+                comment_issue "$number" "$(body_issue_release "$latest_version" "$latest_marker")" || true
+                return 0
+              fi
+            fi
+
+            if [[ "$inactive_days" -ge "$issue_triage_days" ]]; then
+              add_label_if_missing "$number" "$labels_json" "$needs_triage_label" || true
+              if ! has_marker "$comments_json" "<!-- close-inactive:needs-triage -->" &&
+                 ! has_release_marker "$comments_json"; then
+                comment_issue "$number" "$(body_issue_triage)" || true
+              fi
+            fi
+          }
+
+          function process_pr {
+            local number="$1"
+            local labels_json="$2"
+            local comments_json="$3"
+            local last_epoch="$4"
+            local inactive_days="$5"
+
+            if has_label "$labels_json" "$needs_work_label" ||
+               has_label "$labels_json" "$needs_more_work_label"; then
+              log "Skipping pull request #$number; active-work label is present."
+              return 0
+            fi
+
+            if [[ "$inactive_days" -lt "$pr_stale_days" ]] &&
+               has_label "$labels_json" "$stale_label" &&
+               has_marker "$comments_json" "<!-- close-inactive:pr-stale -->" &&
+               ! marker_epoch_after_activity "$comments_json" "<!-- close-inactive:pr-stale -->" "$last_epoch"; then
+              remove_label_if_present "$number" "$labels_json" "$stale_label" || true
+              labels_json="$(jq -c --arg label "$stale_label" \
+                'map(select((.name | ascii_downcase) != ($label | ascii_downcase)))' \
+                <<<"$labels_json")"
+            fi
+
+            local warning_at
+            local warning_active=false
+            warning_at="$(marker_date "$comments_json" "<!-- close-inactive:pr-close-warning -->")"
+            if marker_epoch_after_activity "$comments_json" "<!-- close-inactive:pr-close-warning -->" "$last_epoch"; then
+              warning_active=true
+            fi
+
+            if [[ "$inactive_days" -ge "$pr_close_days" && "$warning_active" == "true" ]]; then
+              local warning_epoch
+              warning_epoch="$(to_epoch "$warning_at")"
+              if [[ "$(( (now_epoch - warning_epoch) / 86400 ))" -ge "$close_warning_wait_days" ]]; then
+                close_pr "$number" "$(body_pr_close)" || true
+                return 0
+              fi
+            fi
+
+            if [[ "$inactive_days" -ge "$pr_warning_days" ]] &&
+               [[ "$warning_active" != "true" ]]; then
+              comment_issue "$number" "$(body_pr_warning)" || true
+              return 0
+            fi
+
+            if [[ "$warning_active" == "true" ]]; then
+              log "Pull request #$number already has an active close warning."
+              return 0
+            fi
+
+            if [[ "$inactive_days" -ge "$pr_stale_days" ]]; then
+              add_label_if_missing "$number" "$labels_json" "$stale_label" || true
+              if ! has_marker "$comments_json" "<!-- close-inactive:pr-stale -->"; then
+                comment_issue "$number" "$(body_pr_stale)" || true
+              fi
+            fi
+          }
+
+          function write_step_summary {
+            if [[ -z "${GITHUB_STEP_SUMMARY:-}" ]]; then
+              return 0
+            fi
+            {
+              echo "### Close inactive"
+              echo
+              echo "| Metric | Count |"
+              echo "| --- | ---: |"
+              echo "| Items checked | ${items_checked} |"
+              echo "| Labels added | ${labels_added} |"
+              echo "| Labels removed | ${labels_removed} |"
+              echo "| Comments posted | ${comments_posted} |"
+              echo "| Issues closed | ${issues_closed} |"
+              echo "| Pull requests closed | ${prs_closed} |"
+              echo "| Total actions | ${action_count} |"
+              echo
+              echo "- Dry run: ${DRY_RUN}"
+              echo "- Hit action limit: ${hit_max}"
+              echo "- Max actions: ${MAX_ACTIONS}"
+            } >> "$GITHUB_STEP_SUMMARY"
+          }
+
+          ensure_label "$needs_work_label" "c5def5" "Active backlog item exempt from inactivity automation"
+          ensure_label "$needs_triage_label" "f9d0c4" "Needs a maintainer decision"
+          ensure_label "$stale_label" "ededed" "Inactive and needs review"
+
+          latest_tag=""
+          latest_date=""
+          latest_release_info
+          latest_version=""
+          latest_marker=""
+          if [[ -n "$latest_tag" && -n "$latest_date" ]]; then
+            latest_version="$(extract_version "$latest_tag")"
+            if [[ -n "$latest_version" ]]; then
+              latest_marker="$(printf '%s' "$latest_tag" | sha256sum | awk '{print $1}')"
+              log "Latest release/tag: $latest_tag (${latest_version})"
+            else
+              latest_tag=""
+              latest_date=""
+              log "Latest tag has no parseable version; release-aware issue bump is disabled."
+            fi
+          else
+            log "No release or tag found; release-aware issue bump is disabled."
+          fi
+
+          # Listing open issues is the one hard-fail API dependency: if this
+          # call fails, the run should stop instead of silently doing nothing.
+          items_json="$(
+              gh api --paginate --slurp \
+                "repos/${GITHUB_REPOSITORY}/issues?state=open&per_page=100" |
+              jq 'add'
+          )"
+
+          while IFS= read -r item; do
+            if ! can_act; then
+              hit_max=true
+              log "Reached MAX_ACTIONS=$MAX_ACTIONS; stopping."
+              break
+            fi
+            items_checked=$((items_checked + 1))
+
+            number="$(jq -r '.number' <<<"$item")"
+            created_at="$(jq -r '.created_at' <<<"$item")"
+            labels_json="$(jq -c '.labels // []' <<<"$item")"
+            is_pr="$(jq -r 'has("pull_request")' <<<"$item")"
+
+            comments_json="$(load_comments "$number")"
+            last_epoch="$(last_meaningful_epoch "$created_at" "$comments_json")"
+            if [[ "$is_pr" == "true" ]]; then
+              if ! pr_activity_epoch="$(last_pr_activity_epoch "$number")"; then
+                warn "Skipping pull request #$number; PR activity could not be loaded safely."
+                continue
+              fi
+              if [[ "$pr_activity_epoch" -gt "$last_epoch" ]]; then
+                last_epoch="$pr_activity_epoch"
+              fi
+            fi
+            inactive_days="$(days_since_epoch "$last_epoch")"
+
+            if [[ "$is_pr" == "true" ]]; then
+              log "Checking pull request #$number; inactive for ${inactive_days} day(s)."
+              process_pr "$number" "$labels_json" "$comments_json" "$last_epoch" "$inactive_days"
+            else
+              log "Checking issue #$number; inactive for ${inactive_days} day(s)."
+              process_issue "$number" "$created_at" "$labels_json" "$comments_json" "$last_epoch" "$inactive_days"
+            fi
+          done < <(jq -c 'sort_by(.created_at)[]' <<<"$items_json")
+
+          write_step_summary
+          log "Completed close-inactive review with $action_count action(s)."

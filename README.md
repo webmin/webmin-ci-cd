@@ -48,6 +48,8 @@ In some cases, fine-grained tokens are required for builds involving private rep
 
 Push code review remains part of the master build workflow so submitted code is checked before packages are built. Pull request code review is handled by a separate reusable workflow, letting child repositories review PRs without coupling that review to package build or publish jobs. PR reviews report through GitHub checks and comments; email notifications remain limited to push reviews.
 
+Inactive issue and pull request triage is handled by the reusable `Close inactive` workflow. See [the close inactive design note](docs/close-inactive-design.md) for the policy, safety guards, and child workflow example.
+
 ## Architecture
 This is a quick overview of the key files involved in the build process, highlighting their roles, functionality, and purpose.
 
@@ -62,6 +64,8 @@ This is a quick overview of the key files involved in the build process, highlig
 - **code-review.yml** — this reusable GitHub Actions workflow runs code review on pull requests without coupling review to package build or publish jobs.
 
 - **code-review.bash** — this script reviews submitted source, workflow, config, and documentation diffs when a child workflow passes a code review API key. It fails CI only on concrete findings and ignores unsupported/generated assets by default.
+
+- **close-inactive.yml** — this reusable workflow labels and reminds inactive issues and pull requests, with conservative close rules for very old items. The detailed policy is documented in [docs/close-inactive-design.md](docs/close-inactive-design.md).
 
 - **sync-github-secrets.bash** — this script dynamically updates, deletes, or lists GitHub secrets for a given repository or all repositories. It's especially useful for batch updating secrets across all projects in one go. The script expects a ZIP file containing the secrets, either specified via the `ENV_SECRETS_ZIP` environment variable or placed in `~/Git/.secrets/gh-secrets.zip` file.
 

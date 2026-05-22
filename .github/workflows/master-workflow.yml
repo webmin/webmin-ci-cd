@@ -125,7 +125,7 @@ jobs:
         if: ${{ inputs.run-code-review && github.event_name == 'push' && env.CODE_REVIEW_SKIP == 'true' }}
         run: echo "[no-review] marker found; skipping code review."
 
-      - name: Code review
+      - name: CI code review
         if: ${{ inputs.run-code-review && github.event_name == 'push' && env.CODE_REVIEW_SKIP != 'true' }}
         env:
           CODE_REVIEW_API_KEY: ${{ secrets.CODE_REVIEW_API_KEY }}

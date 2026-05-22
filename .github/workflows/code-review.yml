@@ -1,4 +1,4 @@
-name: Code Review
+name: CI code review
 
 on:
   pull_request:
@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   code-review:
-    name: Code review
+    name: CI code review
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'pull_request' && (github.repository_owner == 'webmin' || github.repository_owner == 'virtualmin') }}
     env:

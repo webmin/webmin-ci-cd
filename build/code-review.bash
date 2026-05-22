@@ -26,7 +26,7 @@ context_lines="10"
 fail_on_api_error="true"
 
 # Optional SES SMTP email notification settings. CODE_REVIEW_SMTP_PASSWORD is a
-# multiline secret: SMTP username, password, From address, and BCC address.
+# multiline secret: SMTP username, password, From address, and BCC/Reply-To address.
 email_smtp_host="email-smtp.us-east-1.amazonaws.com"
 email_smtp_scheme="smtps"
 email_smtp_port="465"
@@ -558,7 +558,7 @@ PERL
 review_exit=0
 perl -MJSON::PP - "$review_file" "$response_file" "$email_file" "$markdown_file" \
 	"$commit_author_email" "$commit_author_name" "$commit_time" \
-	"$commit_subject" "$email_from_address" "$email_from_name" "$repo_label" "$short_head_sha" "$run_url" \
+	"$commit_subject" "$email_from_address" "$email_from_name" "$email_bcc_address" "$repo_label" "$short_head_sha" "$run_url" \
 	"$commit_url" "$review_diff_url" "$review_patch_url" \
 	"$email_on_attention" <<'PERL' || review_exit=$?
 use strict;
@@ -569,7 +569,7 @@ binmode STDOUT, ':encoding(UTF-8)';
 
 my ($review_path, $response_path, $email_path, $markdown_path, $email_to,
     $commit_author_name, $commit_time, $commit_subject,
-    $email_from_address, $email_from_name, $repo_label,
+    $email_from_address, $email_from_name, $email_reply_to_address, $repo_label,
     $short_head_sha, $run_url, $commit_url, $review_diff_url,
     $review_patch_url, $email_on_attention) = @ARGV;
 open my $fh, '<', $review_path or die "open $review_path: $!";
@@ -677,6 +677,12 @@ sub log_text {
 	$value =~ s/[\r\n]+/ /g;
 	$value =~ s/\s+/ /g;
 	return trim($value);
+}
+
+sub is_email_address {
+	my ($value) = @_;
+	$value = log_text($value);
+	return $value =~ /\A[^\s@<>]+@[^\s@<>]+\z/;
 }
 
 sub print_review_notes {
@@ -940,6 +946,8 @@ sub write_email_report {
 	if (length(log_text($email_from_name))) {
 		$from = log_text($email_from_name) . " <$from>";
 	}
+	my $reply_to = is_email_address($email_reply_to_address) ?
+		log_text($email_reply_to_address) : '';
 	my @links;
 	push @links, [ 'Commit', $commit_url ] if length(log_text($commit_url));
 	push @links, [ 'Reviewed Diff', $review_diff_url ] if length(log_text($review_diff_url));
@@ -954,6 +962,7 @@ sub write_email_report {
 
 	email_line($efh, "From: $from");
 	email_line($efh, "To: " . log_text($email_to));
+	email_line($efh, "Reply-To: $reply_to") if length($reply_to);
 	email_line($efh, "Subject: $subject");
 	email_line($efh, "MIME-Version: 1.0");
 	email_line($efh, "Content-Type: multipart/alternative; boundary=\"$boundary\"");

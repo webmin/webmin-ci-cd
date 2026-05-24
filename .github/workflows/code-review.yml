@@ -47,24 +47,31 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Fetch base commit
+      - name: Fetch base branch
         if: ${{ env.CODE_REVIEW_AVAILABLE == 'true' && env.CODE_REVIEW_SKIP != 'true' }}
         env:
           BASE_REPO_URL: ${{ github.event.pull_request.base.repo.clone_url }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
-          if git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
-            echo "Base commit already exists in checkout."
+          if git merge-base --is-ancestor "$BASE_SHA" HEAD 2>/dev/null ||
+             git merge-base HEAD "$BASE_SHA" >/dev/null 2>&1; then
+            echo "Base history already exists in checkout."
             exit 0
           fi
-          git fetch --no-tags --depth=1 "$BASE_REPO_URL" "$BASE_SHA"
+          # Fetch the base branch, not only the base SHA. A depth-1 base SHA
+          # can leave Git unable to find the PR merge-base, which makes the
+          # review compare against the base tip and include unrelated old code.
+          git fetch --no-tags "$BASE_REPO_URL" \
+            "+refs/heads/${BASE_REF}:refs/remotes/base/${BASE_REF}"
 
       - name: Code review
         if: ${{ env.CODE_REVIEW_AVAILABLE == 'true' && env.CODE_REVIEW_SKIP != 'true' }}
         env:
           CODE_REVIEW_API_KEY: ${{ secrets.CODE_REVIEW_API_KEY }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BEFORE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |

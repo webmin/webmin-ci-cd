@@ -31,6 +31,26 @@ on:
         required: false
         type: boolean
         default: true
+      code-review-email:
+        description: 'Whether to email code review findings when SMTP is configured'
+        required: false
+        type: boolean
+        default: false
+      code-review-email-on-attention:
+        description: 'Whether email notifications should include non-blocking attention findings'
+        required: false
+        type: boolean
+        default: true
+      code-review-commit-comments:
+        description: 'Whether to leave code review findings as comments on the pushed commit'
+        required: false
+        type: boolean
+        default: true
+      code-review-comments-on-attention:
+        description: 'Whether commit comments should include non-blocking attention findings'
+        required: false
+        type: boolean
+        default: true
       module-build-type:
         required: false
         type: string
@@ -69,15 +89,71 @@ on:
         required: false
 
 jobs:
+  code-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    if: ${{ !contains(github.event.head_commit.message || '', '[no-build]') && inputs.run-code-review && github.event_name == 'push' && !contains(toJson(github.event.commits.*.message), '[no-review]') && !contains(github.event.head_commit.message || '', '[no-review]') && (github.repository_owner == 'webmin' || github.repository_owner == 'virtualmin') }}
+    env:
+      CI_CD_UNSTABLE_BASE: https://raw.githubusercontent.com/webmin/webmin-ci-cd/main/build
+    steps:
+      - name: Check code review configuration
+        id: review-config
+        env:
+          CODE_REVIEW_API_KEY: ${{ secrets.CODE_REVIEW_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CODE_REVIEW_API_KEY:-}" ]; then
+            echo "No CODE_REVIEW_API_KEY was provided; skipping code review."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout code
+        if: ${{ steps.review-config.outputs.enabled == 'true' }}
+        uses: actions/checkout@v4
+        with:
+          path: actions-checkout
+          fetch-depth: 0
+
+      - name: Fetch code review
+        if: ${{ steps.review-config.outputs.enabled == 'true' }}
+        run: |
+          set -euo pipefail
+          curl -fsSLo code-review.bash "${CI_CD_UNSTABLE_BASE}/code-review.bash"
+          chmod +x code-review.bash
+
+      - name: CI code review
+        if: ${{ steps.review-config.outputs.enabled == 'true' }}
+        env:
+          CODE_REVIEW_API_KEY: ${{ secrets.CODE_REVIEW_API_KEY }}
+          CODE_REVIEW_SMTP_PASSWORD: ${{ secrets.CODE_REVIEW_SMTP_PASSWORD }}
+          CODE_REVIEW_EMAIL: ${{ inputs.code-review-email }}
+          CODE_REVIEW_EMAIL_ON_ATTENTION: ${{ inputs.code-review-email-on-attention }}
+          CODE_REVIEW_COMMIT_COMMENTS: ${{ inputs.code-review-commit-comments }}
+          CODE_REVIEW_COMMENTS_ON_ATTENTION: ${{ inputs.code-review-comments-on-attention }}
+          CODE_REVIEW_GITHUB_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ github.event.before || '' }}
+          HEAD_SHA: ${{ github.sha }}
+          BEFORE_SHA: ${{ github.event.before || '' }}
+          # Used only when push metadata cannot provide a usable before SHA.
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch || '' }}
+        run: |
+          set -euo pipefail
+          bash code-review.bash actions-checkout
+
   build:
     runs-on: ubuntu-latest
+    needs: code-review
+    permissions:
+      contents: read
     # Only allow canonical repositories under our owners to invoke builds
-    if: ${{ !contains(github.event.head_commit.message || '', '[no-build]') && (github.repository_owner == 'webmin' || github.repository_owner == 'virtualmin') }}
+    if: ${{ always() && !contains(github.event.head_commit.message || '', '[no-build]') && (needs.code-review.result == 'success' || needs.code-review.result == 'skipped') && (github.repository_owner == 'webmin' || github.repository_owner == 'virtualmin') }}
     env:
       TZ: Europe/Nicosia
       CI_CD_STABLE_BASE: https://github.com/webmin/webmin-ci-cd/releases/latest/download
       CI_CD_UNSTABLE_BASE: https://raw.githubusercontent.com/webmin/webmin-ci-cd/main/build
-      CODE_REVIEW_SKIP: ${{ github.event_name == 'push' && (contains(toJson(github.event.commits.*.message), '[no-review]') || contains(github.event.head_commit.message || '', '[no-review]')) }}
     steps:
       - name: Checkout code
         if: ${{ inputs.is-checkout || github.event_name == 'push' }}
@@ -98,8 +174,6 @@ jobs:
           version: 1.0
 
       - name: Fetch dependencies
-        env:
-          CODE_REVIEW_API_KEY: ${{ secrets.CODE_REVIEW_API_KEY }}
         run: |
           set -euo pipefail
           if [ "${{ inputs.is-release }}" = "true" ] && [ "${{ inputs.is-prerelease }}" != "true" ]; then
@@ -112,36 +186,6 @@ jobs:
           echo "BUILD_BOOTSTRAP_URL=$base" >> "$GITHUB_ENV"
           curl -fsSLo bootstrap.bash "$base/bootstrap.bash"
           chmod +x bootstrap.bash
-          if [ -n "${CODE_REVIEW_API_KEY:-}" ] &&
-             [ "${{ inputs.run-code-review }}" = "true" ] &&
-             [ "${{ github.event_name }}" = "push" ] &&
-             [ "${CODE_REVIEW_SKIP}" != "true" ]; then
-            review_url="${CI_CD_UNSTABLE_BASE}/code-review.bash"
-            curl -fsSLo code-review.bash "$review_url"
-            chmod +x code-review.bash
-          fi
-
-      - name: Skip code review by marker
-        if: ${{ inputs.run-code-review && github.event_name == 'push' && env.CODE_REVIEW_SKIP == 'true' }}
-        run: echo "[no-review] marker found; skipping code review."
-
-      - name: CI code review
-        if: ${{ inputs.run-code-review && github.event_name == 'push' && env.CODE_REVIEW_SKIP != 'true' }}
-        env:
-          CODE_REVIEW_API_KEY: ${{ secrets.CODE_REVIEW_API_KEY }}
-          CODE_REVIEW_SMTP_PASSWORD: ${{ secrets.CODE_REVIEW_SMTP_PASSWORD }}
-          BASE_SHA: ${{ github.event.before || '' }}
-          HEAD_SHA: ${{ github.sha }}
-          BEFORE_SHA: ${{ github.event.before || '' }}
-          # Used only when push metadata cannot provide a usable before SHA.
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch || '' }}
-        run: |
-          set -euo pipefail
-          if [ -z "${CODE_REVIEW_API_KEY:-}" ]; then
-            echo "No CODE_REVIEW_API_KEY was provided; skipping code review."
-            exit 0
-          fi
-          bash code-review.bash actions-checkout
 
       - name: Set timezone
         run: sudo timedatectl set-timezone ${{ env.TZ }}

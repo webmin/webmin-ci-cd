@@ -25,6 +25,15 @@ max_bytes="200000"
 context_lines="10"
 fail_on_api_error="true"
 
+# Notification settings. Commit comments are the default delivery path; email
+# remains available only when explicitly enabled by the workflow.
+email_enabled="${CODE_REVIEW_EMAIL:-false}"
+email_on_attention="${CODE_REVIEW_EMAIL_ON_ATTENTION:-true}"
+commit_comments_enabled="${CODE_REVIEW_COMMIT_COMMENTS:-true}"
+commit_comments_on_attention="${CODE_REVIEW_COMMENTS_ON_ATTENTION:-true}"
+github_comment_token="${CODE_REVIEW_GITHUB_TOKEN:-${GITHUB_TOKEN:-}}"
+github_api_url="${GITHUB_API_URL:-https://api.github.com}"
+
 # Optional SES SMTP email notification settings. CODE_REVIEW_SMTP_PASSWORD is a
 # multiline secret: SMTP username, password, From address, and BCC/Reply-To address.
 email_smtp_host="email-smtp.us-east-1.amazonaws.com"
@@ -36,7 +45,6 @@ email_smtp_password=""
 email_from_address=""
 email_from_name="Code Review"
 email_bcc_address=""
-email_on_attention="true"
 
 # Split the multiline SMTP secret without exposing account-specific mail values.
 if [[ -n "$email_smtp_secret" ]]; then
@@ -97,13 +105,24 @@ function is_email_address {
 	[[ "$value" =~ ^[^[:space:]@\<\>]+@[^[:space:]@\<\>]+$ ]]
 }
 
-# Send the prepared review email without putting SMTP credentials on argv.
+# Accept common boolean spellings for workflow inputs and local config.
+function is_enabled {
+	local value="${1:-}"
+	value="${value,,}"
+	[[ "$value" == "1" || "$value" == "true" || "$value" == "yes" ]]
+}
+
+# Send the prepared review email without putting SMTP credentials on argv when
+# the workflow explicitly enables email delivery.
 function send_code_review_email {
 	local email_path="$1"
 	local recipient="$2"
 	local curl_config="$tmp_dir/smtp-curl.conf"
 
 	if [[ ! -s "$email_path" ]]; then
+		return 0
+	fi
+	if ! is_enabled "$email_enabled"; then
 		return 0
 	fi
 	if [[ -z "$email_smtp_secret" ]]; then
@@ -149,6 +168,84 @@ function send_code_review_email {
 	else
 		echo "::warning::Code review email failed to send."
 	fi
+}
+
+# Post review findings as GitHub commit comments when enabled.
+function post_code_review_comments {
+	local comments_dir="$1"
+	local commit_sha="$2"
+	local repo="${GITHUB_REPOSITORY:-}"
+	local comments_url existing_comments_file payload fingerprint marker
+	local fallback_payload
+
+	if ! is_enabled "$commit_comments_enabled"; then
+		return 0
+	fi
+	if [[ -z "$github_comment_token" || -z "$repo" || -z "$commit_sha" ]]; then
+		echo "::warning::Code review commit comments not sent; GitHub token, repository, or commit SHA is unavailable."
+		return 0
+	fi
+	if [[ ! -d "$comments_dir" ]] || ! compgen -G "$comments_dir/*.json" >/dev/null; then
+		return 0
+	fi
+
+	comments_url="${github_api_url%/}/repos/${repo}/commits/${commit_sha}/comments"
+	existing_comments_file="$tmp_dir/existing-commit-comments.json"
+	if ! curl --silent --show-error --fail --location \
+		--header "authorization: Bearer ${github_comment_token}" \
+		--header "accept: application/vnd.github+json" \
+		--output "$existing_comments_file" \
+		"${comments_url}?per_page=100"; then
+		echo "::warning::Code review commit comments not sent; existing comments could not be loaded."
+		return 0
+	fi
+
+	for payload in "$comments_dir"/*.json; do
+		[[ -e "$payload" ]] || continue
+		fingerprint="${payload##*/}"
+		fingerprint="${fingerprint%.json}"
+		marker="<!-- webmin-code-review:${fingerprint} -->"
+		if perl -MJSON::PP -0777 -e '
+			my ($marker) = @ARGV;
+			my $comments = eval { JSON::PP::decode_json(<STDIN>) } || [];
+			for my $comment (@$comments) {
+				if (ref($comment) eq "HASH" &&
+				    index($comment->{body} || "", $marker) >= 0) {
+					exit 0;
+				}
+			}
+			exit 1;
+		' "$marker" < "$existing_comments_file"; then
+			continue
+		fi
+
+		if curl --silent --show-error --fail --location \
+			--request POST \
+			--header "authorization: Bearer ${github_comment_token}" \
+			--header "accept: application/vnd.github+json" \
+			--header "content-type: application/json" \
+			--output /dev/null \
+			--data "@$payload" \
+			"$comments_url"; then
+			continue
+		fi
+
+		fallback_payload="$tmp_dir/commit-comment-${fingerprint}.json"
+		perl -MJSON::PP -0777 -e '
+			my $payload = JSON::PP::decode_json(<STDIN>);
+			print JSON::PP::encode_json({ body => $payload->{body} });
+		' < "$payload" > "$fallback_payload"
+		if ! curl --silent --show-error --fail --location \
+			--request POST \
+			--header "authorization: Bearer ${github_comment_token}" \
+			--header "accept: application/vnd.github+json" \
+			--header "content-type: application/json" \
+			--output /dev/null \
+			--data "@$fallback_payload" \
+			"$comments_url"; then
+			echo "::warning::Code review commit comment failed for ${fingerprint}."
+		fi
+	done
 }
 
 api_key="${CODE_REVIEW_API_KEY:-}"
@@ -261,6 +358,8 @@ response_file="$tmp_dir/response.json"
 review_file="$tmp_dir/review.txt"
 email_file="$tmp_dir/code-review-email.txt"
 markdown_file="${CODE_REVIEW_MARKDOWN_FILE:-}"
+commit_comments_dir="$tmp_dir/commit-comments"
+mkdir -p "$commit_comments_dir"
 
 # Collect commit and GitHub URLs used in review annotations and email reports.
 commit_author_name="$(git log -1 --format=%an "$head_sha" 2>/dev/null || true)"
@@ -393,7 +492,7 @@ Return exactly one JSON object with this shape:
   ]
 }
 
-Use "fail" only when there is at least one fatal issue introduced by this diff. Use "pass" when there are no fatal issues, even if there are attention findings. If a line number is unknown, use null.
+Use "fail" only when there is at least one fatal issue introduced by this diff. Use "pass" when there are no fatal issues, even if there are attention findings. Use line numbers from the new/head file when possible. If a line number is unknown, use null.
 For passing reviews, make the summary specific to the changed files or behavior; do not use a generic summary like "No fatal issues found". Include 1-3 reviewed items and 1-3 passed_checks items. Do not claim that tests, linters, or commands ran; describe only what is visible from the diff.
 
 Changed files:
@@ -554,24 +653,25 @@ print join("", @text);
 PERL
 
 # Parse the review JSON, convert findings into GitHub annotations, and prepare
-# an optional email report for findings.
+# optional notification payloads for findings.
 review_exit=0
-perl -MJSON::PP - "$review_file" "$response_file" "$email_file" "$markdown_file" \
+perl -MJSON::PP - "$review_file" "$response_file" "$diff_file" "$email_file" "$markdown_file" "$commit_comments_dir" \
 	"$commit_author_email" "$commit_author_name" "$commit_time" \
 	"$commit_subject" "$email_from_address" "$email_from_name" "$email_bcc_address" "$repo_label" "$short_head_sha" "$run_url" \
 	"$commit_url" "$review_diff_url" "$review_patch_url" \
-	"$email_on_attention" <<'PERL' || review_exit=$?
+	"$email_on_attention" "$commit_comments_on_attention" <<'PERL' || review_exit=$?
 use strict;
 use warnings;
-use JSON::PP qw(decode_json);
+use Digest::SHA qw(sha1_hex);
+use JSON::PP qw(decode_json encode_json);
 
 binmode STDOUT, ':encoding(UTF-8)';
 
-my ($review_path, $response_path, $email_path, $markdown_path, $email_to,
+my ($review_path, $response_path, $diff_path, $email_path, $markdown_path, $commit_comments_dir, $email_to,
     $commit_author_name, $commit_time, $commit_subject,
     $email_from_address, $email_from_name, $email_reply_to_address, $repo_label,
     $short_head_sha, $run_url, $commit_url, $review_diff_url,
-    $review_patch_url, $email_on_attention) = @ARGV;
+    $review_patch_url, $email_on_attention, $commit_comments_on_attention) = @ARGV;
 open my $fh, '<', $review_path or die "open $review_path: $!";
 my $text = do { local $/; <$fh> };
 
@@ -810,7 +910,7 @@ sub markdown_text {
 }
 
 # Wrap common code references in Markdown code spans while escaping all other
-# review text, so PR comments stay readable without trusting model Markdown.
+# review text, so GitHub comments stay readable without trusting model Markdown.
 sub markdown_code_span {
 	my ($value) = @_;
 	$value = log_text($value);
@@ -1063,6 +1163,107 @@ sub write_email_report {
 	close $efh;
 }
 
+# Interpret workflow boolean inputs passed into the embedded parser.
+sub config_enabled {
+	my ($value) = @_;
+	$value = lc(log_text($value));
+	return $value eq '1' || $value eq 'true' || $value eq 'yes';
+}
+
+# Decode the simple path forms emitted by git diff headers.
+sub diff_path {
+	my ($path) = @_;
+	$path = log_text($path);
+	if ($path =~ /\A"(.*)"\z/s) {
+		$path = $1;
+		$path =~ s/\\t/\t/g;
+		$path =~ s/\\n/\n/g;
+		$path =~ s/\\r/\r/g;
+		$path =~ s/\\"/"/g;
+		$path =~ s/\\\\/\\/g;
+	}
+	$path =~ s/\A[ab]\///;
+	return $path;
+}
+
+# GitHub commit comments use a diff position, not a destination file line. Build
+# a best-effort map from head-file line numbers to positions in each file patch.
+sub load_diff_positions {
+	my ($path) = @_;
+	my %positions;
+	open my $dfh, '<:encoding(UTF-8)', $path or return \%positions;
+	my ($file, $new_line, $position, $in_hunk) = ('', 0, 0, 0);
+	while (my $line = <$dfh>) {
+		chomp $line;
+		if ($line =~ /^diff --git /) {
+			($file, $new_line, $position, $in_hunk) = ('', 0, 0, 0);
+			next;
+		}
+		if ($line =~ /^\+\+\+\s+(.+)\z/) {
+			my $path = $1;
+			$file = $path eq '/dev/null' ? '' : diff_path($path);
+			next;
+		}
+		if ($line =~ /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/) {
+			$position++ if $in_hunk;
+			$new_line = $1;
+			$in_hunk = 1;
+			next;
+		}
+		next if !$in_hunk || !length($file);
+
+		$position++;
+		next if $line =~ /^\\/;
+		my $kind = substr($line, 0, 1);
+		if ($kind eq '+' || $kind eq ' ') {
+			$positions{$file . "\0" . $new_line} ||= $position;
+			$new_line++;
+		}
+	}
+	close $dfh;
+	return \%positions;
+}
+
+my $diff_positions = load_diff_positions($diff_path);
+
+# Write one GitHub commit-comment payload for a review finding.
+sub write_commit_comment_payload {
+	my ($severity, $file, $line, $message, $suggestion, $is_blocking) = @_;
+	return if !defined($commit_comments_dir) || !length($commit_comments_dir);
+	return if !$is_blocking && !config_enabled($commit_comments_on_attention);
+
+	my $fingerprint = sha1_hex(join("\0",
+		$file || '', defined($line) ? $line : '',
+		$message || '', $suggestion || ''));
+	my $marker = "<!-- webmin-code-review:$fingerprint -->";
+	my $location = length(log_text($file)) ? log_text($file) : 'submitted diff';
+	$location .= ':' . log_text($line) if defined($line) && $line =~ /^\d+$/;
+	my $body = "$marker\n**Code review finding:** **[$severity]** " .
+		   markdown_code_span($location) . "\n\n" .
+		   markdown_inline_code($message);
+	if (length(log_text($suggestion))) {
+		$body .= "\n\n**Suggested fix:** " .
+			 markdown_inline_code($suggestion);
+	}
+	if (length(log_text($review_diff_url))) {
+		$body .= "\n\nReviewed diff: " . markdown_link('open diff', $review_diff_url);
+	}
+
+	my %payload = ( body => $body );
+	if (length(log_text($file)) && defined($line) && $line =~ /^\d+$/) {
+		my $position = $diff_positions->{log_text($file) . "\0" . (0 + $line)};
+		if (defined($position)) {
+			$payload{path} = log_text($file);
+			$payload{position} = 0 + $position;
+		}
+	}
+
+	open my $cfh, '>:encoding(UTF-8)', "$commit_comments_dir/$fingerprint.json"
+		or die "open $commit_comments_dir/$fingerprint.json: $!";
+	print {$cfh} encode_json(\%payload);
+	close $cfh;
+}
+
 my $status = lc($review->{status} || '');
 my $summary = log_text($review->{summary});
 my $findings = $review->{findings};
@@ -1100,6 +1301,8 @@ for my $finding (@$findings) {
 	print '::' . $command;
 	print ' ' . join(',', @props) if @props;
 	print '::' . escape_data($annotation) . "\n";
+	write_commit_comment_payload($severity, $file, $line, $message,
+				     $suggestion, $is_blocking);
 }
 
 write_markdown_report($blocking_findings, $attention_findings,
@@ -1129,4 +1332,5 @@ exit 1;
 PERL
 
 send_code_review_email "$email_file" "$commit_author_email"
+post_code_review_comments "$commit_comments_dir" "$head_sha"
 exit "$review_exit"

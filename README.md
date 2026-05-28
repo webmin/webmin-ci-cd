@@ -46,7 +46,7 @@ Each product repository includes a child workflow that reuses the master workflo
 
 In some cases, fine-grained tokens are required for builds involving private repositories. For instance, if changes in a public repository rely on a private one, GitHub's permission model prevents workflows from accessing the private repository unless an additional token with the necessary permissions is provided for cloning the private repository. Conversely, when a workflow is triggered directly by a private repository, GitHub automatically provides an authentication token, making it easy to clone the repository without any additional steps.
 
-Push code review remains part of the master build workflow so submitted code is checked before packages are built. Merged pull request changes are reviewed by the push workflow when they land on the target branch. Email notifications remain limited to push reviews.
+Push code review remains part of the master build workflow so submitted code is checked before packages are built. Merged pull request changes are reviewed by the push workflow when they land on the target branch. When no code review API key is passed, the review job exits before checkout or script download. Commit comments are enabled by default for push reviews, while email notifications are available only when a child workflow explicitly sets `code-review-email: true`.
 
 Inactive issue and pull request triage is handled by the reusable `Close inactive` workflow. See [the close inactive design note](docs/close-inactive-design.md) for the policy, safety guards, and child workflow example.
 
@@ -61,7 +61,7 @@ This is a quick overview of the key files involved in the build process, highlig
 
 - **build-product-deb.bash**, **build-product-rpm.bash**, **build-module-deb.bash**, **build-module-rpm.bash** — these scripts are designed specifically to handle builds for either a product (e.g., Webmin or Usermin) or a plugin (e.g., Virtualmin GPL, Virtualmin Nginx, Virtualmin AWStats, etc.). They are called directly from the workflow and manage the build process for the respective product or plugin.
 
-- **code-review.bash** — this script reviews submitted source, workflow, config, and documentation diffs when a child workflow passes a code review API key. It fails CI only on concrete findings and ignores unsupported/generated assets by default.
+- **code-review.bash** — this script reviews submitted source, workflow, config, and documentation diffs when a child workflow passes a code review API key. It fails CI only on concrete findings, ignores unsupported/generated assets by default, and delivers findings through pushed-commit comments by default, with email available as an explicit opt-in.
 
 - **close-inactive.yml** — this reusable workflow labels and reminds inactive issues and pull requests, with conservative close rules for very old items. The detailed policy is documented in [docs/close-inactive-design.md](docs/close-inactive-design.md).
 

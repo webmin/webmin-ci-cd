@@ -92,7 +92,7 @@ jobs:
   code-review:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     if: ${{ !contains(github.event.head_commit.message || '', '[no-build]') && inputs.run-code-review && github.event_name == 'push' && !contains(toJson(github.event.commits.*.message), '[no-review]') && !contains(github.event.head_commit.message || '', '[no-review]') && (github.repository_owner == 'webmin' || github.repository_owner == 'virtualmin') }}
     env:
       CI_CD_UNSTABLE_BASE: https://raw.githubusercontent.com/webmin/webmin-ci-cd/main/build

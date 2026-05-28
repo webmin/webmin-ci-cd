@@ -407,6 +407,7 @@ review_pathspecs=(
 	'*.xml'
 	'*.yaml'
 	'*.yml'
+	'config'
 	':(glob)**/*.bash'
 	':(glob)**/*.cgi'
 	':(glob)**/*.conf'
@@ -420,6 +421,7 @@ review_pathspecs=(
 	':(glob)**/*.xml'
 	':(glob)**/*.yaml'
 	':(glob)**/*.yml'
+	':(glob)**/config'
 	':(exclude,glob)**/*.min.*'
 )
 

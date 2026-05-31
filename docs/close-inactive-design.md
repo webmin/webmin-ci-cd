@@ -10,6 +10,7 @@ The workflow is reusable from child repositories: each child repository owns whe
 
 - Surface quiet issues that need maintainer review.
 - Remind reporters after a release to confirm whether old issues still reproduce.
+- Close issues marked `Fixed` after a short grace period if nobody follows up.
 - Avoid closing legitimate recent reports just because nobody replied quickly.
 - Close truly abandoned issues and pull requests only after a long grace period.
 - Keep automation idempotent so repeated runs do not spam duplicate comments.
@@ -26,6 +27,7 @@ The workflow is reusable from child repositories: each child repository owns whe
 
 For issues:
 
+- If an issue is labeled `Fixed`, close it after 7 days unless a human comments after the label was applied.
 - After 90 days of no meaningful activity, add `Needs Triage` and leave a soft reminder.
 - After 180 days, add `Stale` and leave a stronger but non-closing reminder.
 - After a new release/tag, old inactive issues may get one release-aware prompt asking whether the issue still happens with the current version.
@@ -46,6 +48,8 @@ Meaningful activity is activity from a person, not the workflow itself. For issu
 
 - Issue creation time.
 - Non-bot issue comments.
+
+For `Fixed` issues, the workflow also reads issue label events to find when the current `Fixed` label was applied. Label changes do not otherwise reset inactivity timers.
 
 For pull requests, it also considers:
 
@@ -78,6 +82,7 @@ When a newer version exists after the last meaningful issue activity, the workfl
 - A workflow-level concurrency group prevents overlapping runs in the same repository.
 - The job has a timeout to avoid runaway API loops.
 - Optional API fetch failures are treated as missing signal where safe. Required PR activity reads fail closed for that PR, so the workflow skips PR mutations when commit or review activity is unknown.
+- Required `Fixed` label history reads fail closed for that issue, so the workflow skips fixed-issue closure when label timing is unknown.
 - Actions are counted only after the corresponding GitHub command succeeds.
 - Each run writes a GitHub step summary with checked items, mutations, closes, and action-limit status.
 
@@ -109,6 +114,6 @@ For manual testing, callers can optionally pass `dry-run: true` and a lower `max
 
 ## Operational Guidance
 
-Maintainers should apply `Needs Work` when an item should remain active even if it has no recent comments. If a user responds after a stale label, the workflow removes `Stale` once the item is no longer stale.
+Maintainers should apply `Needs Work` when an item should remain active even if it has no recent comments. Apply `Fixed` only when the issue is believed resolved and should close after a 7-day follow-up window. If a user responds after a stale label, the workflow removes `Stale` once the item is no longer stale.
 
-Very old closures are reversible. The closing comment explicitly invites reopening with updated details if the issue or PR is still relevant.
+Very old closures are reversible by maintainers. The closing comment asks users to add updated details if the issue or PR is still relevant.

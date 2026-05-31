@@ -44,9 +44,11 @@ jobs:
           pr_warning_days=335
           pr_close_days=365
           close_warning_wait_days=30
+          fixed_close_days=7
 
           # Public labels stay simple. Hidden comment markers make the workflow
           # idempotent without exposing implementation details in the issue list.
+          fixed_label="Fixed"
           needs_work_label="Needs Work"
           needs_more_work_label="Needs More Work"
           needs_triage_label="Needs Triage"
@@ -218,6 +220,11 @@ jobs:
             api_array "repos/${GITHUB_REPOSITORY}/issues/${number}/comments?per_page=100"
           }
 
+          function load_issue_events {
+            local number="$1"
+            api_array_required "repos/${GITHUB_REPOSITORY}/issues/${number}/events?per_page=100"
+          }
+
           function last_meaningful_epoch {
             local created_at="$1"
             local comments_json="$2"
@@ -237,6 +244,23 @@ jobs:
             else
               to_epoch "$created_at"
             fi
+          }
+
+          function fixed_label_date {
+            local events_json="$1"
+            local label
+            label="$(printf '%s' "$fixed_label" | normalize_label)"
+            jq -r --arg label "$label" '
+              [
+                .[] |
+                select((.event == "labeled" or .event == "unlabeled") and
+                       ((.label.name // "" | ascii_downcase) == $label))
+              ] |
+              sort_by(.created_at) |
+              last // {} |
+              select(.event == "labeled") |
+              .created_at // empty
+            ' <<<"$events_json"
           }
 
           function marker_date {
@@ -299,6 +323,7 @@ jobs:
           function close_issue {
             local number="$1"
             local body="$2"
+            local reason="${3:-not planned}"
             if ! can_act; then
               hit_max=true
               log "Reached MAX_ACTIONS=$MAX_ACTIONS; skipping close for issue #$number."
@@ -307,7 +332,7 @@ jobs:
             log "Closing issue #$number"
             if run_or_log gh issue close "$number" \
                  --repo "$GITHUB_REPOSITORY" \
-                 --reason "not planned" \
+                 --reason "$reason" \
                  --comment "$body"; then
               did_action
               issues_closed=$((issues_closed + 1))
@@ -433,7 +458,16 @@ jobs:
           <!-- close-inactive:closed -->
           Closing this issue because there has been no meaningful follow-up for an extended period after a prior warning.
 
-          If this is still relevant, feel free to reopen it with updated details.
+          If this is still relevant, please add updated details and a maintainer can reopen it.
+          EOF
+          }
+
+          function body_issue_fixed_close {
+            cat <<'EOF'
+          <!-- close-inactive:fixed-closed -->
+          Closing this issue because it has been marked as Fixed for 7 days without follow-up.
+
+          If this is still a problem, please add updated details and a maintainer can reopen it.
           EOF
           }
 
@@ -460,7 +494,7 @@ jobs:
           <!-- close-inactive:pr-closed -->
           Closing this pull request because there has been no meaningful follow-up for an extended period after a prior warning.
 
-          Feel free to reopen it or submit a fresh pull request if this is still relevant.
+          If this is still relevant, please add updated details and a maintainer can reopen it, or submit a fresh pull request.
           EOF
           }
 
@@ -537,6 +571,32 @@ jobs:
             if has_label "$labels_json" "$needs_work_label" ||
                has_label "$labels_json" "$needs_more_work_label"; then
               log "Skipping issue #$number; active-work label is present."
+              return 0
+            fi
+
+            if has_label "$labels_json" "$fixed_label"; then
+              local events_json
+              local fixed_at
+              local fixed_epoch
+              if ! events_json="$(load_issue_events "$number")"; then
+                warn "Skipping issue #$number; Fixed label history could not be loaded safely."
+                return 0
+              fi
+              fixed_at="$(fixed_label_date "$events_json")"
+              if [[ -z "$fixed_at" ]]; then
+                warn "Skipping issue #$number; Fixed label date could not be found."
+                return 0
+              fi
+              fixed_epoch="$(to_epoch "$fixed_at")"
+              if [[ "$last_epoch" -gt "$fixed_epoch" ]]; then
+                log "Issue #$number has human follow-up after the Fixed label; leaving open."
+                return 0
+              fi
+              if [[ "$(( (now_epoch - fixed_epoch) / 86400 ))" -ge "$fixed_close_days" ]]; then
+                close_issue "$number" "$(body_issue_fixed_close)" "completed" || true
+                return 0
+              fi
+              log "Issue #$number is labeled Fixed but is still inside the ${fixed_close_days}-day grace period."
               return 0
             fi
 

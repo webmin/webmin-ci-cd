@@ -783,6 +783,30 @@ sub log_text {
 	return trim($value);
 }
 
+# Wrap Actions annotation text so GitHub's Checks UI does not force a long
+# horizontal scroll for model-generated findings.
+sub wrap_annotation_text {
+	my ($value) = @_;
+	my $width = 92;
+	my @words = split /\s+/, log_text($value);
+	my @lines;
+	my $line = '';
+	for my $word (@words) {
+		if (!length($line)) {
+			$line = $word;
+		}
+		elsif (length($line) + 1 + length($word) <= $width) {
+			$line .= ' ' . $word;
+		}
+		else {
+			push @lines, $line;
+			$line = $word;
+		}
+	}
+	push @lines, $line if length($line);
+	return join "\n", @lines;
+}
+
 sub is_email_address {
 	my ($value) = @_;
 	$value = log_text($value);
@@ -1288,8 +1312,11 @@ for my $finding (@$findings) {
 	    $suggestion =~ /add\s+&\s+before/i) {
 		$severity = 'attention';
 	}
-	my $annotation = $message;
-	$annotation .= " Suggested fix: $suggestion" if length $suggestion;
+	my $annotation = wrap_annotation_text($message);
+	if (length $suggestion) {
+		$annotation .= "\n\nSuggested fix:\n" .
+			       wrap_annotation_text($suggestion);
+	}
 	my $is_blocking = $severity eq 'fatal' ? 1 : 0;
 	my $command = $is_blocking ? 'error' : 'warning';
 	$blocking_findings++ if $is_blocking;

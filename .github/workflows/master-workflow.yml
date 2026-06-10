@@ -26,6 +26,11 @@ on:
         required: false
         type: boolean
         default: false
+      discard-build-checkout:
+        description: 'Whether to remove the build job checkout before running build scripts'
+        required: false
+        type: boolean
+        default: false
       run-code-review:
         description: 'Whether to review submitted code when an API key is available'
         required: false
@@ -161,6 +166,10 @@ jobs:
         with:
           path: actions-checkout
           fetch-depth: ${{ github.event_name == 'push' && '0' || '1' }}
+
+      - name: Discard build checkout
+        if: ${{ inputs.discard-build-checkout }}
+        run: rm -rf -- "$GITHUB_WORKSPACE/actions-checkout"
 
       - name: Reject release demotion
         if: ${{ github.event_name == 'release' && github.event.action == 'prereleased' && github.event.release.published_at != github.event.release.updated_at }}

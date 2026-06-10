@@ -26,11 +26,6 @@ on:
         required: false
         type: boolean
         default: false
-      discard-build-checkout:
-        description: 'Whether to remove the build job checkout before running build scripts'
-        required: false
-        type: boolean
-        default: false
       run-code-review:
         description: 'Whether to review submitted code when an API key is available'
         required: false
@@ -161,15 +156,11 @@ jobs:
       CI_CD_UNSTABLE_BASE: https://raw.githubusercontent.com/webmin/webmin-ci-cd/main/build
     steps:
       - name: Checkout code
-        if: ${{ inputs.is-checkout || github.event_name == 'push' }}
+        if: ${{ inputs.is-checkout }}
         uses: actions/checkout@v4
         with:
           path: actions-checkout
-          fetch-depth: ${{ github.event_name == 'push' && '0' || '1' }}
-
-      - name: Discard build checkout
-        if: ${{ inputs.discard-build-checkout }}
-        run: rm -rf -- "$GITHUB_WORKSPACE/actions-checkout"
+          fetch-depth: 1
 
       - name: Reject release demotion
         if: ${{ github.event_name == 'release' && github.event.action == 'prereleased' && github.event.release.published_at != github.event.release.updated_at }}

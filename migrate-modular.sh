@@ -40,24 +40,48 @@ get_repo_pkg_type() {
 	return 1
 }
 
-# Reinstall (or install) the base "webmin" package using the new active repo
-# with the correct package manager based on mode (rpm/deb)
+# Upgrade/sync and then reinstall the base "webmin" package using the new
+# active repo. This handles both a newer package release, like 2.641-1 to
+# 2.641-3, and a same-EVR package rebuilt with the modular payload.
 reinstall_webmin_by_mode() {
 	mode="$1"
 
 	case "$mode" in
 		rpm)
 			# Try dnf, fall back to yum
-			dnf -y makecache >/dev/null 2>&1 || yum -y makecache >/dev/null 2>&1 || :
-			dnf -y reinstall webmin >/dev/null 2>&1 \
-				|| yum -y reinstall webmin >/dev/null 2>&1 \
-				|| dnf -y install webmin >/dev/null 2>&1 \
-				|| yum -y install webmin >/dev/null 2>&1
+			if command -v dnf >/dev/null 2>&1; then
+				dnf -y clean all >/dev/null 2>&1 || :
+				dnf -y makecache >/dev/null 2>&1 || :
+				dnf -y distro-sync webmin >/dev/null 2>&1 \
+					|| dnf -y --best upgrade webmin >/dev/null 2>&1 \
+					|| dnf -y install webmin >/dev/null 2>&1 \
+					|| return 1
+				dnf -y reinstall webmin >/dev/null 2>&1 \
+					|| dnf -y install webmin >/dev/null 2>&1 \
+					|| return 1
+			elif command -v yum >/dev/null 2>&1; then
+				yum -y clean all >/dev/null 2>&1 || :
+				yum -y makecache >/dev/null 2>&1 || :
+				yum -y distro-sync webmin >/dev/null 2>&1 \
+					|| yum -y update webmin >/dev/null 2>&1 \
+					|| yum -y install webmin >/dev/null 2>&1 \
+					|| return 1
+				yum -y reinstall webmin >/dev/null 2>&1 \
+					|| yum -y install webmin >/dev/null 2>&1 \
+					|| return 1
+			else
+				return 1
+			fi
 			;;
 		deb)
 			apt-get update >/dev/null 2>&1 || apt update >/dev/null 2>&1 || :
+			DEBIAN_FRONTEND=noninteractive apt-get -y --only-upgrade install webmin >/dev/null 2>&1 || :
 			DEBIAN_FRONTEND=noninteractive apt-get -y --reinstall install webmin >/dev/null 2>&1 \
-				|| DEBIAN_FRONTEND=noninteractive apt-get -y install webmin >/dev/null 2>&1
+				|| DEBIAN_FRONTEND=noninteractive apt-get -y install webmin >/dev/null 2>&1 \
+				|| return 1
+			;;
+		*)
+			return 1
 			;;
 	esac
 }
@@ -69,23 +93,40 @@ install_webmin_modules_from_file_by_mode() {
 	mode="$1"
 	mods_file="$2"
 	[ -r "$mods_file" ] || return 0
+	failed=0
 
 	case "$mode" in
 		rpm)
 			while IFS= read -r m; do
 				[ -n "$m" ] || continue
 				p="webmin-$m"
-				dnf -y install "$p" >/dev/null 2>&1 || yum -y install "$p" >/dev/null 2>&1 || :
+				if command -v dnf >/dev/null 2>&1; then
+					dnf -y install "$p" >/dev/null 2>&1 \
+						|| yum -y install "$p" >/dev/null 2>&1 \
+						|| failed=1
+				elif command -v yum >/dev/null 2>&1; then
+					yum -y install "$p" >/dev/null 2>&1 || failed=1
+				else
+					failed=1
+				fi
 			done < "$mods_file"
 			;;
 		deb)
 			while IFS= read -r m; do
 				[ -n "$m" ] || continue
 				p="webmin-$m"
-				DEBIAN_FRONTEND=noninteractive apt-get -y install "$p" >/dev/null 2>&1 || :
+				DEBIAN_FRONTEND=noninteractive apt-get -y install "$p" >/dev/null 2>&1 || failed=1
 			done < "$mods_file"
 			;;
+		*)
+			return 1
+			;;
 	esac
+
+	if [ "$failed" -ne 0 ]; then
+		echo "migrate-modular.sh: one or more Webmin module packages could not be installed" >&2
+	fi
+	return 0
 }
 
 # List enabled, non-core Webmin modules on the currently installed system by
@@ -281,10 +322,13 @@ post_migration_apply() {
 	# Determine rpm/deb based on newly configured repo files
 	mode=$(get_repo_pkg_type "$host") || mode=""
 
-	if [ -n "$mode" ]; then
-		reinstall_webmin_by_mode "$mode"
-		install_webmin_modules_from_file_by_mode "$mode" "$mods_file"
-	fi
+	[ -n "$mode" ] || { rm -f "$mods_file"; return 1; }
+
+	reinstall_webmin_by_mode "$mode" || { rm -f "$mods_file"; return 1; }
+	install_webmin_modules_from_file_by_mode "$mode" "$mods_file" || {
+		rm -f "$mods_file"
+		return 1
+	}
 
 	rm -f "$mods_file"
 	return 0

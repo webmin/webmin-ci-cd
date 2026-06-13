@@ -408,6 +408,7 @@ review_pathspecs=(
 	'*.yaml'
 	'*.yml'
 	'config'
+	'lang/*'
 	':(glob)**/*.bash'
 	':(glob)**/*.cgi'
 	':(glob)**/*.conf'
@@ -422,6 +423,7 @@ review_pathspecs=(
 	':(glob)**/*.yaml'
 	':(glob)**/*.yml'
 	':(glob)**/config'
+	':(glob)**/lang/*'
 	':(exclude,glob)**/*.min.*'
 )
 

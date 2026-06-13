@@ -14,15 +14,41 @@ command -v download_content >/dev/null 2>&1 || {
 	(return 0) 2>/dev/null || exit 0
 }
 
+# Return success if an RPM repo file points at the given host.
+repo_file_has_rpm_host() {
+	host="$1"
+	file="$2"
+
+	# Match the host on an actual RPM repo URL line, not elsewhere in the file
+	awk -v host="$host" '
+		/^[[:space:]]*(baseurl|mirrorlist)[[:space:]]*=/ && index($0, host) {
+			found = 1
+		}
+		END { exit found ? 0 : 1 }
+	' "$file" 2>/dev/null
+}
+
+repo_file_has_deb_host() {
+	host="$1"
+	file="$2"
+
+	# Match the host on an actual APT deb line, not elsewhere in the file
+	awk -v host="$host" '
+		/^[[:space:]]*deb[[:space:]]/ && index($0, host) {
+			found = 1
+		}
+		END { exit found ? 0 : 1 }
+	' "$file" 2>/dev/null
+}
+
 # Detect package ecosystem (rpm/deb) by scanning existing repo config files for
 # a given repo host, and prints "rpm" or "deb" and returns 0 when found
 get_repo_pkg_type() {
 	host="$1"
 
-	for d in /etc/yum.repos.d /etc/dnf/repos.d; do
-		[ -d "$d" ] || continue
-		if grep -RqsE "(^|[[:space:]])(baseurl|mirrorlist)=" "$d" && \
-		   grep -RqsF "$host" "$d"; then
+	for f in /etc/yum.repos.d/* /etc/dnf/repos.d/*; do
+		[ -f "$f" ] || continue
+		if repo_file_has_rpm_host "$host" "$f"; then
 			echo "rpm"
 			return 0
 		fi
@@ -30,8 +56,7 @@ get_repo_pkg_type() {
 
 	for f in /etc/apt/sources.list /etc/apt/sources.list.d/*.list; do
 		[ -f "$f" ] || continue
-		if grep -qsE "^[[:space:]]*deb[[:space:]]" "$f" && \
-		   grep -qsF "$host" "$f"; then
+		if repo_file_has_deb_host "$host" "$f"; then
 			echo "deb"
 			return 0
 		fi
@@ -273,24 +298,24 @@ pre_migration_capture() {
 	host="$1"
 
 	mods_file=""
-	old_repo_found=0
+	old_repo_found="${2:-0}"
 
 	# Check rpm repos
-	for d in /etc/yum.repos.d /etc/dnf/repos.d; do
-		[ -d "$d" ] || continue
-		if grep -RqsE "(^|[[:space:]])(baseurl|mirrorlist)=" "$d" && \
-		   grep -RqsF "$host" "$d"; then
-			old_repo_found=1
-			break
-		fi
-	done
+	if [ "$old_repo_found" -ne 1 ]; then
+		for f in /etc/yum.repos.d/* /etc/dnf/repos.d/*; do
+			[ -f "$f" ] || continue
+			if repo_file_has_rpm_host "$host" "$f"; then
+				old_repo_found=1
+				break
+			fi
+		done
+	fi
 
 	# Check apt sources (if not already found)
 	if [ "$old_repo_found" -eq 0 ]; then
 		for f in /etc/apt/sources.list /etc/apt/sources.list.d/*.list; do
 			[ -f "$f" ] || continue
-			if grep -qsE "^[[:space:]]*deb[[:space:]]" "$f" && \
-			   grep -qsF "$host" "$f"; then
+			if repo_file_has_deb_host "$host" "$f"; then
 				old_repo_found=1
 				break
 			fi
@@ -298,7 +323,10 @@ pre_migration_capture() {
 	fi
 
 	# Exit if no old repo
-	[ "$old_repo_found" -eq 1 ] || { echo ""; return 0; }
+	[ "$old_repo_found" -eq 1 ] || {
+		echo ""
+		return 0
+	}
 
 	# Capture enabled non-core modules while monolithic Webmin is still installed
 	mods_file="/tmp/webmin-mods.$$"
@@ -324,7 +352,10 @@ post_migration_apply() {
 
 	[ -n "$mode" ] || { rm -f "$mods_file"; return 1; }
 
-	reinstall_webmin_by_mode "$mode" || { rm -f "$mods_file"; return 1; }
+	reinstall_webmin_by_mode "$mode" || {
+		rm -f "$mods_file"
+		return 1
+	}
 	install_webmin_modules_from_file_by_mode "$mode" "$mods_file" || {
 		rm -f "$mods_file"
 		return 1

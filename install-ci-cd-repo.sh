@@ -131,7 +131,16 @@ set_cloudmin_repo_preferences() {
 setup_repo() {
 	product="$1"
 	type="$2"
-	if ! script=$(download_script "$url"); then
+	setup_url="$url"
+
+	# For Virtualmin stable, fetch the setup helper from the stable Virtualmin
+	# repository instead of reaching out to GitHub.
+	if [ "$product" = "virtualmin" ] &&
+	   [ "$type" = "stable" ]; then
+		setup_url="https://$virtualmin_stable_host/setup"
+	fi
+
+	if ! script=$(download_script "$setup_url"); then
 		return 1
 	fi
 

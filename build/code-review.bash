@@ -21,7 +21,7 @@ api_version_header=""
 model="gpt-5.5"
 reasoning_effort="low"
 max_output_tokens="8192"
-max_bytes="200000"
+max_bytes="500000"
 context_lines="10"
 fail_on_api_error="true"
 

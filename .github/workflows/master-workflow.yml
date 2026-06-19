@@ -90,6 +90,7 @@ on:
 
 jobs:
   code-review:
+    name: CI code review
     runs-on: ubuntu-latest
     permissions:
       contents: write

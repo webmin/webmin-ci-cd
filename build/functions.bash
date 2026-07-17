@@ -300,7 +300,7 @@ function cloud_sync_remote_repos {
 	fi
 
 	# Sync repos from staging to repo server
-	echo "Syncing repos ${ssh_warning_text-} .."
+	echo "Syncing repos ${ssh_warning_text-}.."
 	local cmd_sync="ssh $ssh_options $CLOUD_UPLOAD_SSH_USER@$host "
 	cmd_sync+="sync $VERBOSITY_LEVEL"
 	eval "$cmd_sync"

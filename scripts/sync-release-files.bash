@@ -229,13 +229,24 @@ if [[ "$replace_existing" == "1" ]]; then
 fi
 
 # Standard files
-files=(
-	"${project}-${version}.tar.gz"
-	"${project}-${version}-minimal.tar.gz"
-	"${project}-${version}.pkg.gz"
-	"${project}_${version}_all.deb"
-	"${project}-${version}-1.noarch.rpm"
-)
+if [ "${project}" = "webmin" ]; then
+        files=(
+                "${project}-${version}.tar.gz"
+                "${project}-${version}-minimal.tar.gz"
+                "${project}-${version}.pkg.gz"
+                "${project}_${version}_all.deb"
+                "${project}-${version}-1.noarch.rpm"
+        )
+else
+        files=(
+                "${project}-${version}.tar.gz"
+                "${project}-webmail-${version}.tar.gz"
+                "${project}_${version}_all.deb"
+                "${project}-webmail_${version}_all.deb"
+                "${project}-${version}-1.noarch.rpm"
+                "${project}-webmail-${version}-1.noarch.rpm"
+        )
+fi
 
 # Main loop
 error=0

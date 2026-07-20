@@ -234,17 +234,17 @@ if [ "${project}" = "webmin" ]; then
                 "${project}-${version}.tar.gz"
                 "${project}-${version}-minimal.tar.gz"
                 "${project}-${version}.pkg.gz"
-                "${project}_${version}_all.deb"
-                "${project}-${version}-1.noarch.rpm"
+                "newkey-${project}_${version}_all.deb"
+                "newkey-${project}-${version}-1.noarch.rpm"
         )
 else
         files=(
                 "${project}-${version}.tar.gz"
                 "${project}-webmail-${version}.tar.gz"
-                "${project}_${version}_all.deb"
-                "${project}-webmail_${version}_all.deb"
-                "${project}-${version}-1.noarch.rpm"
-                "${project}-webmail-${version}-1.noarch.rpm"
+                "newkey-${project}_${version}_all.deb"
+                "newkey-${project}-webmail_${version}_all.deb"
+                "newkey-${project}-${version}-1.noarch.rpm"
+                "newkey-${project}-webmail-${version}-1.noarch.rpm"
         )
 fi
 
@@ -255,6 +255,7 @@ skipped=0
 
 for f in "${files[@]}"; do
 	fprt="$(sanitize_file "$f")"
+	gitname=`echo ${fprt} | sed -e 's/newkey-//'`
 	url="https://sourceforge.net/projects/webadmin/files/${project}/${version}/${f}/download"
 
 	echo "    Downloading from SourceForge (${project}/${fprt})"
@@ -269,13 +270,13 @@ for f in "${files[@]}"; do
 		ln -sf "$tmp_dir/$f" "$tmp_dir/$fprt"
 	fi
 
-	echo "    Uploading to GitHub (${project}/${fprt})"
+	echo "    Uploading to GitHub (${project}/${gitname})"
 	upload_args=(
 		upload
 		--user "$org"
 		--repo "$project"
 		--tag "$vprt"
-		--name "$fprt"
+		--name "$gitname"
 		--file "$tmp_dir/$fprt"
 	)
 

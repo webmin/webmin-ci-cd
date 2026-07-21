@@ -112,6 +112,96 @@ function is_enabled {
 	[[ "$value" == "1" || "$value" == "true" || "$value" == "yes" ]]
 }
 
+# Save the permalink returned by GitHub for a posted commit comment. These
+# links let notification emails open the commentable discussion rather than a
+# read-only Actions annotation that happens to be rendered on the same line.
+function save_code_review_comment_link {
+	local response_path="$1"
+	local label="$2"
+	local links_path="$3"
+	local html_url
+
+	html_url="$(perl -MJSON::PP -0777 -e '
+		my $comment = eval { JSON::PP::decode_json(<STDIN>) };
+		exit 0 if !$comment || ref($comment) ne "HASH";
+		my $url = $comment->{html_url} || "";
+		$url =~ s/[\r\n\t]//g;
+		print $url if $url =~ m{\Ahttps?://[^\s<>"]+\z};
+	' < "$response_path")"
+	if [[ -n "$html_url" ]]; then
+		label="${label//$'\t'/ }"
+		label="${label//$'\r'/ }"
+		label="${label//$'\n'/ }"
+		printf '%s\t%s\n' "$label" "$html_url" >> "$links_path"
+	fi
+}
+
+# Replace the two MIME-part placeholders written by write_email_report with
+# links to the commit-comment discussions created by GitHub.
+function add_code_review_comment_links_to_email {
+	local email_path="$1"
+	local links_path="$2"
+
+	[[ -s "$email_path" ]] || return 0
+
+	perl - "$email_path" "$links_path" <<'PERL'
+use strict;
+use warnings;
+
+my ($email_path, $links_path) = @ARGV;
+my (@links, %seen);
+if (open my $lfh, '<:encoding(UTF-8)', $links_path) {
+	while (my $line = <$lfh>) {
+		$line =~ s/\r?\n\z//;
+		my ($label, $url) = split /\t/, $line, 2;
+		next if !defined($url) || $url !~ m{\Ahttps?://[^\s<>"]+\z};
+		next if $seen{$url}++;
+		$label = 'code review finding' if !defined($label) || !length($label);
+		push @links, [ $label, $url ];
+	}
+	close $lfh;
+}
+
+sub html_escape {
+	my ($value) = @_;
+	$value = '' if !defined($value);
+	$value =~ s/&/&amp;/g;
+	$value =~ s/</&lt;/g;
+	$value =~ s/>/&gt;/g;
+	$value =~ s/"/&quot;/g;
+	return $value;
+}
+
+my ($text_links, $html_links) = ('', '');
+if (@links) {
+	$text_links = "\r\nDiscuss findings on GitHub:\r\n";
+	for my $link (@links) {
+		$text_links .= '- ' . $link->[0] . ': ' . $link->[1] . "\r\n";
+	}
+
+	$html_links = '<h2 class="cr-heading" style="font-size:16px;margin:22px 0 8px;color:#24292f;">Discuss findings on GitHub</h2>' . "\r\n";
+	$html_links .= '<ul class="cr-list" style="margin:0;padding-left:20px;color:#24292f;line-height:1.7;">' . "\r\n";
+	for my $link (@links) {
+		$html_links .= '<li class="cr-text" style="margin:7px 0;line-height:1.7;"><a class="cr-link" href="' .
+			html_escape($link->[1]) . '" style="color:#164a82;text-decoration:none;">Discuss ' .
+			html_escape($link->[0]) . '</a></li>' . "\r\n";
+	}
+	$html_links .= "</ul>\r\n";
+}
+
+open my $efh, '<:encoding(UTF-8)', $email_path
+	or die "open $email_path: $!";
+my $email = do { local $/; <$efh> };
+close $efh;
+$email =~ s/\{\{CODE_REVIEW_COMMENT_LINKS_TEXT\}\}/$text_links/g;
+$email =~ s/\{\{CODE_REVIEW_COMMENT_LINKS_HTML\}\}/$html_links/g;
+open $efh, '>:encoding(UTF-8)', $email_path
+	or die "open $email_path: $!";
+print {$efh} $email;
+close $efh;
+PERL
+}
+
 # Send the prepared review email without putting SMTP credentials on argv when
 # the workflow explicitly enables email delivery.
 function send_code_review_email {
@@ -174,9 +264,10 @@ function send_code_review_email {
 function post_code_review_comments {
 	local comments_dir="$1"
 	local commit_sha="$2"
+	local links_file="$3"
 	local repo="${GITHUB_REPOSITORY:-}"
-	local comments_url existing_comments_file payload fingerprint marker
-	local fallback_payload
+	local comments_url existing_comments_file payload fingerprint marker label
+	local existing_link comment_response fallback_payload label_file
 
 	if ! is_enabled "$commit_comments_enabled"; then
 		return 0
@@ -205,28 +296,39 @@ function post_code_review_comments {
 		fingerprint="${payload##*/}"
 		fingerprint="${fingerprint%.json}"
 		marker="<!-- webmin-code-review:${fingerprint} -->"
-		if perl -MJSON::PP -0777 -e '
+		label="$fingerprint"
+		label_file="${payload%.json}.label"
+		if [[ -s "$label_file" ]]; then
+			IFS= read -r label < "$label_file" || true
+		fi
+		if existing_link="$(perl -MJSON::PP -0777 -e '
 			my ($marker) = @ARGV;
 			my $comments = eval { JSON::PP::decode_json(<STDIN>) } || [];
 			for my $comment (@$comments) {
 				if (ref($comment) eq "HASH" &&
 				    index($comment->{body} || "", $marker) >= 0) {
+					print $comment->{html_url} || "";
 					exit 0;
 				}
 			}
 			exit 1;
-		' "$marker" < "$existing_comments_file"; then
+		' "$marker" < "$existing_comments_file")"; then
+			if [[ "$existing_link" =~ ^https?://[^[:space:]\<\>\"]+$ ]]; then
+				printf '%s\t%s\n' "$label" "$existing_link" >> "$links_file"
+			fi
 			continue
 		fi
 
+		comment_response="$tmp_dir/commit-comment-${fingerprint}-response.json"
 		if curl --silent --show-error --fail --location \
 			--request POST \
 			--header "authorization: Bearer ${github_comment_token}" \
 			--header "accept: application/vnd.github+json" \
 			--header "content-type: application/json" \
-			--output /dev/null \
+			--output "$comment_response" \
 			--data "@$payload" \
 			"$comments_url"; then
+			save_code_review_comment_link "$comment_response" "$label" "$links_file"
 			continue
 		fi
 
@@ -240,10 +342,12 @@ function post_code_review_comments {
 			--header "authorization: Bearer ${github_comment_token}" \
 			--header "accept: application/vnd.github+json" \
 			--header "content-type: application/json" \
-			--output /dev/null \
+			--output "$comment_response" \
 			--data "@$fallback_payload" \
 			"$comments_url"; then
 			echo "::warning::Code review commit comment failed for ${fingerprint}."
+		else
+			save_code_review_comment_link "$comment_response" "$label" "$links_file"
 		fi
 	done
 }
@@ -359,7 +463,9 @@ review_file="$tmp_dir/review.txt"
 email_file="$tmp_dir/code-review-email.txt"
 markdown_file="${CODE_REVIEW_MARKDOWN_FILE:-}"
 commit_comments_dir="$tmp_dir/commit-comments"
+comment_links_file="$tmp_dir/commit-comment-links.tsv"
 mkdir -p "$commit_comments_dir"
+: > "$comment_links_file"
 
 # Collect commit and GitHub URLs used in review annotations and email reports.
 commit_author_name="$(git log -1 --format=%an "$head_sha" 2>/dev/null || true)"
@@ -1121,6 +1227,7 @@ sub write_email_report {
 		}
 	}
 	email_text_section($efh, 'Findings', @findings);
+	email_line($efh, '{{CODE_REVIEW_COMMENT_LINKS_TEXT}}');
 	email_text_section($efh, 'Reviewed', @reviewed);
 	email_text_section($efh, 'Passed checks', @passed_checks);
 
@@ -1184,6 +1291,7 @@ sub write_email_report {
 		email_line($efh, '</div>');
 	}
 	email_html_section($efh, 'Findings', @findings);
+	email_line($efh, '{{CODE_REVIEW_COMMENT_LINKS_HTML}}');
 	email_html_section($efh, 'Reviewed', @reviewed);
 	email_html_section($efh, 'Passed checks', @passed_checks);
 	email_line($efh, '</div></div></div>');
@@ -1278,6 +1386,8 @@ sub write_commit_comment_payload {
 	if (length(log_text($review_diff_url))) {
 		$body .= "\n\nReviewed diff: " . markdown_link('open diff', $review_diff_url);
 	}
+	$body .= "\n\n**Feedback:** Reply here with `Addressed`, `False positive`, " .
+		 "`Accepted risk`, or any context the reviewer missed.";
 
 	my %payload = ( body => $body );
 	if (length(log_text($file)) && defined($line) && $line =~ /^\d+$/) {
@@ -1292,6 +1402,10 @@ sub write_commit_comment_payload {
 		or die "open $commit_comments_dir/$fingerprint.json: $!";
 	print {$cfh} encode_json(\%payload);
 	close $cfh;
+	open my $lfh, '>:encoding(UTF-8)', "$commit_comments_dir/$fingerprint.label"
+		or die "open $commit_comments_dir/$fingerprint.label: $!";
+	print {$lfh} $location;
+	close $lfh;
 }
 
 my $status = lc($review->{status} || '');
@@ -1364,6 +1478,7 @@ print "::error::Code review JSON used unexpected status '$status'.\n";
 exit 1;
 PERL
 
+post_code_review_comments "$commit_comments_dir" "$head_sha" "$comment_links_file"
+add_code_review_comment_links_to_email "$email_file" "$comment_links_file"
 send_code_review_email "$email_file" "$commit_author_email"
-post_code_review_comments "$commit_comments_dir" "$head_sha"
 exit "$review_exit"

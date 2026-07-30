@@ -34,6 +34,8 @@ virtualmin_repos=(
 	"virtualmin/virtualmin-nginx"
 	"virtualmin/virtualmin-registrar"
 	"virtualmin/virtualmin-support"
+	"virtualmin/virtualmin-powerdns"
+	"virtualmin/virtualmin-git"
 	"virtualmin/jailkit"
 	"virtualmin/webmin-jailkit"
 	"virtualmin/php-pear"

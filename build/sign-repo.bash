@@ -951,7 +951,7 @@ function promote_files_to_stable {
 
 # Invalidate CloudFront objects based on what was uploaded
 function invalidate_cloudfront_repo {
-	local repo_dir="$1"
+	local cf_repo_dir="$1"
 	local map_file="$HOME/.config/cloudfront-distributions.txt"
 	local profile="${CLOUD_CF_PROFILE:-cf-invalidator}"
 
@@ -959,7 +959,7 @@ function invalidate_cloudfront_repo {
 	command -v aws >/dev/null 2>&1 || return 0
 
 	local domain=""
-	if [[ "$repo_dir" =~ /domains/([^/]+)/public_html(/|$) ]]; then
+	if [[ "$cf_repo_dir" =~ /domains/([^/]+)/public_html(/|$) ]]; then
 		domain="${BASH_REMATCH[1]}"
 	else
 		return 0
@@ -969,7 +969,7 @@ function invalidate_cloudfront_repo {
 	dist_id=$(awk -F= -v d="$domain" '$1==d {print $2; exit}' "$map_file")
 	[[ -n "$dist_id" ]] || return 0
 
-	local list="$repo_dir/.uploaded_list"
+	local list="$cf_repo_dir/.uploaded_list"
 	[[ -s "$list" ]] || return 0
 
 	# Read list and clear it so we don't reuse it on next run
@@ -978,7 +978,7 @@ function invalidate_cloudfront_repo {
 		flock 9
 		mapfile -t uploaded <"$list" 2>/dev/null || true
 		rm -f -- "$list" 2>/dev/null || true
-	} 9>"$repo_dir/.uploaded_list.lock"
+	} 9>"$cf_repo_dir/.uploaded_list.lock"
 
 	((${#uploaded[@]})) || return 0
 
@@ -1085,7 +1085,7 @@ function invalidate_cloudfront_repo {
 			--distribution-id "$dist_id" \
 			--paths "${paths[@]}" \
 			--profile "$profile" >/dev/null 2>&1 || true
-	} 9>"$repo_dir/.cf_invalidate.lock"
+	} 9>"$cf_repo_dir/.cf_invalidate.lock"
 
 	echo
 }

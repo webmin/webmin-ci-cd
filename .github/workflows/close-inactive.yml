@@ -11,6 +11,10 @@ on:
         required: false
         type: number
         default: 100
+      max-comments:
+        required: false
+        type: number
+        default: 20
 
 permissions:
   contents: read
@@ -31,12 +35,22 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           DRY_RUN: ${{ inputs['dry-run'] }}
           MAX_ACTIONS: ${{ inputs['max-actions'] }}
+          MAX_COMMENTS: ${{ inputs['max-comments'] }}
         run: |
           set -euo pipefail
 
           # Policy knobs. Activity means human comments only; bot comments and
           # label edits are deliberately ignored so reminders do not reset time.
-          issue_triage_days=90
+          # Comments are the only step that notifies subscribers, so they are
+          # rationed: an issue gets one reminder after issue_triage_days of
+          # silence, while repeatable PR reminders are separated by
+          # reminder_gap_days. Close warnings and closures follow their own
+          # much longer schedule.
+          # Every new bot comment replaces the previous ones, so a thread
+          # converges to a single bot comment; leftovers from a budget-limited
+          # or failed sweep are removed by the per-run tidy.
+          issue_triage_days=100
+          reminder_gap_days=100
           issue_stale_days=180
           issue_warning_days=1795
           issue_close_days=1825
@@ -59,10 +73,17 @@ jobs:
           labels_added=0
           labels_removed=0
           comments_posted=0
+          comments_deleted=0
           issues_closed=0
           prs_closed=0
           items_checked=0
           hit_max=false
+          hit_max_comments=false
+          bot_marker_prefix="<!-- close-inactive:"
+          closing_marker_pattern="close-inactive:(closed|fixed-closed|pr-closed) -->"
+          # Stamped on every body this version posts; eligible issue reminders
+          # without it are recognized as legacy cleanup candidates.
+          bot_version_marker="<!-- close-inactive:v2 -->"
 
           function log {
             printf '%s\n' "$*"
@@ -71,6 +92,20 @@ jobs:
           function warn {
             printf 'Warning: %s\n' "$*" >&2
           }
+
+          # Bash arithmetic cannot safely enforce fractional or negative
+          # limits, so reject invalid caller input before making any writes.
+          function validate_budget {
+            local name="$1"
+            local value="$2"
+            if [[ ! "$value" =~ ^[0-9]+$ ]]; then
+              warn "$name must be a non-negative integer; got '$value'."
+              exit 1
+            fi
+          }
+
+          validate_budget "max-actions" "$MAX_ACTIONS"
+          validate_budget "max-comments" "$MAX_COMMENTS"
 
           function run_or_log {
             if [[ "$DRY_RUN" == "true" ]]; then
@@ -90,6 +125,49 @@ jobs:
 
           function can_act {
             [[ "$action_count" -lt "$MAX_ACTIONS" ]]
+          }
+
+          # New bot comments notify subscribers, so they get their own smaller
+          # budget on top of the overall action limit.
+          function can_comment {
+            can_act && [[ "$comments_posted" -lt "$MAX_COMMENTS" ]]
+          }
+
+          # Some notifying steps must be followed by further writes in the same
+          # run (a label, deletions of older bot comments). Reserve that
+          # capacity up front, otherwise defer the whole step to a later run
+          # rather than leave the thread half-updated.
+          function can_comment_with_followups {
+            local followups="$1"
+            can_comment && [[ $((action_count + followups)) -lt "$MAX_ACTIONS" ]]
+          }
+
+          # A close whose comment was already posted does not consume another
+          # comment-budget slot, but the close and its cleanup must still fit
+          # in the action budget because closed threads are not revisited.
+          function can_act_with_followups {
+            local followups="$1"
+            can_act && [[ $((action_count + followups)) -lt "$MAX_ACTIONS" ]]
+          }
+
+          # Record which budget prevented a new comment. The required action
+          # count includes that comment and all mandatory follow-up writes.
+          function note_notification_limit {
+            local required_actions="$1"
+            if [[ "$comments_posted" -ge "$MAX_COMMENTS" ]]; then
+              hit_max_comments=true
+            fi
+            if [[ $((action_count + required_actions)) -gt "$MAX_ACTIONS" ]]; then
+              hit_max=true
+            fi
+          }
+
+          # Number of comments this workflow has on the thread.
+          function bot_comment_count {
+            local comments_json="$1"
+            jq --arg marker "$bot_marker_prefix" '
+              [ .[] | select((.user.login == "github-actions[bot]") and (.body | contains($marker))) ] | length
+            ' <<<"$comments_json"
           }
 
           function did_action {
@@ -215,9 +293,19 @@ jobs:
             fi
           }
 
+          # Comments are the activity signal; an empty list would look like a
+          # thread with no human reply, so a load failure must skip the thread.
           function load_comments {
             local number="$1"
-            api_array "repos/${GITHUB_REPOSITORY}/issues/${number}/comments?per_page=100"
+            local out
+            if out="$(gh api --paginate --slurp \
+                 "repos/${GITHUB_REPOSITORY}/issues/${number}/comments?per_page=100" |
+                 jq 'add // []')" && [[ -n "$out" ]]; then
+              printf '%s\n' "$out"
+            else
+              warn "Could not load comments for #$number."
+              return 1
+            fi
           }
 
           function load_issue_events {
@@ -282,6 +370,28 @@ jobs:
             [[ -n "$(marker_date "$comments_json" "$marker")" ]]
           }
 
+          # ID of the newest workflow comment carrying a specific marker.
+          function marker_comment_id {
+            local comments_json="$1"
+            local marker="$2"
+            jq -r --arg marker "$marker" '
+              [
+                .[] |
+                select((.user.login == "github-actions[bot]") and
+                       (.body | contains($marker)))
+              ] | max_by(.created_at) | .id // empty
+            ' <<<"$comments_json"
+          }
+
+          # Current and legacy issue reminder stages all mean the thread has
+          # already received its one ordinary reminder.
+          function has_issue_reminder {
+            local comments_json="$1"
+            has_marker "$comments_json" "<!-- close-inactive:needs-triage -->" ||
+              has_marker "$comments_json" "<!-- close-inactive:release:" ||
+              has_marker "$comments_json" "<!-- close-inactive:stale -->"
+          }
+
           function marker_epoch_after_activity {
             local comments_json="$1"
             local marker="$2"
@@ -294,26 +404,114 @@ jobs:
             [[ "$(to_epoch "$marked_at")" -ge "$last_epoch" ]]
           }
 
-          function has_release_marker {
+          # Date of the most recent comment this workflow posted, any stage.
+          function last_bot_comment_date {
             local comments_json="$1"
-            jq -e '
-              any(.[]; (.user.login == "github-actions[bot]") and
-                       (.body | contains("<!-- close-inactive:release:")))
-            ' <<<"$comments_json" >/dev/null
+            marker_date "$comments_json" "$bot_marker_prefix"
+          }
+
+          # Reminders are rationed per thread: skip when the last bot comment
+          # is younger than reminder_gap_days, whatever stage posted it. Close
+          # warnings and closures are not reminders and do not consult this.
+          function reminder_allowed {
+            local comments_json="$1"
+            local last_bot_at
+            last_bot_at="$(last_bot_comment_date "$comments_json")"
+            if [[ -z "$last_bot_at" ]]; then
+              return 0
+            fi
+            [[ "$(days_since_epoch "$(to_epoch "$last_bot_at")")" -ge "$reminder_gap_days" ]]
+          }
+
+          # Delete the bot comments selected by a jq filter over the thread.
+          # Deletions are writes and count against the action budget. A caller
+          # may ignore failure for best-effort cleanup or require success before
+          # an irreversible follow-up such as closing the thread.
+          function delete_selected_comments {
+            local number="$1"
+            local comments_json="$2"
+            local jq_filter="$3"
+            local stop_on_failure="${4:-false}"
+            local last_activity_epoch="${5:-0}"
+            local comment_id
+            local failed=false
+            # Remove invalidated close comments first; otherwise delete oldest
+            # first so partial cleanup retains the newest state-carrying comment.
+            while IFS= read -r comment_id; do
+              [[ -n "$comment_id" ]] || continue
+              if ! can_act; then
+                hit_max=true
+                log "Reached MAX_ACTIONS=$MAX_ACTIONS; leaving remaining bot comments on #$number for a later run."
+                return 1
+              fi
+              log "Deleting previous bot comment $comment_id on #$number"
+              if run_quiet_or_log gh api --method DELETE \
+                   "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}"; then
+                did_action
+                comments_deleted=$((comments_deleted + 1))
+              else
+                warn "Could not delete bot comment $comment_id on #$number."
+                failed=true
+                if [[ "$stop_on_failure" == "true" ]]; then
+                  return 1
+                fi
+              fi
+            done < <(
+              jq -r --arg marker "$bot_marker_prefix" --arg version "$bot_version_marker" \
+                --arg close_pattern "$closing_marker_pattern" \
+                --argjson last_activity_epoch "$last_activity_epoch" \
+                "[ .[] | select((.user.login == \"github-actions[bot]\") and (.body | contains(\$marker)) and ($jq_filter)) ] | sort_by([if ((.body | test(\$close_pattern)) and ((.created_at | fromdateiso8601) < \$last_activity_epoch)) then 0 else 1 end, .created_at])[] | .id" \
+                <<<"$comments_json"
+            )
+            [[ "$failed" == "false" ]]
+          }
+
+          # Remove every earlier comment this workflow left on the thread.
+          # Called after the new comment or close succeeded, so a failure here
+          # never costs the thread its state-carrying comment; open threads
+          # retry during a later per-run tidy.
+          function delete_bot_comments {
+            delete_selected_comments "$1" "$2" 'true' "${3:-false}"
+          }
+
+          # Per-run tidy for threads that got no new comment: keep only the
+          # newest bot comment (leftovers from budget-limited earlier sweeps),
+          # retire reminder comments from earlier versions, and remove a close
+          # comment invalidated by later meaningful activity. Warning-based
+          # pending closes skip this tidy so their prerequisite warning remains;
+          # legacy PR stale comments remain because their marker suppresses a
+          # repeat.
+          function cleanup_bot_comments {
+            local number="$1"
+            local comments_json="$2"
+            local last_activity_epoch="$3"
+            local newest_id
+            newest_id="$(
+              jq -r --arg marker "$bot_marker_prefix" '
+                [ .[] | select((.user.login == "github-actions[bot]") and (.body | contains($marker))) ] |
+                max_by(.created_at) | .id // empty
+              ' <<<"$comments_json"
+            )"
+            [[ -n "$newest_id" ]] || return 0
+            delete_selected_comments "$number" "$comments_json" \
+              "(.id != ${newest_id}) or ((.body | contains(\$version) | not) and (.body | test(\"close-inactive:(needs-triage -->|release:|stale -->)\"))) or ((.body | test(\$close_pattern)) and ((.created_at | fromdateiso8601) < \$last_activity_epoch))" \
+              false "$last_activity_epoch"
           }
 
           function comment_issue {
             local number="$1"
             local body="$2"
-            if ! can_act; then
-              hit_max=true
-              log "Reached MAX_ACTIONS=$MAX_ACTIONS; skipping comment on #$number."
+            local comments_json="${3:-[]}"
+            if ! can_comment; then
+              note_notification_limit 1
+              log "Reached comment or action limit; skipping comment on #$number."
               return 1
             fi
             log "Commenting on #$number"
             if run_or_log gh issue comment "$number" --repo "$GITHUB_REPOSITORY" --body "$body"; then
               did_action
               comments_posted=$((comments_posted + 1))
+              delete_bot_comments "$number" "$comments_json" || true
             else
               warn "Could not comment on #$number."
               return 1
@@ -324,20 +522,75 @@ jobs:
             local number="$1"
             local body="$2"
             local reason="${3:-not planned}"
-            if ! can_act; then
-              hit_max=true
-              log "Reached MAX_ACTIONS=$MAX_ACTIONS; skipping close for issue #$number."
+            local comments_json="${4:-[]}"
+            local close_marker="$5"
+            local last_epoch="$6"
+            local pending_comment_id
+            local previous_comments
+            pending_comment_id="$(marker_comment_id "$comments_json" "$close_marker")"
+            previous_comments="$(bot_comment_count "$comments_json")"
+
+            # GitHub CLI posts --comment before it attempts to close. If that
+            # close failed, the marker is a durable request: retry the close
+            # without posting a duplicate, then keep that newest comment.
+            if [[ -n "$pending_comment_id" ]] &&
+               marker_epoch_after_activity "$comments_json" "$close_marker" "$last_epoch"; then
+              # Warning-based closes still depend on their warning until the
+              # state change succeeds. Fixed closes rely on the label instead,
+              # so their older comments may be tidied while a retry is pending.
+              if [[ "$close_marker" == "<!-- close-inactive:closed -->" ]]; then
+                skip_comment_cleanup=true
+              fi
+              if ! can_act_with_followups "$((previous_comments - 1))"; then
+                hit_max=true
+                log "Reached action limit; skipping pending close for issue #$number."
+                return 1
+              fi
+              log "Retrying pending close for issue #$number"
+              if run_quiet_or_log gh issue close "$number" \
+                   --repo "$GITHUB_REPOSITORY" \
+                   --reason "$reason"; then
+                did_action
+                issues_closed=$((issues_closed + 1))
+                delete_selected_comments "$number" "$comments_json" \
+                  ".id != ${pending_comment_id}" || true
+              else
+                warn "Could not complete pending close for issue #$number."
+                return 1
+              fi
+              return 0
+            fi
+
+            # Closed threads are never revisited, so the older bot comments
+            # plus both the new comment and close must fit in this run.
+            if ! can_comment_with_followups "$((previous_comments + 1))"; then
+              note_notification_limit "$((previous_comments + 2))"
+              log "Reached comment or action limit; skipping close for issue #$number."
+              return 1
+            fi
+
+            # Post explicitly so the comment and state change are counted as
+            # separate writes. If closing fails, the marker suppresses another
+            # comment and lets a later run retry only the state change.
+            log "Posting closing comment on issue #$number"
+            if run_or_log gh issue comment "$number" \
+                 --repo "$GITHUB_REPOSITORY" \
+                 --body "$body"; then
+              did_action
+              comments_posted=$((comments_posted + 1))
+            else
+              warn "Could not comment before closing issue #$number."
               return 1
             fi
             log "Closing issue #$number"
-            if run_or_log gh issue close "$number" \
+            if run_quiet_or_log gh issue close "$number" \
                  --repo "$GITHUB_REPOSITORY" \
-                 --reason "$reason" \
-                 --comment "$body"; then
+                 --reason "$reason"; then
               did_action
               issues_closed=$((issues_closed + 1))
+              delete_bot_comments "$number" "$comments_json" || true
             else
-              warn "Could not close issue #$number."
+              warn "Could not close issue #$number; its closing comment will suppress duplicates while a later run retries."
               return 1
             fi
           }
@@ -345,108 +598,79 @@ jobs:
           function close_pr {
             local number="$1"
             local body="$2"
-            if ! can_act; then
-              hit_max=true
-              log "Reached MAX_ACTIONS=$MAX_ACTIONS; skipping close for PR #$number."
+            local comments_json="${3:-[]}"
+            local close_marker="$4"
+            local last_epoch="$5"
+            local pending_comment_id
+            local previous_comments
+            pending_comment_id="$(marker_comment_id "$comments_json" "$close_marker")"
+            previous_comments="$(bot_comment_count "$comments_json")"
+
+            # Finish a close whose comment was successfully posted earlier.
+            if [[ -n "$pending_comment_id" ]] &&
+               marker_epoch_after_activity "$comments_json" "$close_marker" "$last_epoch"; then
+              # Preserve the warning that authorized this pending close.
+              skip_comment_cleanup=true
+              if ! can_act_with_followups "$((previous_comments - 1))"; then
+                hit_max=true
+                log "Reached action limit; skipping pending close for PR #$number."
+                return 1
+              fi
+              log "Retrying pending close for pull request #$number"
+              if run_quiet_or_log gh pr close "$number" --repo "$GITHUB_REPOSITORY"; then
+                did_action
+                prs_closed=$((prs_closed + 1))
+                delete_selected_comments "$number" "$comments_json" \
+                  ".id != ${pending_comment_id}" || true
+              else
+                warn "Could not complete pending close for PR #$number."
+                return 1
+              fi
+              return 0
+            fi
+
+            # Same as close_issue: comment, close and cleanup must all fit.
+            if ! can_comment_with_followups "$((previous_comments + 1))"; then
+              note_notification_limit "$((previous_comments + 2))"
+              log "Reached comment or action limit; skipping close for PR #$number."
+              return 1
+            fi
+
+            log "Posting closing comment on pull request #$number"
+            if run_or_log gh issue comment "$number" \
+                 --repo "$GITHUB_REPOSITORY" \
+                 --body "$body"; then
+              did_action
+              comments_posted=$((comments_posted + 1))
+            else
+              warn "Could not comment before closing PR #$number."
               return 1
             fi
             log "Closing pull request #$number"
-            if run_or_log gh pr close "$number" --repo "$GITHUB_REPOSITORY" --comment "$body"; then
+            if run_quiet_or_log gh pr close "$number" --repo "$GITHUB_REPOSITORY"; then
               did_action
               prs_closed=$((prs_closed + 1))
+              delete_bot_comments "$number" "$comments_json" || true
             else
-              warn "Could not close pull request #$number."
+              warn "Could not close pull request #$number; its closing comment will suppress duplicates while a later run retries."
               return 1
             fi
           }
 
-          function extract_version {
-            local tag="$1"
-            local version
-            version="$(printf '%s\n' "$tag" | grep -Eo '[0-9]+([._-][0-9A-Za-z]+)*' | head -n 1 || true)"
-            if [[ -n "$version" ]]; then
-              printf '%s\n' "${version//_/.}"
-            fi
-            return 0
-          }
-
-          function latest_release_info {
-            local release_json
-            local tag_json
-            local tag_commit_url
-            local commit_json
-            local tag_item
-            local tag_name
-            local tag_date
-            local tag_epoch
-            local newest_epoch=0
-            if release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" 2>/dev/null)"; then
-              latest_tag="$(jq -r '.tag_name // empty' <<<"$release_json")"
-              latest_date="$(jq -r '.published_at // .created_at // empty' <<<"$release_json")"
-              return 0
-            fi
-            if tag_json="$(api_array "repos/${GITHUB_REPOSITORY}/tags?per_page=30")" &&
-               [[ "$(jq 'length' <<<"$tag_json")" -gt 0 ]]; then
-              while IFS= read -r tag_item; do
-                tag_name="$(jq -r '.name // empty' <<<"$tag_item")"
-                tag_commit_url="$(jq -r '.commit.url // empty' <<<"$tag_item")"
-                if [[ -z "$tag_name" || -z "$tag_commit_url" ]]; then
-                  continue
-                fi
-                if ! commit_json="$(gh api "$tag_commit_url" 2>/dev/null)"; then
-                  warn "Could not load commit metadata for tag '$tag_name'."
-                  continue
-                fi
-                tag_date="$(jq -r '.commit.committer.date // .commit.author.date // empty' <<<"$commit_json")"
-                if [[ -z "$tag_date" ]]; then
-                  continue
-                fi
-                tag_epoch="$(to_epoch "$tag_date")"
-                if [[ "$tag_epoch" -gt "$newest_epoch" ]]; then
-                  newest_epoch="$tag_epoch"
-                  latest_tag="$tag_name"
-                  latest_date="$tag_date"
-                fi
-              done < <(jq -c '.[]' <<<"$tag_json")
-            fi
-            if [[ -z "$latest_tag" || -z "$latest_date" ]]; then
-              latest_tag=""
-              latest_date=""
-            fi
-          }
-
-          function body_issue_triage {
+          function body_issue_reminder {
             cat <<'EOF'
           <!-- close-inactive:needs-triage -->
+          <!-- close-inactive:v2 -->
           This issue has been quiet for a while and needs a fresh look.
 
           If you are still seeing it, a short update with the current version and any new details would help. Maintainers can add the Needs Work label if it should stay on the active backlog.
           EOF
           }
 
-          function body_issue_release {
-            local version="$1"
-            local marker="$2"
-            cat <<EOF
-          <!-- close-inactive:release:${marker} -->
-          A newer version appears to be available: ${version}.
-
-          If you have a moment, please check whether this still happens there. A short update helps us keep it moving; if it is already fixed or no longer relevant, closing it would help keep the tracker tidy. Maintainers can add the Needs Work label if this should stay on the active backlog.
-          EOF
-          }
-
-          function body_issue_stale {
-            cat <<'EOF'
-          <!-- close-inactive:stale -->
-          This issue is now marked as stale because there has not been recent follow-up.
-
-          It is not being closed now. Please help us choose the next step: add updated details if it still matters, close it if resolved, or add Needs Work if it should remain on the active backlog.
-          EOF
-          }
-
           function body_issue_warning {
             cat <<EOF
           <!-- close-inactive:close-warning -->
+          <!-- close-inactive:v2 -->
           This issue has had no meaningful follow-up for an extended period.
 
           It may be closed in approximately ${close_warning_wait_days} days unless someone adds updated details or a maintainer marks it as Needs Work.
@@ -456,6 +680,7 @@ jobs:
           function body_issue_close {
             cat <<'EOF'
           <!-- close-inactive:closed -->
+          <!-- close-inactive:v2 -->
           Closing this issue because there has been no meaningful follow-up for an extended period after a prior warning.
 
           If this is still relevant, please add updated details and a maintainer can reopen it.
@@ -465,6 +690,7 @@ jobs:
           function body_issue_fixed_close {
             cat <<'EOF'
           <!-- close-inactive:fixed-closed -->
+          <!-- close-inactive:v2 -->
           Closing this issue because it has been marked as Fixed for 7 days without follow-up.
 
           If this is still a problem, please add updated details and a maintainer can reopen it.
@@ -474,6 +700,7 @@ jobs:
           function body_pr_stale {
             cat <<'EOF'
           <!-- close-inactive:pr-stale -->
+          <!-- close-inactive:v2 -->
           This pull request has been quiet for a while and is now marked as stale.
 
           Please update it if it is still intended for merge, or close it if it has been superseded. Maintainers can add the Needs Work label if this should stay open.
@@ -483,6 +710,7 @@ jobs:
           function body_pr_warning {
             cat <<EOF
           <!-- close-inactive:pr-close-warning -->
+          <!-- close-inactive:v2 -->
           This pull request has had no meaningful follow-up for an extended period.
 
           It may be closed in approximately ${close_warning_wait_days} days unless someone updates it or a maintainer marks it as Needs Work.
@@ -492,6 +720,7 @@ jobs:
           function body_pr_close {
             cat <<'EOF'
           <!-- close-inactive:pr-closed -->
+          <!-- close-inactive:v2 -->
           Closing this pull request because there has been no meaningful follow-up for an extended period after a prior warning.
 
           If this is still relevant, please add updated details and a maintainer can reopen it, or submit a fresh pull request.
@@ -567,6 +796,23 @@ jobs:
             local comments_json="$4"
             local last_epoch="$5"
             local inactive_days="$6"
+            local previous_comments
+            local reminder_recorded=false
+
+            # Repair the durable label before any policy branch can return or
+            # the per-run tidy can retire the only legacy reminder marker. If
+            # the write fails, preserve the comments so a later run can retry.
+            if has_label "$labels_json" "$needs_triage_label"; then
+              reminder_recorded=true
+            elif has_issue_reminder "$comments_json"; then
+              if add_label_if_missing "$number" "$labels_json" "$needs_triage_label"; then
+                reminder_recorded=true
+              else
+                skip_comment_cleanup=true
+                warn "Could not preserve reminder state on issue #$number; skipping further changes."
+                return 0
+              fi
+            fi
 
             if has_label "$labels_json" "$needs_work_label" ||
                has_label "$labels_json" "$needs_more_work_label"; then
@@ -593,16 +839,20 @@ jobs:
                 return 0
               fi
               if [[ "$(( (now_epoch - fixed_epoch) / 86400 ))" -ge "$fixed_close_days" ]]; then
-                close_issue "$number" "$(body_issue_fixed_close)" "completed" || true
+                close_issue "$number" "$(body_issue_fixed_close)" "completed" \
+                  "$comments_json" "<!-- close-inactive:fixed-closed -->" "$last_epoch" || true
                 return 0
               fi
               log "Issue #$number is labeled Fixed but is still inside the ${fixed_close_days}-day grace period."
               return 0
             fi
 
+            # Human activity after the stale comment clears the label. The
+            # stale comment itself may already have been replaced by a later
+            # bot comment, so only a stale marker newer than the activity
+            # keeps the label.
             if [[ "$inactive_days" -lt "$issue_stale_days" ]] &&
                has_label "$labels_json" "$stale_label" &&
-               has_marker "$comments_json" "<!-- close-inactive:stale -->" &&
                ! marker_epoch_after_activity "$comments_json" "<!-- close-inactive:stale -->" "$last_epoch"; then
               remove_label_if_present "$number" "$labels_json" "$stale_label" || true
               labels_json="$(jq -c --arg label "$stale_label" \
@@ -621,14 +871,15 @@ jobs:
               local warning_epoch
               warning_epoch="$(to_epoch "$warning_at")"
               if [[ "$(( (now_epoch - warning_epoch) / 86400 ))" -ge "$close_warning_wait_days" ]]; then
-                close_issue "$number" "$(body_issue_close)" || true
+                close_issue "$number" "$(body_issue_close)" "not planned" \
+                  "$comments_json" "<!-- close-inactive:closed -->" "$last_epoch" || true
                 return 0
               fi
             fi
 
             if [[ "$inactive_days" -ge "$issue_warning_days" ]] &&
                [[ "$warning_active" != "true" ]]; then
-              comment_issue "$number" "$(body_issue_warning)" || true
+              comment_issue "$number" "$(body_issue_warning)" "$comments_json" || true
               return 0
             fi
 
@@ -637,31 +888,39 @@ jobs:
               return 0
             fi
 
+            # Stale is a silent label; the reminder already asked for input.
             if [[ "$inactive_days" -ge "$issue_stale_days" ]]; then
               add_label_if_missing "$number" "$labels_json" "$stale_label" || true
-              if ! has_marker "$comments_json" "<!-- close-inactive:stale -->"; then
-                comment_issue "$number" "$(body_issue_stale)" || true
-              fi
+            fi
+
+            # Needs Triage is a durable "already reminded" record. Human
+            # replies reset inactivity but do not clear it, so an issue can
+            # never receive a second ordinary reminder.
+            if [[ "$inactive_days" -lt "$issue_triage_days" ]]; then
               return 0
             fi
 
-            if [[ -n "$latest_tag" && -n "$latest_date" && "$inactive_days" -ge "$issue_triage_days" ]]; then
-              local release_epoch
-              release_epoch="$(to_epoch "$latest_date")"
-              if [[ "$release_epoch" -gt "$last_epoch" ]] &&
-                 ! has_marker "$comments_json" "<!-- close-inactive:release:${latest_marker} -->"; then
-                add_label_if_missing "$number" "$labels_json" "$needs_triage_label" || true
-                comment_issue "$number" "$(body_issue_release "$latest_version" "$latest_marker")" || true
-                return 0
-              fi
+            # Quiet long enough. The Needs Triage label records that the one
+            # reminder was already sent, so deleted or missing bot comments
+            # never cause a second one.
+            if [[ "$reminder_recorded" == "true" ]]; then
+              return 0
             fi
-
-            if [[ "$inactive_days" -ge "$issue_triage_days" ]]; then
+            if ! reminder_allowed "$comments_json"; then
+              log "Issue #$number is quiet but a recent bot comment exists; not commenting yet."
+              return 0
+            fi
+            # The label is the durable record of this reminder, so it must be
+            # addable right after the comment; defer both when the budget is
+            # too tight for the comment, the label and the sweep of old ones.
+            previous_comments="$(bot_comment_count "$comments_json")"
+            if ! can_comment_with_followups "$((previous_comments + 1))"; then
+              note_notification_limit "$((previous_comments + 2))"
+              log "Reached comment or action limit; deferring reminder on #$number."
+              return 0
+            fi
+            if comment_issue "$number" "$(body_issue_reminder)" "$comments_json"; then
               add_label_if_missing "$number" "$labels_json" "$needs_triage_label" || true
-              if ! has_marker "$comments_json" "<!-- close-inactive:needs-triage -->" &&
-                 ! has_release_marker "$comments_json"; then
-                comment_issue "$number" "$(body_issue_triage)" || true
-              fi
             fi
           }
 
@@ -680,7 +939,6 @@ jobs:
 
             if [[ "$inactive_days" -lt "$pr_stale_days" ]] &&
                has_label "$labels_json" "$stale_label" &&
-               has_marker "$comments_json" "<!-- close-inactive:pr-stale -->" &&
                ! marker_epoch_after_activity "$comments_json" "<!-- close-inactive:pr-stale -->" "$last_epoch"; then
               remove_label_if_present "$number" "$labels_json" "$stale_label" || true
               labels_json="$(jq -c --arg label "$stale_label" \
@@ -699,14 +957,15 @@ jobs:
               local warning_epoch
               warning_epoch="$(to_epoch "$warning_at")"
               if [[ "$(( (now_epoch - warning_epoch) / 86400 ))" -ge "$close_warning_wait_days" ]]; then
-                close_pr "$number" "$(body_pr_close)" || true
+                close_pr "$number" "$(body_pr_close)" "$comments_json" \
+                  "<!-- close-inactive:pr-closed -->" "$last_epoch" || true
                 return 0
               fi
             fi
 
             if [[ "$inactive_days" -ge "$pr_warning_days" ]] &&
                [[ "$warning_active" != "true" ]]; then
-              comment_issue "$number" "$(body_pr_warning)" || true
+              comment_issue "$number" "$(body_pr_warning)" "$comments_json" || true
               return 0
             fi
 
@@ -717,8 +976,9 @@ jobs:
 
             if [[ "$inactive_days" -ge "$pr_stale_days" ]]; then
               add_label_if_missing "$number" "$labels_json" "$stale_label" || true
-              if ! has_marker "$comments_json" "<!-- close-inactive:pr-stale -->"; then
-                comment_issue "$number" "$(body_pr_stale)" || true
+              if ! marker_epoch_after_activity "$comments_json" "<!-- close-inactive:pr-stale -->" "$last_epoch" &&
+                 reminder_allowed "$comments_json"; then
+                comment_issue "$number" "$(body_pr_stale)" "$comments_json" || true
               fi
             fi
           }
@@ -736,38 +996,22 @@ jobs:
               echo "| Labels added | ${labels_added} |"
               echo "| Labels removed | ${labels_removed} |"
               echo "| Comments posted | ${comments_posted} |"
+              echo "| Previous bot comments deleted | ${comments_deleted} |"
               echo "| Issues closed | ${issues_closed} |"
               echo "| Pull requests closed | ${prs_closed} |"
               echo "| Total actions | ${action_count} |"
               echo
               echo "- Dry run: ${DRY_RUN}"
               echo "- Hit action limit: ${hit_max}"
+              echo "- Hit comment limit: ${hit_max_comments}"
               echo "- Max actions: ${MAX_ACTIONS}"
+              echo "- Max comments: ${MAX_COMMENTS}"
             } >> "$GITHUB_STEP_SUMMARY"
           }
 
           ensure_label "$needs_work_label" "c5def5" "Active backlog item exempt from inactivity automation"
-          ensure_label "$needs_triage_label" "f9d0c4" "Needs a maintainer decision"
+          ensure_label "$needs_triage_label" "f9d0c4" "Reminded once after a long quiet period; needs a maintainer decision"
           ensure_label "$stale_label" "ededed" "Inactive and needs review"
-
-          latest_tag=""
-          latest_date=""
-          latest_release_info
-          latest_version=""
-          latest_marker=""
-          if [[ -n "$latest_tag" && -n "$latest_date" ]]; then
-            latest_version="$(extract_version "$latest_tag")"
-            if [[ -n "$latest_version" ]]; then
-              latest_marker="$(printf '%s' "$latest_tag" | sha256sum | awk '{print $1}')"
-              log "Latest release/tag: $latest_tag (${latest_version})"
-            else
-              latest_tag=""
-              latest_date=""
-              log "Latest tag has no parseable version; release-aware issue bump is disabled."
-            fi
-          else
-            log "No release or tag found; release-aware issue bump is disabled."
-          fi
 
           # Listing open issues is the one hard-fail API dependency: if this
           # call fails, the run should stop instead of silently doing nothing.
@@ -790,7 +1034,10 @@ jobs:
             labels_json="$(jq -c '.labels // []' <<<"$item")"
             is_pr="$(jq -r 'has("pull_request")' <<<"$item")"
 
-            comments_json="$(load_comments "$number")"
+            if ! comments_json="$(load_comments "$number")"; then
+              warn "Skipping #$number; comment history could not be loaded safely."
+              continue
+            fi
             last_epoch="$(last_meaningful_epoch "$created_at" "$comments_json")"
             if [[ "$is_pr" == "true" ]]; then
               if ! pr_activity_epoch="$(last_pr_activity_epoch "$number")"; then
@@ -803,12 +1050,23 @@ jobs:
             fi
             inactive_days="$(days_since_epoch "$last_epoch")"
 
+            comments_before="$comments_posted"
+            deletions_before="$comments_deleted"
+            skip_comment_cleanup=false
             if [[ "$is_pr" == "true" ]]; then
               log "Checking pull request #$number; inactive for ${inactive_days} day(s)."
               process_pr "$number" "$labels_json" "$comments_json" "$last_epoch" "$inactive_days"
             else
               log "Checking issue #$number; inactive for ${inactive_days} day(s)."
               process_issue "$number" "$created_at" "$labels_json" "$comments_json" "$last_epoch" "$inactive_days"
+            fi
+            # A new comment or close already swept the thread, and a thread
+            # with a pending close keeps its warning; otherwise perform the
+            # ordinary per-run tidy.
+            if [[ "$comments_posted" -eq "$comments_before" &&
+                  "$comments_deleted" -eq "$deletions_before" &&
+                  "$skip_comment_cleanup" == "false" ]]; then
+              cleanup_bot_comments "$number" "$comments_json" "$last_epoch" || true
             fi
           done < <(jq -c 'sort_by(.created_at)[]' <<<"$items_json")
 

@@ -28,6 +28,7 @@ virtualmin_repos=(
 	"virtualmin/virtualmin-gpl"
 	"virtualmin/virtualmin-pro"
 	"virtualmin/virtualmin-awstats"
+	"virtualmin/virtualmin-goaccess"
 	"virtualmin/virtualmin-htpasswd"
 	"virtualmin/virtualmin-mailman"
 	"virtualmin/virtualmin-nginx-ssl"

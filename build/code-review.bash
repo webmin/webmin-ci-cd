@@ -775,6 +775,7 @@ perl -MJSON::PP - "$review_file" "$response_file" "$diff_file" "$email_file" "$m
 use strict;
 use warnings;
 use Digest::SHA qw(sha1_hex);
+use Encode qw(encode);
 use JSON::PP qw(decode_json encode_json);
 
 binmode STDOUT, ':encoding(UTF-8)';
@@ -1370,9 +1371,10 @@ sub write_commit_comment_payload {
 	return if !defined($commit_comments_dir) || !length($commit_comments_dir);
 	return if !$is_blocking && !config_enabled($commit_comments_on_attention);
 
-	my $fingerprint = sha1_hex(join("\0",
+	# Hash UTF-8 bytes because review text can contain Unicode characters.
+	my $fingerprint = sha1_hex(encode('UTF-8', join("\0",
 		$file || '', defined($line) ? $line : '',
-		$message || '', $suggestion || ''));
+		$message || '', $suggestion || '')));
 	my $marker = "<!-- webmin-code-review:$fingerprint -->";
 	my $location = length(log_text($file)) ? log_text($file) : 'submitted diff';
 	$location .= ':' . log_text($line) if defined($line) && $line =~ /^\d+$/;
@@ -1398,7 +1400,8 @@ sub write_commit_comment_payload {
 		}
 	}
 
-	open my $cfh, '>:encoding(UTF-8)', "$commit_comments_dir/$fingerprint.json"
+	# encode_json already returns UTF-8 bytes; avoid encoding them twice.
+	open my $cfh, '>:raw', "$commit_comments_dir/$fingerprint.json"
 		or die "open $commit_comments_dir/$fingerprint.json: $!";
 	print {$cfh} encode_json(\%payload);
 	close $cfh;

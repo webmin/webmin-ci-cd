@@ -9,7 +9,8 @@
  *
  * Accepts HTTP Basic Auth with serial_id as username and license_key as
  * password. Checks credentials against MariaDB and verifies the license
- * hasn't expired (with a configurable grace period).
+ * hasn't expired (with a configurable grace period). The product parameter
+ * selects virtualmin or cloudmin; older callers default to virtualmin.
  * 
  * Uses Valkey for caching valid/invalid auth results and rate limiting
  * per IP+serial to prevent brute force attacks. Falls back gracefully if
@@ -24,6 +25,7 @@
  *
  * Response headers:
  *   X-License: valid|invalid|expired
+ *   X-License-Product: virtualmin|cloudmin (on success)
  *   X-Client-IP: (client IP used for rate limiting)
  *   X-Cache-Status: cached|fresh|bypass
  *   X-Cache-TTL: (time remaining, e.g., 4m30s)
@@ -216,6 +218,7 @@ function allow(bool $cached, int $ttl, ?string $connType, string $clientIp): nev
 	http_response_code(200);
 	header('Cache-Control: no-store');
 	header('X-License: valid');
+	header('X-License-Product: ' . LICENSE_PRODUCT);
 	header('X-Client-IP: ' . $clientIp);
 	if ($connType === null) {
 		header('X-Cache-Status: bypass');
@@ -280,8 +283,16 @@ function main(): void
 		}
 	}
 
-	// Build cache keys
-	$credHash     = hash('sha256', "{$serialId}\0{$licenseKey}");
+	// Only these stored product codes can authorize package downloads.
+	$product = $_GET['product'] ?? 'virtualmin';
+	$products = ['virtualmin' => 'vm', 'cloudmin' => 'cm'];
+	if (!is_string($product) || !isset($products[$product])) {
+		deny(false, CACHE_FAIL_TTL, null, $clientIp, 'invalid');
+	}
+	define('LICENSE_PRODUCT', $product);
+
+	// A product change cannot reuse an old or another product's decision.
+	$credHash     = hash('sha256', "v2\0{$product}\0{$serialId}\0{$licenseKey}");
 	$cacheOkKey   = "repo_auth:ok:{$credHash}";
 	$cacheFailKey = "repo_auth:fail:{$credHash}";
 	$rateLimitKey = "repo_auth:rl:" . hash('sha256', "{$clientIp}\0{$serialId}");
@@ -339,7 +350,7 @@ function main(): void
 	}
 
 	// Check database
-	$result = checkLicense($serialId, $licenseKey);
+	$result = checkLicense($serialId, $licenseKey, $products[$product]);
 
 	// DB error
 	if ($result === null) {
@@ -426,7 +437,7 @@ function connectValkey(?string &$connType): ?Redis
  * Returns 'expired' if found but past end_date + grace period.
  * Returns null on DB error.
  */
-function checkLicense(string $serialId, string $licenseKey): ?string
+function checkLicense(string $serialId, string $licenseKey, string $product): ?string
 {
 	try {
 		$pdo = new PDO(DB_DSN, DB_USER, DB_PASS, [
@@ -438,12 +449,14 @@ function checkLicense(string $serialId, string $licenseKey): ?string
 
 		$sql = 'SELECT end_date FROM `' . DB_TABLE . '`
 				WHERE serial_id = :serial_id AND license_key = :license_key
+				  AND product_name = :product
 				LIMIT 1';
 
 		$stmt = $pdo->prepare($sql);
 		$stmt->execute([
 			':serial_id'   => $serialId,
 			':license_key' => $licenseKey,
+			':product'     => $product,
 		]);
 
 		$row = $stmt->fetch();

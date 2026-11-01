@@ -53,6 +53,8 @@ virtualmin_repos=(
 )
 
 cloudmin_repos=(
+	"virtualmin/cloudmin-gpl cloudmin"
+	"virtualmin/cloudmin-pro cloudmin"
 	"virtualmin/cloudmin-yum-groups cloudmin"
 	"virtualmin/cloudmin-core-meta cloudmin"
 	"virtualmin/cloudmin-stack-meta cloudmin"

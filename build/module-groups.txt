@@ -1,1 +1,2 @@
 virtualmin-gpl=virtualmin-pro
+cloudmin-gpl=cloudmin-pro

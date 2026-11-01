@@ -1,7 +1,7 @@
 virtualmin-gpl=virtual-server,gpl
 virtualmin-pro=virtual-server,pro,virtualmin-gpl,virtual-server/pro,Commercial License
 cloudmin-gpl=server-manager,gpl
-cloudmin-pro=server-manager,pro,cloudmin-gpl,virtual-server/pro,Commercial License
+cloudmin-pro=server-manager,pro,cloudmin-gpl,server-manager/pro,Commercial License
 webmin-jailkit=jailkit
 virtualmin-wp-workbench=virtualmin-wp-workbench,,,,Commercial License
 virtualmin-podman=virtualmin-podman,,,,Commercial License

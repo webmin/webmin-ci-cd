@@ -988,6 +988,21 @@ function resolve_module_flags {
 	echo ""
 }
 
+# get_module_repo_target(module)
+# Select the repository whose metadata must include the module's packages.
+function get_module_repo_target {
+	case "$1" in
+	# Both Cloudmin editions publish to the Cloudmin repository.
+	cloudmin-gpl|cloudmin-pro)
+		echo cloudmin.dev
+		;;
+	# Other modules retain their existing repository.
+	*)
+		echo virtualmin.dev
+		;;
+	esac
+}
+
 # Function to get related modules
 get_related_modules() {
 	local module="$1"

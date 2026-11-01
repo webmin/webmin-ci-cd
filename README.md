@@ -73,6 +73,9 @@ This is a quick overview of the key files involved in the build process, highlig
 
   - `webmin__UPLOAD_SSH_DIR`: Sets `UPLOAD_SSH_DIR` secret for `webmin` organization for all repositories listed in the `webmin_repos` variable
   - `virtualmin__IP_KNOWN_HOSTS`: Sets `IP_KNOWN_HOSTS` secret for `virtualmin` organization for all repositories listed in the `virtualmin_repos` variable
+  - `cloudmin__DEV_UPLOAD_SSH_DIR`: Sets the Cloudmin upload directory for repositories listed in `cloudmin_repos`, including updates selected with `-r`.
+
+  `DEV_UPLOAD_SSH_DIR` and `PRERELEASE_UPLOAD_SSH_DIR` select the staging directories for uploads. The repository target passed to signing controls metadata; it does not move packages to another directory.
 
 - **github-actions.bash** - this is a forced-command wrapper script for secure automated repository operations over SSH. It allows specific commands like repository signing with strict path checks and SCP uploads only to the given directory, while denying interactive shells, SFTP, SCP downloads, and all other commands. This ensures that only authorized operations can be performed by the CI/CD system, enhancing security.
 

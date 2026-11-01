@@ -121,8 +121,8 @@ EOF
 	exit 1
 }
 
-# Check if a repository is valid
-function is_valid_repo {
+# resolve_repo(repo) returns the repository entry with its secret prefix.
+function resolve_repo {
 	local user_input="$1"
 	local user_base
 	user_base=$(echo "$user_input" | awk '{print $1}')
@@ -130,7 +130,17 @@ function is_valid_repo {
 	for r in "${webmin_repos[@]}" "${virtualmin_repos[@]}" "${cloudmin_repos[@]}"; do
 		local arr_base
 		arr_base=$(echo "$r" | awk '{print $1}')
+		# Keep the configured product prefix when only owner/repo is supplied.
 		if [ "$arr_base" = "$user_base" ]; then
+			local prefix
+			prefix=$(echo "$user_input" | awk '{print $2}')
+			# Preserve an explicit prefix supplied by the caller.
+			if [ -n "$prefix" ]; then
+				printf '%s %s\n' "$user_base" "$prefix"
+			else
+				# Cloudmin repositories use Cloudmin secrets under the same owner.
+				printf '%s\n' "$r"
+			fi
 			return 0
 		fi
 	done
@@ -197,11 +207,11 @@ while [[ $# -gt 0 ]]; do
 				exit 1
 			fi
 			base_repo=$(echo "$2" | awk '{print $1}')
-			if ! is_valid_repo "$2"; then
+			if ! repo_config=$(resolve_repo "$2"); then
 				echo "Error: Invalid repository: $base_repo"
 				exit 1
 			fi
-			selected_repos+=("$2")
+			selected_repos+=("$repo_config")
 			shift 2
 			;;
 		-s|--secret)

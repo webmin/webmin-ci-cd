@@ -8,7 +8,7 @@
 
 url="https://raw.githubusercontent.com/webmin/webmin/master/webmin-setup-repo.sh"
 virtualmin_license_file="/etc/virtualmin-license"
-cloudmin_license_file="/etc/server-manager-license"
+cloudmin_license_file="/etc/cloudmin-license"
 virtualmin_stable_host="download.virtualmin.com"
 virtualmin_unstable_host="download.virtualmin.dev"
 virtualmin_prerelease_host="rc.download.virtualmin.dev"
@@ -62,6 +62,18 @@ set_virtualmin_package_preferences() {
 		printf '%s\n' \
 			"deb:pin:webmin-virtual-server=1001=gpl" \
 			"rpm:exclude:webmin-virtual-server-*pro*.noarch"
+	fi
+	return 0
+}
+
+# set_cloudmin_package_preferences(auth_user, auth_pass) keeps GPL repos on GPL.
+set_cloudmin_package_preferences() {
+	fn_auth_user="$1"
+	fn_auth_pass="$2"
+	if [ -z "$fn_auth_user" ] || [ -z "$fn_auth_pass" ]; then
+		printf '%s\n' \
+			"deb:pin:webmin-server-manager=1001=gpl" \
+			"rpm:exclude:webmin-server-manager-*pro*.noarch"
 	fi
 	return 0
 }
@@ -250,6 +262,7 @@ setup_repo() {
 						--force \
 						--prerelease-host="$cloudmin_prerelease_host" \
 						--name=cloudmin \
+						--key-server="https://${download_webmin_host:-download.webmin.com}" \
 						--dist=cloudmin \
 						--description=Cloudmin \
 						--component=main \
@@ -268,6 +281,7 @@ setup_repo() {
 						--force \
 						--unstable-host="$cloudmin_unstable_host" \
 						--name=cloudmin \
+						--key-server="https://${download_webmin_host:-download.webmin.com}" \
 						--dist=cloudmin \
 						--description=Cloudmin \
 						--component=main \

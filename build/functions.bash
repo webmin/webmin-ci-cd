@@ -1752,9 +1752,11 @@ function build_native_package {
 			echo "rm -rf %{buildroot}"
 		} > "$work_dir/SPECS/${base_name}.spec"
 		
-		# Build package
+		# Use RPM v4 so supported systems can verify package signatures.
 		echo "  Building package .."
-		cmd="rpmbuild --verbose --define '_topdir $work_dir' --target $arch-linux -bb '$work_dir/SPECS/${base_name}.spec' $VERBOSITY_LEVEL"
+		cmd="rpmbuild --verbose --define '_rpmformat 4' \
+			--define '_topdir $work_dir' --target $arch-linux \
+			-bb '$work_dir/SPECS/${base_name}.spec' $VERBOSITY_LEVEL"
 		eval "$cmd"
 		status=$?
 		postcmd $status 2
